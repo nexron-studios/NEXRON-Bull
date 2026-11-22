@@ -88,15 +88,19 @@ The screenshots show made-up data. See [Screenshots](#screenshots-1) under Devel
 
 ### Install
 
-There is no published release yet. Build the installer yourself:
+Download `Bull_<version>_x64-setup.exe` from the
+[latest release](https://github.com/nexron-studios/NEXRON-Bull/releases/latest), run it and start
+Bull from the Start menu. The installer is not signed yet, so Windows SmartScreen asks first:
+**More info › Run anyway**.
+
+To build the installer yourself:
 
 ```bash
 npm ci
 npm run app:build
 ```
 
-The installers land in `src-tauri/target/release/bundle/` (`nsis/` and `msi/`). Run one and
-start Bull from the Start menu.
+The installers land in `src-tauri/target/release/bundle/` (`nsis/` and `msi/`).
 
 ### First steps
 

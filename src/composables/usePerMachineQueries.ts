@@ -8,7 +8,7 @@ export interface PerMachineQuery<T> {
   queryKey: QueryKey
   queryFn: () => Promise<T>
   staleTime: number
-  /** A function can stop polling a machine, e.g. while it does not answer */
+  /** A function can slow down or stop polling a machine, e.g. while it does not answer */
   refetchInterval: number | ((query: { state: { status: string } }) => number | false)
   /** `false` reads the cache without fetching; default on */
   enabled?: boolean

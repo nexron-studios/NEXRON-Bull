@@ -190,7 +190,8 @@ const answered = computed(() =>
         :hint="failedHint"
         class="motion-shake"
       >
-        <!-- A host gets the assistant, which finds the cause; this PC has none, only a retry. -->
+        <!-- A host gets the assistant, which finds the cause; this PC has none, only a retry.
+             So does a host whose ssh entry has not loaded yet: the assistant needs it. -->
         <Button
           v-if="entry"
           variant="outline"

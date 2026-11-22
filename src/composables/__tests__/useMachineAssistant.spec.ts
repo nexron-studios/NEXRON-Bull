@@ -47,6 +47,23 @@ describe('useMachineAssistant', () => {
     expect(state.value).toEqual({ step: 'checked', entry: SERVER, probe: NO_AGENTD })
   })
 
+  it('should reload the accounts of a machine whose check answers', async () => {
+    service.test.mockResolvedValue(OK)
+    const queryClient = client.current as QueryClient
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const { check } = useMachineAssistant()
+    await check(SERVER)
+    expect(invalidate).toHaveBeenLastCalledWith({ queryKey: ['agentd'] })
+  })
+
+  it('should leave the accounts alone while the machine does not answer', async () => {
+    const queryClient = client.current as QueryClient
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const { check } = useMachineAssistant()
+    await check(SERVER)
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['agentd'] })
+  })
+
   it('should replace the entry an earlier check of the same run added', async () => {
     const { check } = useMachineAssistant()
     await check(SERVER)

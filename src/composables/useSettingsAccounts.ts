@@ -39,7 +39,8 @@ export const useSettingsAccounts = () => {
     queryFn: () => fetchProfiles(machine),
     staleTime: PROFILES_STALE_TIME_MS,
     // An offline host is asked once a minute instead of every 15 s: each try waits out the SSH
-    // timeout. The card offers no retry button; it comes back by itself once the host answers.
+    // timeout. A host's machine card offers "Beheben" instead of a retry, so this poll and a
+    // successful check are what bring it back.
     refetchInterval: (query) => (query.state.status === 'error' ? FAILED_POLL_MS : PROFILES_POLL_MS)
   }))
 

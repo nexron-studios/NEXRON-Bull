@@ -1,0 +1,269 @@
+/*
+ * Character motion — the defaults from Rules/frontend/motion.md,
+ * section "Character: motion with weight".
+ *
+ * Copied into src/styles/motion.css and imported from main.css after tokens.css.
+ * The source lives in the vault (Rules/assets/motion.css): change it there, then
+ * copy it again — never edit only the copy.
+ *
+ * Durations and curves come from tokens.css. The fallbacks only keep a project
+ * that has no motion tokens yet working.
+ *
+ * Usage:
+ *   press          every pressable element                  class="motion-press"
+ *   squash         small element that lands (badge, knob)   one-shot, see below
+ *   pop            success the user must not miss           one-shot, see below
+ *   shake          error, always next to the error text     one-shot, see below
+ *   fade-in        content replacing its skeleton           class="motion-fade-in"
+ *   stagger        list or grid that enters                 class="motion-stagger"
+ *                                                           :style="{ '--stagger-index': index }"
+ *   depth          the app container behind a phone sheet   class="motion-depth", add "is-behind"
+ *   springs        any spatial transition you write         var(--ease-spring-*) with var(--duration-spring-*)
+ *
+ * One-shot classes play once per add. In Vue, bind them to a flag and clear it
+ * when the animation ends, so the next trigger plays again:
+ *   :class="{ 'motion-shake': hasError }" @animationend="hasError = false"
+ */
+
+/*
+ * Springs in Apple's parametrisation (WWDC23 "Animate with springs"), sampled into
+ * linear(). Generated, never retyped: each curve is tied to its duration, so the
+ * pair is always used together. They live here rather than in tokens.css because
+ * they are computed, not tuned. Arrival (98 % of the way): smooth 280 ms,
+ * snappy 200 ms, bouncy 175 ms; the rest is an invisible settle.
+ */
+:root {
+  /* duration 0.3 s, bounce 0 */
+  --ease-spring-smooth: linear(
+    0,
+    0.042,
+    0.13,
+    0.239,
+    0.35,
+    0.455,
+    0.549,
+    0.632,
+    0.704,
+    0.762,
+    0.81,
+    0.849,
+    0.881,
+    0.906,
+    0.926,
+    0.943,
+    0.955,
+    0.965,
+    0.973,
+    0.979,
+    0.984,
+    0.987,
+    0.99,
+    0.993,
+    0.994,
+    0.996,
+    0.997,
+    0.997,
+    1
+  );
+  --duration-spring-smooth: 410ms;
+  /* duration 0.3 s, bounce 0.15 */
+  --ease-spring-snappy: linear(
+    0,
+    0.038,
+    0.122,
+    0.234,
+    0.349,
+    0.462,
+    0.568,
+    0.659,
+    0.737,
+    0.803,
+    0.855,
+    0.896,
+    0.929,
+    0.953,
+    0.971,
+    0.984,
+    0.993,
+    0.999,
+    1.002,
+    1.005,
+    1.006,
+    1.006,
+    1.006,
+    1.005,
+    1.004,
+    1.004,
+    1.003,
+    1.002,
+    1
+  );
+  --duration-spring-snappy: 390ms;
+  /* duration 0.35 s, bounce 0.3 */
+  --ease-spring-bouncy: linear(
+    0,
+    0.037,
+    0.127,
+    0.247,
+    0.377,
+    0.507,
+    0.623,
+    0.729,
+    0.818,
+    0.889,
+    0.945,
+    0.985,
+    1.013,
+    1.031,
+    1.041,
+    1.045,
+    1.044,
+    1.041,
+    1.036,
+    1.031,
+    1.025,
+    1.019,
+    1.014,
+    1.01,
+    1.006,
+    1.003,
+    1.001,
+    1,
+    1
+  );
+  --duration-spring-bouncy: 450ms;
+}
+
+@layer components {
+  /*
+   * Down fast on a curve, back up on the snappy spring. A transition, not
+   * keyframes: releasing mid-press retargets instead of restarting.
+   */
+  .motion-press {
+    transition: transform var(--duration-spring-snappy) var(--ease-spring-snappy);
+  }
+
+  .motion-press:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(0.97);
+    transition: transform var(--duration-micro, 120ms)
+      var(--ease-out-quart, cubic-bezier(0.165, 0.84, 0.44, 1));
+  }
+
+  /*
+   * The app behind a bottom sheet steps back like a card in a stack. The sheet
+   * must live outside this container (Teleport to body): a transform turns it
+   * into the containing block of every position: fixed inside it.
+   */
+  .motion-depth {
+    transform-origin: 50% 0;
+    transition: transform var(--duration-spring-smooth) var(--ease-spring-smooth);
+  }
+
+  @media (max-width: 640px) {
+    .motion-depth.is-behind {
+      transform: translateY(10px) scale(0.94);
+      border-radius: 12px;
+      overflow: clip;
+    }
+  }
+
+  /* Never on text, numbers or data — only on a small object that lands. */
+  .motion-squash {
+    animation: motion-squash var(--duration-micro, 120ms)
+      var(--ease-out-quart, cubic-bezier(0.165, 0.84, 0.44, 1));
+  }
+
+  .motion-pop {
+    animation: motion-pop var(--duration-ui, 200ms)
+      var(--ease-out-quart, cubic-bezier(0.165, 0.84, 0.44, 1));
+  }
+
+  /* 3 × ±6 px in 300 ms. */
+  .motion-shake {
+    animation: motion-shake 300ms var(--ease-in-out-quart, cubic-bezier(0.77, 0, 0.175, 1));
+  }
+
+  /* Opacity only: content lands where its skeleton stood, so moving it would read as a jump. */
+  .motion-fade-in {
+    animation: motion-fade-in 150ms var(--ease-out-quart, cubic-bezier(0.165, 0.84, 0.44, 1)) both;
+  }
+
+  /*
+   * 40 ms between items, capped at index 6: items 7+ enter with the 6th, so the
+   * cascade never spreads over more than 240 ms however long the list is. A list
+   * with many rows in view may raise it to 7 with --stagger-cap (8 staggered,
+   * 280 ms); the rule allows no more.
+   * Inside a scroll container (a table wrapper with overflow-x: auto) the 8 px
+   * offset overflows it and flashes a scrollbar: give that container
+   * overflow-y: hidden.
+   */
+  .motion-stagger {
+    animation: motion-enter var(--duration-ui, 200ms)
+      var(--ease-out-quart, cubic-bezier(0.165, 0.84, 0.44, 1)) both;
+    animation-delay: calc(min(var(--stagger-index, 0), var(--stagger-cap, 6)) * 40ms);
+  }
+}
+
+@keyframes motion-squash {
+  40% {
+    transform: scale(1.1, 0.9);
+  }
+}
+
+@keyframes motion-pop {
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+@keyframes motion-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  16.6%,
+  50%,
+  83.3% {
+    transform: translateX(-6px);
+  }
+  33.3%,
+  66.6% {
+    transform: translateX(6px);
+  }
+}
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes motion-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Shared elements (list thumbnail into detail hero) travel on the snappy spring. */
+::view-transition-group(*) {
+  animation-duration: var(--duration-spring-snappy);
+  animation-timing-function: var(--ease-spring-snappy);
+}
+
+/*
+ * Under reduced motion the global block in main.css ends keyframes at once. The
+ * two enter animations are kept as plain fades, without movement or delay:
+ * nothing moves, nothing cuts hard.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade-in,
+  .motion-stagger {
+    animation-duration: 150ms !important;
+  }
+
+  .motion-stagger {
+    animation-name: motion-fade-in;
+    animation-delay: 0ms;
+  }
+}

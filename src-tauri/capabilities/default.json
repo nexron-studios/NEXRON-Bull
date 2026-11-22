@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Main window: agentd events, links in the browser, copying text, notifications that bring the window back",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "ms-settings:notifications" },
+        { "url": "https://*" },
+        { "url": "http://*" },
+        { "url": "mailto:*" }
+      ]
+    },
+    "clipboard-manager:allow-write-text",
+    "notification:default",
+    "core:window:allow-unminimize",
+    "core:window:allow-show",
+    "core:window:allow-set-focus"
+  ]
+}

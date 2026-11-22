@@ -1,0 +1,10 @@
+{
+  "name": "Bull",
+  "tagline": "Claude Code as a chat. Every account, every machine.",
+  "glyph": "../../public/favicon.svg",
+  "brand": "#4d7cff",
+  "brand_light": "#2a4fd6",
+  "pattern": "dots",
+  "out": ".",
+  "wordmark_font": "../../src/assets/fonts/climate-crisis-latin-400.woff2"
+}

@@ -1,0 +1,77 @@
+{
+  "generated_at": "2026-11-16T00:20:49.140450Z",
+  "poll_interval_seconds": 60,
+  "demo_mode": false,
+  "providers": [
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "account": { "id": "11111111-1111-1111-1111-111111111111", "name": "work", "email": "work@example.com" },
+      "plan": "Max",
+      "windows": [
+        { "key": "seven_day", "label": "7 Tage", "used_percent": 24.0, "remaining_percent": 76.0, "resets_at": "2026-11-22T03:59:59.851526Z", "window_minutes": 10080, "primary": false },
+        { "key": "five_hour", "label": "5 Stunden", "used_percent": 61.0, "remaining_percent": 39.0, "resets_at": "2026-11-16T01:29:59.851507Z", "window_minutes": 300, "primary": true },
+        { "key": "seven_day_opus", "label": "7 Tage · Opus", "used_percent": 3.5, "remaining_percent": 96.5, "resets_at": null, "window_minutes": 10080, "primary": false },
+        { "key": "seven_day_oauth_apps", "label": "7 Tage · Apps", "used_percent": 1.0, "remaining_percent": 99.0, "resets_at": null, "window_minutes": 10080, "primary": false }
+      ],
+      "source": "api",
+      "status": "ok",
+      "message": null,
+      "fetched_at": "2026-11-16T00:14:44.923112Z",
+      "stale": false,
+      "warning": null,
+      "warning_status": null,
+      "retry_after_seconds": null
+    },
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "account": { "id": "22222222-2222-2222-2222-222222222222", "name": "private", "email": "private@example.com" },
+      "plan": "Pro",
+      "windows": [
+        { "key": "five_hour", "label": "5 Stunden", "used_percent": 0.0, "remaining_percent": 100.0, "resets_at": null, "window_minutes": 300, "primary": true },
+        { "key": "seven_day", "label": "7 Tage", "used_percent": 65.0, "remaining_percent": 35.0, "resets_at": "2026-11-19T15:59:59.860986Z", "window_minutes": 10080, "primary": false }
+      ],
+      "source": "api",
+      "status": "ok",
+      "message": null,
+      "fetched_at": "2026-11-16T00:14:44.946722Z",
+      "stale": true,
+      "warning": "Anbieter drosselt gerade",
+      "warning_status": "rate_limited",
+      "retry_after_seconds": 0.0
+    },
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "account": { "id": "33333333-3333-3333-3333-333333333333", "name": "fresh", "email": "fresh@example.com" },
+      "plan": null,
+      "windows": [],
+      "source": "none",
+      "status": "auth_missing",
+      "message": "Keine Zugangsdaten gefunden.",
+      "fetched_at": "2026-11-16T00:20:49.140450Z",
+      "stale": false,
+      "warning": null,
+      "warning_status": null,
+      "retry_after_seconds": null
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "account": null,
+      "plan": "Free",
+      "windows": [
+        { "key": "primary", "label": "30 Tage", "used_percent": 0.0, "remaining_percent": 100.0, "resets_at": "2026-12-16T00:20:48Z", "window_minutes": 43200, "primary": true }
+      ],
+      "source": "api",
+      "status": "ok",
+      "message": null,
+      "fetched_at": "2026-11-16T00:20:49.140450Z",
+      "stale": false,
+      "warning": null,
+      "warning_status": null,
+      "retry_after_seconds": null
+    }
+  ]
+}

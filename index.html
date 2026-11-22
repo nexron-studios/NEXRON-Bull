@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="theme-color" content="#0e0e0f" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Bull</title>
+    <script>
+      // Pick the theme before first paint, so a dark choice never flashes light while the app
+      // loads. Same rule as useDark in src/composables/useThemeToggle.ts; the key is its
+      // THEME_STORAGE_KEY (a spec checks both match). The colours are --background of each set;
+      // useThemeToggle keeps theme-color in sync from the token afterwards.
+      {
+        let mode = null
+        try {
+          mode = localStorage.getItem('vueuse-color-scheme')
+        } catch {
+          // Storage blocked: follow the system, like useDark does without a stored choice.
+        }
+        const isDark =
+          mode === 'dark' ||
+          (mode !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', isDark)
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', isDark ? '#0e0e0f' : '#f7f6f3')
+        // The picked colour scheme, as useColorSchemeApply last resolved it (same key, a spec
+        // checks it). The app replaces this element once it runs.
+        let schemeCss = null
+        try {
+          schemeCss = localStorage.getItem('bull-color-scheme-css')
+        } catch {
+          // Storage blocked: Night Desk from tokens.css.
+        }
+        if (schemeCss) {
+          const style = document.createElement('style')
+          style.id = 'bull-color-scheme'
+          style.textContent = schemeCss
+          document.head.appendChild(style)
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

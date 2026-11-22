@@ -1,0 +1,31 @@
+[package]
+name = "nexron-chat"
+version = "0.7.9"
+description = "Bull - Claude Code sessions as a chat"
+authors = ["NEXRON"]
+edition = "2024"
+rust-version = "1.90"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "nexron_chat_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.5", features = ["image-png"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+serde_json = "1"
+tauri-plugin-notification = "2"
+portable-pty = "0.9"
+
+# Already in the tree through the notification plugin and tao; asked for the real toast setting and
+# to set the big window icon (taskbar), which Tauri's set_icon leaves alone.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["UI_Notifications", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_Console", "Win32_System_Variant", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }

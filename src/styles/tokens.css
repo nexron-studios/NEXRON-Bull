@@ -1,0 +1,274 @@
+/**
+ * Night Desk: design tokens of Bull.
+ *
+ * Same palette as the Agent Dashboard, so both tools read as one family.
+ * Colour carries meaning, ordered by importance; no layer borrows another's hue:
+ *   critical   approval needed, error, stop, and the "Achtung" callout in an answer. The only red.
+ *   warning    Claude is working, and the "Braucht dich" callout: an answer that waits for the user
+ *   good       done, allowed
+ *   act-*      what a tool does, on icons only: read/search, change/run, web/MCP.
+ *              act-read is a muted slate so it never reads as the blue brand
+ *   foreground / muted-foreground  content and meta text
+ *   brand      the bull (public/favicon.svg), the focus ring, the scrollbar thumb, the bar marking
+ *              the open session, the drag-and-drop line, Clawd (18.11.2026), and the thinking bar's
+ *              wave and effort badge (19.11.2026), nothing else
+ *   brand-strong  the one primary action "new session": a deeper brand blue, so white text on it
+ *              keeps 5.1:1 (the brand blue itself only reaches 3.7:1)
+ *   link       brand-blue text: links in Claude's answers and the "Vorschlag" callout. Brand on
+ *              dark (4.9:1), brand-strong on light (4.7:1); link-hover is lighter on dark, deeper on
+ *              light (19.11.2026: links in the main colour, with hover)
+ *   clawd      Claude orange, only the skills share of the context breakdown. Clawd himself is
+ *              brand blue, so he follows the theme (18.11.2026)
+ *   stage      the black backdrop of the full-screen image viewer on phones, in both themes
+ *   account-a…d  the dot that marks a Claude account (composer chip, panel, sidebar footer),
+ *              nothing else; each account gets one from a hash of its login (`accountToneOf`) or the
+ *              one picked in the settings
+ *   plan-pro, plan-max  the pill that names an account's subscription (AccountPlan), nothing
+ *              else: silver and a muted gold, a tier pair anyone reads; the gold stays dull so it
+ *              never reads as the warning amber (21.11.2026)
+ *   shadow-edge  the shadow a bar casts over content that scrolls past it (NchScrollEdge), nothing
+ *              else; stronger on dark, where little is left to darken
+ * Nothing outside this file introduces a hue.
+ *
+ * Light and dark define the same token names: :root is light, .dark (set on <html> by
+ * useThemeToggle, or before first paint by index.html) is the original Night Desk. Every light
+ * text colour keeps at least 4.5:1 on background, card, popover, muted and accent; the brand
+ * focus ring at least 3:1.
+ */
+
+@theme inline {
+  --font-sans: 'Geist Variable', 'Segoe UI Variable Text', system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: 'Geist Mono Variable', 'Cascadia Code', Consolas, monospace;
+  /* The Bull wordmark only. Same file as the README banner (docs/brand/banner.json). */
+  --font-wordmark: 'Climate Crisis', var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-subtle: var(--subtle);
+  --color-critical: var(--critical);
+  --color-warning: var(--warning);
+  --color-good: var(--good);
+  --color-act-read: var(--act-read);
+  --color-act-change: var(--act-change);
+  --color-act-outside: var(--act-outside);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-strong-hover: var(--brand-strong-hover);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
+  --color-clawd: var(--clawd);
+  --color-stage: var(--stage);
+  --color-stage-foreground: var(--stage-foreground);
+  --color-account-a: var(--account-a);
+  --color-account-b: var(--account-b);
+  --color-account-c: var(--account-c);
+  --color-account-d: var(--account-d);
+  --color-plan-pro: var(--plan-pro);
+  --color-plan-max: var(--plan-max);
+  --color-shadow-edge: var(--shadow-edge);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  /* Type scale, ratio ~1.2 */
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1rem;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.25rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.6rem;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.9rem;
+
+  --ease-out-soft: cubic-bezier(0.2, 0, 0, 1);
+  /* A fade that only brings something in: Vue's fade, an arriving chat item. */
+  --duration-fade: 150ms;
+  /* A layout snap cross-fades the old and new picture of one part: both on this, or it dims. */
+  --duration-snap-fade: 200ms;
+  /* A search hit lights up: in 150 ms, held 900 ms, out in 600 ms (Figma "13c"). */
+  --duration-search-flash: 1650ms;
+
+  /* Container width below which the sidebar panel goes compact (`@max-sidebar:`): no NEXRON logo,
+     machine segments as icon and count. The only source of this breakpoint. */
+  --container-sidebar: 300px;
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* Also THEME_BACKGROUND in src/theme/colorSchemes.ts: scheme links are measured against it. */
+  --background: #f7f6f3;
+  --foreground: #1b1b1a;
+  --card: #ffffff;
+  --card-foreground: #1b1b1a;
+  --popover: #ffffff;
+  --popover-foreground: #1b1b1a;
+  --primary: #1b1b1a;
+  --primary-foreground: #f7f6f3;
+  --secondary: #edece8;
+  --secondary-foreground: #1b1b1a;
+  --muted: #edece8;
+  --muted-foreground: #66655d;
+  --subtle: #43423c;
+  --accent: #eeede9;
+  --accent-foreground: #1b1b1a;
+  --destructive: #c53030;
+  --border: #e3e2dd;
+  --input: #cfcec7;
+  --ring: var(--brand);
+
+  --critical: #c53030;
+  --warning: #8d5c00;
+  --good: #157a15;
+  --act-read: #4f6b93;
+  --act-change: #6352c8;
+  --act-outside: #0b7585;
+  --link: var(--brand-strong);
+  --link-hover: #2a4fd6;
+  --brand: #4d7cff;
+  --brand-foreground: #ffffff;
+  --brand-strong: #3a64e0;
+  --brand-strong-hover: #2f5bd6;
+  --clawd: #d97757;
+  --stage: #000000;
+  --stage-foreground: #f0efec;
+  /* Account dots: at least 3:1 on background, card and popover. */
+  --account-a: #4d7cff;
+  --account-b: #6352c8;
+  --account-c: #0b7585;
+  --account-d: #b83280;
+  /* Plan pills: at least 4.5:1 on their own 15 % tint over muted. */
+  --plan-pro: #505a69;
+  --plan-max: #745914;
+  /* A row, tab or image lifted by drag and drop: ambient plus direct shadow. */
+  --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.12);
+  /* Where a bar casts its edge (NchScrollEdge): the start of a short gradient to transparent. */
+  --shadow-edge: rgb(0 0 0 / 0.1);
+
+  /* The brand blue in both themes: quiet at rest, full on hover and drag. */
+  --scrollbar-thumb: color-mix(in srgb, var(--brand) 45%, transparent);
+  --scrollbar-thumb-hover: var(--brand);
+}
+
+.dark {
+  /* Also THEME_BACKGROUND in src/theme/colorSchemes.ts. */
+  --background: #0e0e0f;
+  --foreground: #f0efec;
+  --card: #19191a;
+  --card-foreground: #f0efec;
+  --popover: #222223;
+  --popover-foreground: #f0efec;
+  --primary: #f0efec;
+  --primary-foreground: #0e0e0f;
+  --secondary: #222223;
+  --secondary-foreground: #f0efec;
+  --muted: #222223;
+  --muted-foreground: #8e8d84;
+  --subtle: #c3c2b7;
+  --accent: #2b2b2c;
+  --accent-foreground: #f0efec;
+  --destructive: #e05252;
+  --border: #2c2c2d;
+  --input: #3a3a3b;
+  --ring: var(--brand);
+
+  --critical: #e05252;
+  --warning: #fab219;
+  --good: #0ca30c;
+  --act-read: #7f9bc4;
+  --act-change: #9085e9;
+  --act-outside: #1fa9bd;
+  --link: var(--brand);
+  --link-hover: #8fb0ff;
+  --brand: #4d7cff;
+  --brand-foreground: #ffffff;
+  --brand-strong: #3a64e0;
+  --brand-strong-hover: #2f5bd6;
+  --clawd: #d97757;
+  --stage: #000000;
+  --stage-foreground: #f0efec;
+  --account-a: #4d7cff;
+  --account-b: #9085e9;
+  --account-c: #1fa9bd;
+  --account-d: #e070b0;
+  --plan-pro: #c5cdd9;
+  --plan-max: #d8b76a;
+  --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.35);
+  --shadow-edge: rgb(0 0 0 / 0.7);
+}
+
+/* Syntax colours, only inside code blocks. Muted on purpose: code is content, and status
+   hues (critical, warning, good) keep their meaning outside. */
+:root {
+  --code-keyword: #7148d0;
+  --code-string: #26744a;
+  --code-number: #8a5800;
+  --code-title: #2d5cc0;
+  --code-comment: #6c6b63;
+  --code-meta: #0b6f7c;
+}
+
+.dark {
+  --code-keyword: #b9a4ff;
+  --code-string: #9fd8b8;
+  --code-number: #e6c27a;
+  --code-title: #8cbcff;
+  --code-comment: #6f6e66;
+  --code-meta: #7fd3df;
+}
+
+@theme inline {
+  --color-code-keyword: var(--code-keyword);
+  --color-code-string: var(--code-string);
+  --color-code-number: var(--code-number);
+  --color-code-title: var(--code-title);
+  --color-code-comment: var(--code-comment);
+  --color-code-meta: var(--code-meta);
+}
+
+/* Data series: one hue per Claude model family, in charts, legends and table keys only, never
+   on text. Categorical in this fixed order (dataviz palette, validated for both themes: CVD
+   separation ΔE ≥ 8.4, normal vision ≥ 19.8, ≥ 3:1 on card in light and dark). The same three in
+   both themes. Bars keep a 2 px gap between segments, so they never need a stroke. */
+@theme inline {
+  --color-series-opus: var(--series-opus);
+  --color-series-sonnet: var(--series-sonnet);
+  --color-series-haiku: var(--series-haiku);
+  --color-series-other: var(--series-other);
+}
+
+:root {
+  --series-opus: #3987e5;
+  --series-sonnet: #199e70;
+  --series-haiku: #c98500;
+  /* Models outside the three families: a neutral, so it never reads as a fourth identity. */
+  --series-other: #a3a29a;
+}
+
+.dark {
+  --series-other: #5c5b55;
+}

@@ -1,0 +1,125 @@
+import { computed, ref, type Ref } from 'vue'
+import { toast } from 'vue-sonner'
+import { useI18n } from 'vue-i18n'
+import type { PendingImage } from '@/utils/content'
+import {
+  MAX_IMAGES_PER_MESSAGE,
+  MAX_IMAGE_FILE_BYTES,
+  formatBytes,
+  groupRejected,
+  placeMarked,
+  sortIncoming,
+  splitSettled,
+  type RejectReason,
+  type Rejected
+} from '@/utils/attachments'
+import { moveItem } from '@/utils/order'
+
+const readAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+
+const REJECT_KEYS: Record<RejectReason, string> = {
+  type: 'chat.image_wrong_type',
+  size: 'chat.image_too_large',
+  limit: 'chat.image_limit'
+}
+
+/**
+ * Images waiting to go out with the next message, from paste, drop or file picker. The state can
+ * live outside the component, so the attachments and the reads still running outlast it (the
+ * composer keeps both per tab).
+ */
+export const useImageAttachments = (
+  images: Ref<PendingImage[]> = ref([]),
+  // Reads still running hold their slots, so two overlapping drops cannot overshoot the limit.
+  readingCount: Ref<number> = ref(0)
+) => {
+  const { t, locale } = useI18n()
+
+  const isReading = computed(() => readingCount.value > 0)
+
+  // A pasted screenshot can arrive without a file name.
+  const nameOf = (name: string) => name || t('chat.image_unnamed')
+  const namesOf = (names: string[]) => names.map(nameOf).join(', ')
+
+  const reportRejected = (rejected: Rejected[]) => {
+    for (const { reason, names } of groupRejected(rejected)) {
+      toast.error(
+        t(REJECT_KEYS[reason], {
+          names: namesOf(names),
+          max:
+            reason === 'size'
+              ? formatBytes(MAX_IMAGE_FILE_BYTES, locale.value)
+              : MAX_IMAGES_PER_MESSAGE
+        })
+      )
+    }
+  }
+
+  const addFiles = async (files: Iterable<File>) => {
+    const { accepted, rejected } = sortIncoming(
+      [...files],
+      MAX_IMAGES_PER_MESSAGE - images.value.length - readingCount.value
+    )
+    reportRejected(rejected)
+    if (!accepted.length) return
+
+    readingCount.value += accepted.length
+    const results = await Promise.allSettled(accepted.map(({ file }) => readAsDataUrl(file)))
+    readingCount.value -= accepted.length
+
+    const { done, failed } = splitSettled(accepted, results)
+    images.value = [
+      ...images.value,
+      ...done.map(({ item: { file, mediaType }, value: src }) => ({
+        id: crypto.randomUUID(),
+        name: nameOf(file.name),
+        mediaType,
+        data: src.slice(src.indexOf(',') + 1),
+        src,
+        bytes: file.size
+      }))
+    ]
+    if (!failed.length) return
+    console.warn('attachments.read_failed', { count: failed.length })
+    toast.error(
+      t('chat.image_read_failed', { names: namesOf(failed.map(({ file }) => file.name)) })
+    )
+  }
+
+  const remove = (id: string) => {
+    images.value = images.value.filter((image) => image.id !== id)
+  }
+
+  /** One place earlier or later; Claude receives the images in this order. */
+  const move = (id: string, step: -1 | 1) => {
+    const from = images.value.findIndex((image) => image.id === id)
+    images.value = moveItem(images.value, from, from + step)
+  }
+
+  const clear = () => {
+    images.value = []
+  }
+
+  /**
+   * Marked images from the preview, in place of their source when that is still attached. False
+   * when the message has no room left.
+   */
+  const placeMarkedImages = (sourceId: string | null, incoming: PendingImage[]) => {
+    const replaced = images.value.some((image) => image.id === sourceId) ? 1 : 0
+    const total = images.value.length - replaced + incoming.length + readingCount.value
+    if (total > MAX_IMAGES_PER_MESSAGE) {
+      toast.error(t('images.marked_limit', { max: MAX_IMAGES_PER_MESSAGE }))
+      return false
+    }
+    images.value = placeMarked(images.value, sourceId, incoming)
+    return true
+  }
+
+  return { images, readingCount, isReading, addFiles, remove, move, clear, placeMarkedImages }
+}

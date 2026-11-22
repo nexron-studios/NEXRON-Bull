@@ -1,0 +1,388 @@
+/* Reused <Transition> classes. */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--duration-fade) var(--ease-out-soft);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Thinking bar quips (Figma "41") and the account of a session row: the old text slips up and
+   out fast, the new one rises in. */
+.quip-leave-active {
+  transition:
+    opacity 80ms var(--ease-out-soft),
+    transform 80ms var(--ease-out-soft);
+}
+.quip-enter-active {
+  transition:
+    opacity 160ms var(--ease-out-soft),
+    transform 160ms var(--ease-out-soft);
+}
+.quip-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.quip-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Drag and drop (vue-draggable-plus / SortableJS toggles these by name, one class each).
+   The lifted copy follows the pointer; the gap where it lands shows only a 2 px brand line. */
+.drag-lifted {
+  /* The copy hangs on <body>, outside its list: without this an <li> shows its bullet. */
+  list-style: none;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-lift);
+  outline: 1px solid var(--brand);
+}
+.drag-ghost,
+.drag-ghost-x {
+  position: relative;
+}
+.drag-ghost > *,
+.drag-ghost-x > * {
+  opacity: 0;
+}
+.drag-ghost::after,
+.drag-ghost-x::after {
+  position: absolute;
+  border-radius: 2px;
+  background: var(--brand);
+  content: '';
+}
+.drag-ghost::after {
+  inset-inline: 0.5rem;
+  top: calc(50% - 1px);
+  height: 2px;
+}
+.drag-ghost-x::after {
+  inset-block: 0.25rem;
+  left: calc(50% - 1px);
+  width: 2px;
+}
+
+/* Route change (router/index.ts): only the content area changes, sidebar and tab bar hold still.
+   The names exist only during a route change; the theme switch reveals the whole root. Inside the
+   content, what both pages share is lifted out of its snapshot so it does not travel with it: a
+   part that stays (the settings list), the current item's marker, which glides to the new item
+   like the sidebar snap, and the title, which turns into the new one in place. Each is one
+   element per page. */
+html[data-route-transition] [data-route-content] {
+  view-transition-name: route-content;
+}
+html[data-route-transition] [data-route-still] {
+  view-transition-name: route-still;
+}
+html[data-route-transition] [data-route-marker] {
+  view-transition-name: route-marker;
+}
+html[data-route-transition] [data-route-title] {
+  view-transition-name: route-title;
+}
+/* The new page rises 8 px, like a chat tab but always vertical: from below when its link comes
+   later in the navigation order, from above when earlier. The old one leaves against it, in half
+   the time. Without a direction there is no shift and the change only fades, in 200 ms. */
+html[data-route-transition='next'] {
+  --route-shift: 8px;
+}
+html[data-route-transition='prev'] {
+  --route-shift: -8px;
+}
+html:is([data-route-transition='next'], [data-route-transition='prev']) {
+  --route-shift-duration: var(--duration-spring-smooth);
+}
+::view-transition-group(route-content) {
+  animation-duration: 200ms;
+}
+/* A shared part that only one page has belongs to that page's content and moves with it. */
+::view-transition-old(route-content),
+::view-transition-old(route-still):only-child,
+::view-transition-old(route-marker):only-child,
+::view-transition-old(route-title):only-child {
+  animation:
+    route-out 120ms var(--ease-out-soft) both,
+    route-shift-out 120ms var(--ease-out-soft) both;
+}
+::view-transition-new(route-content),
+::view-transition-new(route-still):only-child,
+::view-transition-new(route-marker):only-child,
+::view-transition-new(route-title):only-child {
+  animation:
+    route-in 200ms var(--ease-out-soft) both,
+    route-shift-in var(--route-shift-duration, 0s) var(--ease-spring-smooth) both;
+}
+/* Shared by both pages: they travel on the smooth spring when the scroll offset moves them, the
+   marker also to its new item; the list and the title cross-fade in place (the browser's own
+   blend, so what is the same on both stays perfectly still). The list draws over the marker,
+   which would otherwise cover the current item's label. */
+::view-transition-group(route-still),
+::view-transition-group(route-marker),
+::view-transition-group(route-title) {
+  animation-duration: var(--duration-spring-smooth);
+  animation-timing-function: var(--ease-spring-smooth);
+}
+::view-transition-group(route-still) {
+  z-index: 1;
+}
+::view-transition-old(route-still),
+::view-transition-new(route-still),
+::view-transition-old(route-title),
+::view-transition-new(route-title) {
+  animation-duration: var(--duration-fade);
+  animation-timing-function: var(--ease-out-soft);
+}
+@keyframes route-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes route-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes route-shift-out {
+  to {
+    transform: translateY(calc(-1 * var(--route-shift, 0px)));
+  }
+}
+@keyframes route-shift-in {
+  from {
+    transform: translateY(var(--route-shift, 0px));
+  }
+}
+
+/* Tab switch (ChatPaneSwitch, Figma "16 Motion"): the old chat leaves in 120 ms, 8 px against the
+   direction; the new one comes from the side of the selected tab. Both overlap briefly, so the
+   leaving pane lies over the space instead of pushing the new one down. */
+.tab-next-leave-active,
+.tab-prev-leave-active {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms var(--ease-out-soft),
+    transform 120ms var(--ease-out-soft);
+}
+.tab-next-enter-active,
+.tab-prev-enter-active {
+  transition:
+    opacity 150ms var(--ease-out-soft) 50ms,
+    transform 150ms var(--ease-out-soft) 50ms;
+}
+.tab-next-leave-to,
+.tab-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+.tab-next-enter-from,
+.tab-prev-leave-to {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+/* A chat item that arrives while Claude works rises 8 px on the smooth spring and fades in on an
+   ease curve, while the list glides after it (useChatFollow). No fill mode, so nothing keeps a
+   transform once it is done. Streamed text and live cards only fade: they grow in place. */
+.message-rise {
+  animation:
+    message-rise var(--duration-spring-smooth) var(--ease-spring-smooth),
+    message-fade var(--duration-fade) var(--ease-out-soft);
+}
+.message-fade {
+  animation: message-fade var(--duration-fade) var(--ease-out-soft);
+}
+@keyframes message-rise {
+  from {
+    transform: translateY(8px);
+  }
+}
+@keyframes message-fade {
+  from {
+    opacity: 0;
+  }
+}
+/* Reduced motion: no rise, the fade stays (the global block would cut it to nothing). */
+@media (prefers-reduced-motion: reduce) {
+  .message-rise,
+  .message-fade {
+    animation: message-fade var(--duration-fade) var(--ease-out-soft) !important;
+  }
+}
+
+/* Sidebar snap (useLayoutSnap): rail, panel and full width morph into each other instead of
+   jumping. Sidebar and chat column carry a name only while a snap runs, like the route content.
+   The groups travel on the smooth spring; the snapshots keep their own size, pinned top left, so
+   the wider one is revealed by its growing group instead of being stretched. */
+html[data-sidebar-snap] [data-snap-sidebar] {
+  view-transition-name: sidebar;
+}
+html[data-sidebar-snap] [data-snap-chat] {
+  view-transition-name: chat-column;
+}
+::view-transition-group(sidebar),
+::view-transition-group(chat-column),
+::view-transition-group(chat-pane) {
+  overflow: clip;
+  animation-duration: var(--duration-spring-smooth);
+  animation-timing-function: var(--ease-spring-smooth);
+}
+::view-transition-old(sidebar),
+::view-transition-new(sidebar),
+::view-transition-old(chat-column),
+::view-transition-new(chat-column),
+::view-transition-old(chat-pane),
+::view-transition-new(chat-pane) {
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+}
+/* Both states are the same part, so they cross-fade on one curve and add up (the browser's own
+   blend): what looks the same before and after, like the session bar, stays perfectly still. A
+   faster fade-out let both sit half transparent at once and the whole part dimmed for a moment. */
+::view-transition-old(sidebar),
+::view-transition-old(chat-column),
+::view-transition-old(chat-pane),
+::view-transition-old(session-bar-tools):only-child,
+::view-transition-old(chat-search-field):only-child {
+  mix-blend-mode: plus-lighter;
+  animation: route-out var(--duration-snap-fade) var(--ease-out-soft) both;
+}
+::view-transition-new(sidebar),
+::view-transition-new(chat-column),
+::view-transition-new(chat-pane),
+::view-transition-new(session-bar-tools):only-child,
+::view-transition-new(chat-search-field):only-child {
+  mix-blend-mode: plus-lighter;
+  animation: route-in var(--duration-snap-fade) var(--ease-out-soft) both;
+}
+/* The browser isolates a pair only when both pictures exist; a lone one would add its light onto
+   the parts beneath it (the chat column when the sidebar goes full width). */
+::view-transition-image-pair(sidebar),
+::view-transition-image-pair(chat-column),
+::view-transition-image-pair(chat-pane),
+::view-transition-image-pair(session-bar-tools),
+::view-transition-image-pair(chat-search-field) {
+  isolation: isolate;
+}
+/* The session bar's buttons sit at its right edge, the open search field below them: pinned top
+   left, the new ones would wait outside the growing chat until it reached them. They travel there
+   on the same spring instead. The pane leaving a tab switch keeps its copies unnamed, since a name
+   may exist only once, and while the magnifier morphs the field belongs to that morph. */
+html:is([data-sidebar-snap], [data-panel-snap])
+  [data-snap-bar-tools]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *) {
+  view-transition-name: session-bar-tools;
+}
+html:is([data-sidebar-snap], [data-panel-snap]):not([data-search-morph])
+  [data-search-field]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *) {
+  view-transition-name: chat-search-field;
+}
+::view-transition-group(session-bar-tools),
+::view-transition-group(chat-search-field) {
+  animation-duration: var(--duration-spring-smooth);
+  animation-timing-function: var(--ease-spring-smooth);
+}
+
+/* Info panel (useInfoPanel): the chat narrows like in the sidebar snap above, and the panel
+   slides in from the window's right edge on the same spring, so its left edge stays on the chat's
+   right edge all the way. Shutting runs the same way back. Header, tab bar and sidebar are no part
+   of it and stand still. */
+html[data-panel-snap] [data-snap-chat-pane] {
+  view-transition-name: chat-pane;
+}
+html[data-panel-snap] [data-snap-panel] {
+  view-transition-name: info-panel;
+}
+::view-transition-new(info-panel):only-child {
+  animation: panel-slide-in var(--duration-spring-smooth) var(--ease-spring-smooth) both;
+}
+::view-transition-old(info-panel):only-child {
+  animation: panel-slide-out var(--duration-spring-smooth) var(--ease-spring-smooth) both;
+}
+@keyframes panel-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes panel-slide-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+/* Reduced motion: the chat takes its new width at once (main.css stops the groups) and the panel
+   only fades, like the sidebar snap. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(info-panel):only-child {
+    animation: route-in 200ms var(--ease-out-soft) both;
+  }
+  ::view-transition-old(info-panel):only-child {
+    animation: route-out 120ms var(--ease-out-soft) both;
+  }
+}
+
+/* Chat search (useChatSearch, Figma "13c"). The magnifier and the field are one shared element:
+   the group grows from the button to the field on the smooth spring, the field is revealed from
+   its top right corner instead of being stretched, and the button's image fades out quickly. */
+html[data-search-morph] [data-search-button][aria-expanded='false'],
+html[data-search-morph] [data-search-field] {
+  view-transition-name: chat-search;
+}
+::view-transition-group(chat-search) {
+  overflow: clip;
+  border-radius: 12px;
+  animation-duration: var(--duration-spring-smooth);
+  animation-timing-function: var(--ease-spring-smooth);
+}
+::view-transition-old(chat-search),
+::view-transition-new(chat-search) {
+  height: 100%;
+  object-fit: none;
+  object-position: right top;
+}
+::view-transition-old(chat-search) {
+  animation: route-out 120ms var(--ease-out-soft) both;
+}
+::view-transition-new(chat-search) {
+  animation: route-in var(--duration-fade) var(--ease-out-soft) both;
+}
+
+/* Hits in the chat: marked through the CSS Custom Highlight API, the current one stronger. */
+::highlight(chat-search) {
+  background-color: color-mix(in srgb, var(--brand) 25%, transparent);
+}
+::highlight(chat-search-current) {
+  background-color: color-mix(in srgb, var(--brand) 50%, transparent);
+  color: var(--foreground);
+}
+
+/* The item a jump lands on lights up once: in 150 ms, held 900 ms, out in 600 ms. An overlay, so
+   only its opacity animates. */
+.search-flash {
+  position: relative;
+}
+.search-flash::after {
+  content: '';
+  position: absolute;
+  inset: -6px -8px;
+  border-radius: 12px;
+  background-color: var(--brand);
+  opacity: 0;
+  pointer-events: none;
+  animation: search-flash var(--duration-search-flash) var(--ease-out-soft);
+}
+@keyframes search-flash {
+  9%,
+  64% {
+    opacity: 0.1;
+  }
+}
+/* Reduced motion keeps the light: it is a fade, nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  .search-flash::after {
+    animation: search-flash var(--duration-search-flash) var(--ease-out-soft) !important;
+  }
+}

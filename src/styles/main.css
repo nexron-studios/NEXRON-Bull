@@ -1,0 +1,305 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import '@xterm/xterm/css/xterm.css';
+@import './tokens.css';
+@import './motion.css';
+@import './transitions.css';
+@import './debug.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* Bull wordmark, Latin only. `block` instead of `swap`: the face is far wider than the Geist
+   fallback, and a swap after first paint would push the tabs sideways. */
+@font-face {
+  font-family: 'Climate Crisis';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../assets/fonts/climate-crisis-latin-400.woff2') format('woff2');
+}
+
+/* The shadcn-vue "nova" components use these short variants; Reka UI sets data-state and
+   data-orientation, so they map onto those attributes. */
+@custom-variant data-open (&:where([data-state='open']), &:where([data-open]:not([data-open='false'])));
+@custom-variant data-closed (&:where([data-state='closed']), &:where([data-closed]:not([data-closed='false'])));
+@custom-variant data-active (&:where([data-state='active']), &:where([data-active]:not([data-active='false'])));
+@custom-variant data-horizontal (&:where([data-orientation='horizontal']));
+@custom-variant data-vertical (&:where([data-orientation='vertical']));
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* Theme switch: useThemeToggle reveals the new theme as a growing circle, which replaces the
+   default crossfade. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* The material of a bar that content scrolls beneath (motion.md, "Apple feel"): the page
+   background, translucent, blurred and saturated like an iOS bar. Bars nothing runs under stay
+   solid. */
+@utility material {
+  background-color: color-mix(in srgb, var(--background) 80%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.8);
+  backdrop-filter: blur(16px) saturate(1.8);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-body text-foreground antialiased;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-color: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  border-width: 2px;
+  background-color: var(--scrollbar-thumb-hover);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Movement off, fades kept: transitions may only change opacity, keyframe
+     animations end at once, View Transition snapshots stop travelling. */
+  *,
+  *::before,
+  *::after {
+    transition-property: opacity !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*) {
+    animation: none !important;
+  }
+  /* SVG geometry (width, x, r …) is CSS too: with a running transition, Mermaid
+     and other SVG libraries measure the start value and draw tiny diagrams. */
+  svg * {
+    transition-duration: 0s !important;
+  }
+}
+
+/* Code blocks come from markdown-it as HTML (v-html), so Tailwind classes cannot reach them. */
+.code-block {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+.code-block .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+.code-block .code-head button {
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.5rem;
+}
+.code-block .code-head button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.code-block code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.75rem;
+  background: transparent;
+  font-size: var(--text-small);
+}
+.hljs-keyword,
+.hljs-built_in,
+.hljs-selector-tag,
+.hljs-type {
+  color: var(--code-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--code-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol {
+  color: var(--code-number);
+}
+.hljs-title,
+.hljs-function,
+.hljs-section,
+.hljs-name {
+  color: var(--code-title);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.hljs-meta,
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-property {
+  color: var(--code-meta);
+}
+
+/* xterm.css paints the terminal's viewport black under its cells (theme colours go on the cells);
+   a sub-pixel row of it showed as a dark line under the terminal in the light theme. */
+.xterm .xterm-viewport {
+  background-color: transparent;
+}
+
+/* "Claude is writing", after prompt-kit's Text Shimmer (MIT). Reduced motion stops it via the
+   block above. */
+@keyframes text-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@utility text-shimmer {
+  background: linear-gradient(
+      90deg,
+      var(--muted-foreground) 35%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 65%
+    )
+    0 0 / 200% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2.4s linear infinite;
+}
+
+/* The first ghost row of the info panel while Claude thinks (Figma 42e): a light band sweeps
+   across, by transform only. */
+@keyframes ghost-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@utility animate-ghost-sweep {
+  /* `both`: shortened to one run under reduced motion, the band stays at its end, off the bar. */
+  animation: ghost-sweep 1.6s var(--ease-out-soft) infinite both;
+}
+
+/* The thinking bar's wave (Figma "37" A). It rests at full height, so with less motion the bars
+   keep their shape instead of collapsing. */
+@keyframes wave-bar {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.4);
+  }
+}
+@utility wave-bar {
+  transform-origin: bottom;
+  animation: wave-bar 1s ease-in-out infinite;
+}
+
+/* The thinking bar's effort badge from "high" up (Figma "37" A): a light band runs through the
+   pill; "max" adds a soft brand glow. The band stays faint so white text keeps its contrast; with
+   less motion it ends outside the pill. */
+@keyframes effort-sheen {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+@utility effort-sheen {
+  background-image: linear-gradient(
+    110deg,
+    transparent 35%,
+    color-mix(in oklab, var(--brand-foreground) 32%, transparent) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  animation: effort-sheen 2s ease-in-out infinite;
+}
+@utility effort-glow {
+  box-shadow: 0 0 10px color-mix(in oklab, var(--brand) 45%, transparent);
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+}
+
+/* Empty chat, after the Agent Dashboard's EmptySession: a soft brand-blue glow behind Clawd
+   that fades out towards the frame, and a faint dot raster only at the edges, so text and the
+   prompt line stay on a clean ground. Blue, not Claude orange: an orange haze was the only warm
+   surface in Night Desk (16.11.2026). Clawd is brand blue as well (18.11.2026). */
+@utility clawd-glow {
+  background: radial-gradient(
+    circle at 50% 45%,
+    color-mix(in oklab, var(--brand) 20%, transparent),
+    transparent 58%
+  );
+}
+@utility clawd-dots {
+  background-image: radial-gradient(var(--input) 1px, transparent 1px);
+  background-size: 16px 16px;
+  mask-image: radial-gradient(ellipse at 50% 50%, transparent 55%, black 95%);
+}
+/* The caret of the empty prompt line. Reduced motion stops it via the block above. */
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@utility caret-blink {
+  animation: caret-blink 1.1s steps(1) infinite;
+}
+
+/* Phones: keep bars and the composer clear of the notch and the home indicator. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}

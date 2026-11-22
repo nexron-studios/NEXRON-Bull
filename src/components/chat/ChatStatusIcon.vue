@@ -1,0 +1,78 @@
+<script setup lang="ts">
+import { computed, type Component } from 'vue'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CirclePause,
+  LoaderCircle,
+  MessageCircleQuestion,
+  Timer,
+  TriangleAlert
+} from '@lucide/vue'
+import { useI18n } from 'vue-i18n'
+import BrandClawdMark from '@/components/brand/BrandClawdMark.vue'
+import ChatFinishBadge from '@/components/chat/ChatFinishBadge.vue'
+import type { TabStatus } from '@/utils/chatTab'
+
+// `rank`: a finished chat not seen yet shows its place in the finish order instead of the check.
+// `isFailed`: the last turn ended with an error; a ready chat then shows a warning, not the check.
+// `isWaiting`: the account is full and the chat waits for its reset; that outranks the rest.
+// `hasQuestion`: the last answer ends on a question (`> [!question]`); it outranks the finish number.
+// `isEmpty`: nobody wrote in the chat yet; Clawd waits instead of a spinner while Claude starts.
+const {
+  status,
+  rank = null,
+  isFailed = false,
+  isWaiting = false,
+  hasQuestion = false,
+  isEmpty = false
+} = defineProps<{
+  status: TabStatus
+  rank?: number | null
+  isFailed?: boolean
+  isWaiting?: boolean
+  hasQuestion?: boolean
+  isEmpty?: boolean
+}>()
+
+const { t } = useI18n()
+
+// Colour follows the token hierarchy: critical only for an approval, warning for work, good for ready.
+const LOOK: Record<TabStatus, { icon: Component; class: string }> = {
+  starting: { icon: CircleDashed, class: 'text-muted-foreground animate-spin' },
+  idle: { icon: CircleCheck, class: 'text-good' },
+  working: { icon: LoaderCircle, class: 'text-warning animate-spin' },
+  asking: { icon: CircleAlert, class: 'text-critical' },
+  ended: { icon: CirclePause, class: 'text-muted-foreground' }
+}
+
+const FAILED_LOOK = { icon: TriangleAlert, class: 'text-warning' }
+const WAITING_LOOK = { icon: Timer, class: 'text-act-read' }
+const QUESTION_LOOK = { icon: MessageCircleQuestion, class: 'text-warning' }
+
+const isFailedIdle = computed(() => isFailed && status === 'idle')
+const look = computed(() => {
+  if (isWaiting) return WAITING_LOOK
+  if (hasQuestion) return QUESTION_LOOK
+  return isFailedIdle.value ? FAILED_LOOK : LOOK[status]
+})
+const label = computed(() => {
+  if (isWaiting) return t('chat.status.waiting')
+  if (hasQuestion) return t('chat.status.question')
+  return t(isFailedIdle.value ? 'chat.status.failed' : `chat.status.${status}`)
+})
+</script>
+
+<template>
+  <!-- The box of the other icons, so a title beside it does not shift when the state changes. -->
+  <span v-if="isEmpty && !isWaiting" class="flex size-4 shrink-0 items-center justify-center">
+    <BrandClawdMark :size="9" />
+    <span class="sr-only">{{ t('chat.status.empty') }}</span>
+  </span>
+  <ChatFinishBadge v-else-if="rank !== null && !isWaiting && !hasQuestion" :rank />
+  <template v-else>
+    <component :is="look.icon" class="size-4 shrink-0" :class="look.class" aria-hidden="true" />
+    <span class="sr-only">{{ label }}</span>
+  </template>
+</template>

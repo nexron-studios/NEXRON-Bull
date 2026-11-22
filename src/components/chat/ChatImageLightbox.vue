@@ -1,0 +1,198 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import ChatLightboxHeader from '@/components/chat/ChatLightboxHeader.vue'
+import ChatLightboxPhoneBar from '@/components/chat/ChatLightboxPhoneBar.vue'
+import ChatLightboxStage from '@/components/chat/ChatLightboxStage.vue'
+import ChatLightboxToolbar from '@/components/chat/ChatLightboxToolbar.vue'
+import ChatMarkupComment from '@/components/chat/ChatMarkupComment.vue'
+import ChatMarkupSheet from '@/components/chat/ChatMarkupSheet.vue'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { useLightboxActions } from '@/composables/useLightboxActions'
+import { useProvideMarkup } from '@/composables/useMarkup'
+import { useMarkupTarget } from '@/composables/useMarkupTarget'
+import { useIsPhone } from '@/composables/useViewport'
+import { imageMeta, stepIndex, type LightboxImage } from '@/utils/attachments'
+import type { LightboxMode } from '@/utils/lightbox'
+import type { Size } from '@/utils/markup'
+import { historyStepOf } from '@/utils/shortcuts'
+
+// The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
+// "M20"): view and page, or draw on it and hand the result with a comment to the composer.
+const { images } = defineProps<{ images: LightboxImage[] }>()
+
+const isOpen = defineModel<boolean>('open', { required: true })
+const index = defineModel<number>('index', { required: true })
+
+const stage = ref<InstanceType<typeof ChatLightboxStage> | null>(null)
+const mode = ref<LightboxMode>('view')
+const zoom = ref(1)
+const natural = ref<Size | null>(null)
+
+const { t, locale } = useI18n()
+const isPhone = useIsPhone()
+const markup = useProvideMarkup()
+const target = useMarkupTarget()
+
+const current = computed(() => images[index.value] ?? null)
+const hasSeveral = computed(() => images.length > 1)
+const isMarking = computed(() => mode.value === 'mark')
+const meta = computed(() =>
+  current.value ? imageMeta(current.value.bytes, locale.value, natural.value) : ''
+)
+const counter = computed(() =>
+  hasSeveral.value
+    ? t('chat.image_counter', { current: index.value + 1, total: images.length })
+    : null
+)
+
+const { isApplying, mayLeave, apply, copy, download } = useLightboxActions({
+  current,
+  isMarking,
+  target,
+  markup,
+  onApplied: () => {
+    mode.value = 'view'
+    isOpen.value = false
+  }
+})
+
+const KEY_STEPS: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1 }
+
+const step = (delta: number) => {
+  index.value = stepIndex(index.value, delta, images.length)
+}
+
+// Every way out (Esc, ×, the overlay) comes through here, so unsaved markup is asked about once.
+const setOpen = (next: boolean) => {
+  if (next || mayLeave()) isOpen.value = next
+}
+
+const setMode = (next: LightboxMode) => {
+  if (next === 'view' && !mayLeave()) return
+  if (next === 'view') markup.reset()
+  mode.value = next
+}
+
+const discard = () => {
+  markup.reset()
+  mode.value = 'view'
+}
+
+// Focus the image, not the first button: a focused icon button opens its tooltip right away.
+const focusStage = (event: Event) => {
+  event.preventDefault()
+  stage.value?.focus()
+}
+
+// The comment field keeps its own text undo; everywhere else Ctrl Z belongs to the drawing.
+const handleMarkKey = (event: KeyboardEvent) => {
+  const field = event.target
+  if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) return
+  const action = historyStepOf(event)
+  if (!action) return
+  event.preventDefault()
+  markup[action]()
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (isMarking.value) return handleMarkKey(event)
+  const delta = KEY_STEPS[event.key]
+  if (!delta || !hasSeveral.value) return
+  event.preventDefault()
+  step(delta)
+}
+
+watch(index, () => {
+  natural.value = null
+  zoom.value = 1
+})
+
+watch(isOpen, (open) => {
+  if (open) return
+  discard()
+  zoom.value = 1
+})
+</script>
+
+<template>
+  <Dialog :open="isOpen" @update:open="setOpen">
+    <DialogContent
+      :show-close-button="false"
+      class="inset-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col rounded-none text-stage-foreground ring-0 sm:max-w-none"
+      :class="isPhone ? 'gap-0 bg-stage p-0 pt-safe px-safe' : 'gap-3.5 bg-stage/85 px-10 py-6'"
+      @keydown="handleKeydown"
+      @open-auto-focus="focusStage"
+    >
+      <template v-if="current">
+        <ChatLightboxHeader
+          :name="current.name"
+          :meta
+          :counter
+          :is-phone
+          :is-marking
+          @close="setOpen(false)"
+          @cancel="discard"
+          @download="download"
+        />
+
+        <template v-if="isPhone">
+          <ChatLightboxStage
+            ref="stage"
+            :image="current"
+            :natural
+            :zoom="1"
+            :is-marking
+            :can-page="hasSeveral"
+            is-phone
+            @step="step"
+            @load="natural = $event"
+          />
+          <ChatMarkupSheet v-if="isMarking" :is-applying @apply="apply" />
+          <ChatLightboxPhoneBar
+            v-else
+            class="pb-safe"
+            :index
+            :total="images.length"
+            :can-mark="!!target"
+            @step="step"
+            @copy="copy"
+            @mark="setMode('mark')"
+          />
+        </template>
+
+        <!-- One dialog: the comment sits under the image and its tools, not in a second panel. -->
+        <div v-else class="flex min-h-0 flex-1 flex-col items-center gap-3.5">
+          <ChatLightboxStage
+            ref="stage"
+            class="w-full"
+            :image="current"
+            :natural
+            :zoom
+            :is-marking
+            :can-page="hasSeveral"
+            :is-phone="false"
+            @step="step"
+            @load="natural = $event"
+          />
+          <ChatLightboxToolbar
+            v-model:zoom="zoom"
+            class="max-w-full flex-wrap justify-center"
+            :mode
+            :can-mark="!!target"
+            @update:mode="setMode"
+            @copy="copy"
+            @download="download"
+          />
+          <ChatMarkupComment
+            v-if="isMarking"
+            class="w-full max-w-180 shrink-0"
+            :is-applying
+            @discard="discard"
+            @apply="apply"
+          />
+        </div>
+      </template>
+    </DialogContent>
+  </Dialog>
+</template>

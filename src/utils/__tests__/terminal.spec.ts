@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   controlCharOf,
   fontSizeOf,
+  hasLoginShell,
   resolveShell,
   startupInputOf,
   terminalThemeOf
@@ -22,6 +23,20 @@ describe('resolveShell', () => {
 
   it('should take PowerShell 7 on automatic when it is installed', () => {
     expect(resolveShell('auto', ['pwsh', 'powershell', 'cmd'])).toBe('pwsh')
+  })
+
+  it('should start the login shell on a Mac, also for a shell picked on Windows', () => {
+    expect([resolveShell('auto', ['login']), resolveShell('cmd', ['login'])]).toEqual([
+      'login',
+      'login'
+    ])
+  })
+})
+
+describe('hasLoginShell', () => {
+  it('should give macOS and Linux their login shell and Windows the choice', () => {
+    const systems = ['macOS', 'Linux', 'Windows', null] as const
+    expect(systems.map((system) => hasLoginShell(system))).toEqual([true, true, false, false])
   })
 })
 

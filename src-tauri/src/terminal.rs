@@ -39,9 +39,19 @@ pub enum Shell {
     Powershell,
     Cmd,
     Bash,
+    /// The shell macOS or Linux logs the user in to (`$SHELL`, zsh on a Mac)
+    Login,
 }
 
+/// Windows offers its shells to pick from; macOS and Linux start the user's own login shell, which
+/// already is the one they chose for every terminal there.
+#[cfg(windows)]
 const SHELLS: [Shell; 4] = [Shell::Pwsh, Shell::Powershell, Shell::Cmd, Shell::Bash];
+#[cfg(not(windows))]
+const SHELLS: [Shell; 1] = [Shell::Login];
+/// Where `$SHELL` is not set: the default of every Mac since macOS 10.15.
+#[cfg(not(windows))]
+const FALLBACK_LOGIN_SHELL: &str = "/bin/zsh";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -324,6 +334,8 @@ fn shell_args(shell: Shell) -> &'static [&'static str] {
         Shell::Pwsh | Shell::Powershell => &["-NoLogo"],
         Shell::Cmd => &[],
         Shell::Bash => &["--login", "-i"],
+        // zsh, bash and fish all read `-l`; the profile sets PATH (Homebrew, nvm) as in Terminal.app.
+        Shell::Login => &["-l"],
     }
 }
 
@@ -340,6 +352,7 @@ fn program_of(shell: Shell) -> Option<PathBuf> {
             let outside_system: Vec<PathBuf> = folders.into_iter().filter(|folder| !is_system_folder(folder)).collect();
             find_in(&outside_system, &exe_name("bash"))
         }),
+        Shell::Login => login_shell(),
     }
 }
 
@@ -366,6 +379,17 @@ fn git_bash() -> Option<PathBuf> {
     bash.is_file().then_some(bash)
 }
 
+
+#[cfg(windows)]
+fn login_shell() -> Option<PathBuf> {
+    None
+}
+
+#[cfg(not(windows))]
+fn login_shell() -> Option<PathBuf> {
+    let shell = std::env::var_os("SHELL").map(PathBuf::from).filter(|shell| shell.is_file());
+    shell.or_else(|| Some(PathBuf::from(FALLBACK_LOGIN_SHELL)).filter(|shell| shell.is_file()))
+}
 
 #[tauri::command(async)]
 pub fn terminal_shells() -> Vec<Shell> {
@@ -514,6 +538,23 @@ mod tests {
         assert!(output.contains("bull-pty-test"), "output was {output:?}");
         assert_eq!(code, 0);
         assert!(matches!(host.write(id, "x"), Err(TerminalError::NotFound(_))));
+    }
+
+    #[test]
+    fn names_the_login_shell_as_the_frontend_does() {
+        assert_eq!(serde_json::from_str::<Shell>(r#""login""#).unwrap(), Shell::Login);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn offers_no_login_shell_on_windows() {
+        assert!(!terminal_shells().contains(&Shell::Login));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn offers_only_the_login_shell_elsewhere() {
+        assert_eq!(terminal_shells(), vec![Shell::Login]);
     }
 
     #[cfg(windows)]

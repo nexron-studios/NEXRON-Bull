@@ -1019,7 +1019,8 @@ export default {
         pwsh: 'PowerShell 7',
         powershell: 'Windows PowerShell',
         cmd: 'Eingabeaufforderung',
-        bash: 'Git Bash'
+        bash: 'Git Bash',
+        login: 'Standard-Shell'
       },
       shell_hint_label: 'Was ist {shell}?',
       shell_hints: {
@@ -1028,7 +1029,9 @@ export default {
         powershell:
           'Die PowerShell 5.1, die bei Windows dabei ist. Für ältere Skripte, die unter PowerShell 7 nicht laufen.',
         cmd: 'Die klassische Windows-Konsole (cmd.exe). Für .bat-Dateien und alte Befehle.',
-        bash: 'Die Bash aus Git für Windows. Linux-Befehle wie ls, grep und ./skript.sh, wie auf Mac und Server.'
+        bash: 'Die Bash aus Git für Windows. Linux-Befehle wie ls, grep und ./skript.sh, wie auf Mac und Server.',
+        login:
+          'Bull startet die Shell, die auf diesem Rechner eingestellt ist, auf dem Mac meist zsh. Dieselbe wie im Terminal des Systems.'
       },
       font_size: 'Schriftgröße',
       font_size_value: '{size} px',
@@ -1295,7 +1298,8 @@ export default {
       pwsh: 'PowerShell',
       powershell: 'PowerShell',
       cmd: 'cmd',
-      bash: 'Bash'
+      bash: 'Bash',
+      login: 'Shell'
     },
     drawer_tab: '{shell} {number}'
   },

@@ -1,5 +1,6 @@
 import type { ITheme } from '@xterm/xterm'
 import type { TerminalRequest } from '@/stores/terminalRequests'
+import type { SystemName } from '@/utils/platform'
 import {
   DEFAULT_TERMINAL_FONT_SIZE,
   terminalShellList,
@@ -10,16 +11,22 @@ import {
 export const isTerminalShell = (value: unknown): value is TerminalShell =>
   terminalShellList.some((shell) => shell === value)
 
+/** macOS and Linux start the user's login shell; only Windows has shells to pick from. */
+export const hasLoginShell = (system: SystemName | null): boolean =>
+  system === 'macOS' || system === 'Linux'
+
 /**
  * The shell a new terminal starts: the one picked in the settings if it is installed, else what
- * "automatic" picks, PowerShell 7 or else Windows PowerShell, which every Windows has. A picked
- * shell that went missing (uninstalled, a settings value from another PC) is no reason to fail.
+ * "automatic" picks: the login shell on macOS and Linux, else PowerShell 7 or Windows PowerShell,
+ * which every Windows has. A picked shell that went missing (uninstalled, a settings value from
+ * another PC) is no reason to fail.
  */
 export const resolveShell = (
-  choice: TerminalShellChoice,
+  choice: TerminalShellChoice | TerminalShell,
   installed: readonly TerminalShell[]
 ): TerminalShell => {
   if (choice !== 'auto' && installed.includes(choice)) return choice
+  if (installed.includes('login')) return 'login'
   if (installed.includes('pwsh')) return 'pwsh'
   return 'powershell'
 }

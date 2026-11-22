@@ -14,14 +14,18 @@ import {
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTerminalPreferences } from '@/composables/useTerminalPreferences'
+import { systemNameOf } from '@/utils/platform'
+import { hasLoginShell } from '@/utils/terminal'
 import { terminalFontSizeList, terminalShellChoiceList } from '@/utils/terminalPreferences'
 
 // Shell and font size of new terminals, stored under `bull.terminal.*` where the terminal reads
-// them. "Automatisch" stores nothing: the terminal takes PowerShell 7 when it is installed.
+// them. "Automatisch" stores nothing: the terminal takes PowerShell 7 when it is installed. A Mac
+// (or Linux) starts the login shell the user set up there, so it shows that one and no choice.
 const { isPhone = false } = defineProps<{ isPhone?: boolean }>()
 
 const { t } = useI18n()
 const { shell, fontSize } = useTerminalPreferences()
+const isLoginShell = hasLoginShell(systemNameOf(navigator.userAgent))
 
 // Reka selects hold strings; the stored size stays a number.
 const fontSizeChoice = computed({
@@ -49,7 +53,19 @@ const fontSizeChoice = computed({
         <h2 id="settings-shell" class="text-small font-semibold">
           {{ t('settings.terminal.shell') }}
         </h2>
-        <div role="group" aria-labelledby="settings-shell" class="grid grid-cols-2 gap-2">
+        <template v-if="isLoginShell">
+          <!-- Shown like a value, not a tile: there is nothing to pick. -->
+          <p
+            class="flex min-h-11 items-center gap-2 rounded-lg bg-muted/60 px-3 text-small font-medium"
+          >
+            <TerminalShellIcon shell="login" class="size-4" />
+            {{ t('settings.terminal.shells.login') }}
+          </p>
+          <p class="text-meta text-muted-foreground">
+            {{ t('settings.terminal.shell_hints.login') }}
+          </p>
+        </template>
+        <div v-else role="group" aria-labelledby="settings-shell" class="grid grid-cols-2 gap-2">
           <div
             v-for="value in terminalShellChoiceList"
             :key="value"
@@ -87,7 +103,7 @@ const fontSizeChoice = computed({
           </div>
         </div>
         <!-- Touch has no hover, so on a phone the hint of the picked shell stands below. -->
-        <p v-if="isPhone" class="text-meta text-muted-foreground">
+        <p v-if="isPhone && !isLoginShell" class="text-meta text-muted-foreground">
           {{ t(`settings.terminal.shell_hints.${shell}`) }}
         </p>
       </div>
@@ -105,6 +121,6 @@ const fontSizeChoice = computed({
         </Select>
       </div>
     </div>
-    <SettingsTerminalPreview :shell :font-size />
+    <SettingsTerminalPreview :shell="isLoginShell ? 'login' : shell" :font-size />
   </section>
 </template>

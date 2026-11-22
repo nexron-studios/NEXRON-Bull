@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import TerminalShellIcon from '@/components/terminal/TerminalShellIcon.vue'
-import { TERMINAL_PREVIEW_PROMPT, type TerminalShellChoice } from '@/utils/terminalPreferences'
+import {
+  TERMINAL_PREVIEW_PROMPT,
+  type TerminalShell,
+  type TerminalShellChoice
+} from '@/utils/terminalPreferences'
 
 // A terminal as Bull draws it, in the chosen shell and font size, so both choices show before a
 // terminal is opened. Sample output only; nothing runs.
-defineProps<{ shell: TerminalShellChoice; fontSize: number }>()
+defineProps<{ shell: TerminalShellChoice | TerminalShell; fontSize: number }>()
 
 const { t } = useI18n()
 </script>

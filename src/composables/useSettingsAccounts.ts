@@ -9,6 +9,7 @@ import { accountCardsOf, type AccountCardProps } from '@/utils/accountCards'
 
 /** A new folder or a finished login shows up without a reload while the page is open. */
 const PROFILES_POLL_MS = 15 * 1000
+const FAILED_POLL_MS = 60 * 1000
 const PROFILES_STALE_TIME_MS = 10 * 1000
 
 export const machineStateList = ['loading', 'failed', 'ready'] as const
@@ -37,8 +38,9 @@ export const useSettingsAccounts = () => {
     queryKey: profilesKey(machine),
     queryFn: () => fetchProfiles(machine),
     staleTime: PROFILES_STALE_TIME_MS,
-    // An offline host is not asked again every 15 s over SSH; "Erneut versuchen" does that.
-    refetchInterval: (query) => (query.state.status === 'error' ? false : PROFILES_POLL_MS)
+    // An offline host is asked once a minute instead of every 15 s: each try waits out the SSH
+    // timeout. The card offers no retry button; it comes back by itself once the host answers.
+    refetchInterval: (query) => (query.state.status === 'error' ? FAILED_POLL_MS : PROFILES_POLL_MS)
   }))
 
   const stateOf = (machine: Machine): MachineState => {

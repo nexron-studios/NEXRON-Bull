@@ -190,7 +190,18 @@ const answered = computed(() =>
         :hint="failedHint"
         class="motion-shake"
       >
+        <!-- A host gets the assistant, which finds the cause; this PC has none, only a retry. -->
         <Button
+          v-if="entry"
+          variant="outline"
+          size="sm"
+          class="motion-press mt-1.5 self-start"
+          @click="emit('check')"
+        >
+          <Wrench class="size-4" aria-hidden="true" />{{ t('settings.machines.fix') }}
+        </Button>
+        <Button
+          v-else
           variant="outline"
           size="sm"
           class="motion-press mt-1.5 self-start"
@@ -229,13 +240,14 @@ const answered = computed(() =>
       <Button variant="ghost" size="sm" @click="emit('edit')">
         <SlidersHorizontal class="size-4" aria-hidden="true" />{{ t('settings.machines.edit') }}
       </Button>
-      <Button variant="outline" size="sm" class="motion-press" @click="emit('check')">
-        <component
-          :is="group.state === 'failed' ? Wrench : PlugZap"
-          class="size-4"
-          aria-hidden="true"
-        />
-        {{ group.state === 'failed' ? t('settings.machines.fix') : t('settings.machines.check') }}
+      <Button
+        v-if="group.state !== 'failed'"
+        variant="outline"
+        size="sm"
+        class="motion-press"
+        @click="emit('check')"
+      >
+        <PlugZap class="size-4" aria-hidden="true" />{{ t('settings.machines.check') }}
       </Button>
     </footer>
   </article>

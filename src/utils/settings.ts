@@ -15,7 +15,7 @@ export const creatorLinkList = ['source', 'website'] as const
 export type CreatorLink = (typeof creatorLinkList)[number]
 
 export const CREATOR_LINK: Record<CreatorLink, { url: string; icon: Component }> = {
-  source: { url: 'https://github.com/nexron-studios/NEXRON-chat', icon: FolderGit2 },
+  source: { url: 'https://github.com/nexron-studios/NEXRON-Bull', icon: FolderGit2 },
   website: { url: 'https://www.nexron-studios.com/', icon: Globe }
 }
 

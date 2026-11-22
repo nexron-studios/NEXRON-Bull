@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PanelLeftClose, Plus, Search } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -28,7 +28,8 @@ import { useChatStore } from '@/stores/chat'
 import type { SessionRow } from '@/utils/sessionList'
 
 // Two machines share the row as segments; from three on, the names would shrink to identical
-// server icons, so the switch becomes a picker that names the shown machine.
+// server icons, so the switch becomes a picker that names the shown machine. Also when the panel
+// is wide: the switch should not change shape with the panel width.
 const MAX_MACHINE_SEGMENTS = 2
 
 // `isWide`: the sidebar fills the window, rows become one-line columns and the header tools move in.
@@ -55,6 +56,9 @@ const { activeId } = storeToRefs(chat)
 const { shownChatId } = useChatNavigation()
 const { machineKey, machine, machineLabel, segments, tabsByMachine, isSwitcherPending } =
   useSidebarMachine()
+const hasSegments = computed(
+  () => segments.value.length > 1 && segments.value.length <= MAX_MACHINE_SEGMENTS
+)
 const { rows, groups, now, isRanked, isPending, isError, refetch, reorder } = useSessionList(
   machine,
   query
@@ -168,7 +172,7 @@ onMounted(() => {
         />
       </div>
       <TabsList
-        v-else-if="segments.length > 1"
+        v-else-if="hasSegments"
         :aria-label="t('chat.machine')"
         class="mx-3 h-9 w-auto max-w-full shrink-0 scrollbar-none justify-start overflow-x-auto group-data-horizontal/tabs:h-9"
         :class="{ 'max-w-md': isWide }"
@@ -184,7 +188,17 @@ onMounted(() => {
           :is-selected="segment.key === machineKey"
         />
       </TabsList>
-      <TabsContent :value="machineKey" class="flex min-h-0 flex-col">
+      <!-- Without segments there is no tab to label the panel, so it is a region named after
+           the machine instead of a tab panel pointing at a trigger that does not exist. -->
+      <TabsContent
+        :value="machineKey"
+        class="flex min-h-0 flex-col"
+        v-bind="
+          hasSegments
+            ? {}
+            : { role: 'region', 'aria-labelledby': undefined, 'aria-label': machineLabel }
+        "
+      >
         <SessionGroupList
           :groups
           :query

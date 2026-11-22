@@ -31,17 +31,15 @@ const { t } = useI18n()
 const entries = computed(() =>
   segments.map((segment) => {
     const tabs = tabsByMachine.get(segment.machine) ?? []
-    return { ...segment, count: tabs.length, state: machineStateOf(tabs, now) }
+    // Like the segments: the shown machine's own tabs are in the list, so its dot says nothing new.
+    const isShown = segment.key === machineKey.value
+    return { ...segment, count: tabs.length, state: isShown ? null : machineStateOf(tabs, now) }
   })
 )
 const shown = computed(
   () => entries.value.find((entry) => entry.key === machineKey.value) ?? entries.value[0]
 )
-const othersState = computed(() =>
-  mostPressingOf(
-    entries.value.filter((entry) => entry.key !== machineKey.value).map((entry) => entry.state)
-  )
-)
+const othersState = computed(() => mostPressingOf(entries.value.map((entry) => entry.state)))
 </script>
 
 <template>

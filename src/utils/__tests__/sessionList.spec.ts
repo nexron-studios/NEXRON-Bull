@@ -238,14 +238,14 @@ describe('machineStateOf', () => {
 })
 
 describe('mostPressingOf', () => {
-  it('should pick an approval over work over done, ignoring quiet machines', () => {
-    expect([
-      mostPressingOf([null, 'done', 'needs', 'running']),
-      mostPressingOf(['done', null, 'running']),
-      mostPressingOf([null, 'done']),
-      mostPressingOf([null, null]),
-      mostPressingOf([])
-    ]).toEqual(['needs', 'running', 'done', null, null])
+  it.each([
+    ['an approval over work and done', [null, 'done', 'needs', 'running'], 'needs'],
+    ['work over done', ['done', null, 'running'], 'running'],
+    ['done over a quiet machine', [null, 'done'], 'done'],
+    ['nothing when every machine is quiet', [null, null], null],
+    ['nothing without machines', [], null]
+  ] as const)('should pick %s', (_, states, expected) => {
+    expect(mostPressingOf([...states])).toBe(expected)
   })
 })
 

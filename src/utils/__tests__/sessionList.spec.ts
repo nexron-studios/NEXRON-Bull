@@ -6,6 +6,7 @@ import {
   groupRows,
   isSameSearchable,
   machineStateOf,
+  mostPressingOf,
   rowActivityOf,
   searchableOf,
   sessionRowsOf,
@@ -233,6 +234,18 @@ describe('machineStateOf', () => {
   it('should not call a new chat running while Claude starts', () => {
     const fresh = tab('new', { sessionId: null, status: 'starting', history: 'loaded' })
     expect(machineStateOf([fresh], NOON)).toBe(null)
+  })
+})
+
+describe('mostPressingOf', () => {
+  it('should pick an approval over work over done, ignoring quiet machines', () => {
+    expect([
+      mostPressingOf([null, 'done', 'needs', 'running']),
+      mostPressingOf(['done', null, 'running']),
+      mostPressingOf([null, 'done']),
+      mostPressingOf([null, null]),
+      mostPressingOf([])
+    ]).toEqual(['needs', 'running', 'done', null, null])
   })
 })
 

@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs'
 import ChatNotifyToggle from '@/components/chat/ChatNotifyToggle.vue'
 import NavSegments from '@/components/nav/NavSegments.vue'
 import SessionGroupList from '@/components/session/SessionGroupList.vue'
+import SessionMachinePicker from '@/components/session/SessionMachinePicker.vue'
 import SessionMachineTab from '@/components/session/SessionMachineTab.vue'
 import SessionPhoneHeader from '@/components/session/SessionPhoneHeader.vue'
 import SessionQuotaFooter from '@/components/session/SessionQuotaFooter.vue'
@@ -25,6 +26,10 @@ import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { NEW_SESSION_CHORD } from '@/utils/shortcuts'
 import { useChatStore } from '@/stores/chat'
 import type { SessionRow } from '@/utils/sessionList'
+
+// Two machines share the row as segments; from three on, the names would shrink to identical
+// server icons, so the switch becomes a picker that names the shown machine.
+const MAX_MACHINE_SEGMENTS = 2
 
 // `isWide`: the sidebar fills the window, rows become one-line columns and the header tools move in.
 // `isPhone`: the list is the phone's home screen, with its own top bar.
@@ -150,6 +155,18 @@ onMounted(() => {
         class="mx-3 h-9 shrink-0 rounded-lg"
         :class="{ 'max-w-md': isWide }"
       />
+      <div
+        v-else-if="segments.length > MAX_MACHINE_SEGMENTS"
+        class="mx-3 shrink-0"
+        :class="{ 'max-w-md': isWide }"
+      >
+        <SessionMachinePicker
+          v-model="machineKey"
+          :segments
+          :tabs-by-machine="tabsByMachine"
+          :now="now.getTime()"
+        />
+      </div>
       <TabsList
         v-else-if="segments.length > 1"
         :aria-label="t('chat.machine')"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Monitor, Plus, Server, UserRound } from '@lucide/vue'
+import { Monitor, Plus, Server, ServerOff, UserRound } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'
 import type { Machine } from '@/api/services/agentd.service'
@@ -67,10 +67,9 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
   </SettingsSectionHeader>
 
   <!-- Each machine is a column once two fit, so a host's accounts show without scrolling past
-       this PC's; a single machine takes the whole width. -->
-  <div
-    class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,26rem),1fr))] items-start gap-x-6 gap-y-4"
-  >
+       this PC's; a single machine takes the whole width. Columns share a height, so an empty
+       or failed machine fills the room beside its neighbour's cards. -->
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,26rem),1fr))] gap-x-6 gap-y-4">
     <section
       v-for="group in groups"
       :key="group.machine ?? ''"
@@ -101,19 +100,22 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
         }}</span>
         <Skeleton v-for="n in SKELETON_CARDS" :key="n" class="h-24 rounded-xl" />
       </template>
-      <div
+      <NchEmpty
         v-else-if="group.state === 'failed'"
-        class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3 text-small text-muted-foreground"
-      >
-        {{
+        :icon="ServerOff"
+        :title="t('settings.machines.accounts_failed_title')"
+        :hint="
           t('settings.accounts.machine_failed', {
             machine: nameOf(group.machine)
           })
-        }}
-        <Button variant="outline" size="sm" @click="refetch()">
+        "
+        size="sm"
+        class="motion-shake rounded-xl border border-dashed border-border"
+      >
+        <Button variant="outline" size="sm" class="motion-press" @click="refetch()">
           {{ t('settings.accounts.retry') }}
         </Button>
-      </div>
+      </NchEmpty>
       <NchEmpty
         v-else-if="!group.offeredCards.length"
         :icon="UserRound"

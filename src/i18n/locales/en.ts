@@ -346,6 +346,7 @@ export default {
     search_placeholder: 'Title, folder or account',
     tab_count: '{n} open tab | {n} open tabs',
     machine_state: { needs: 'needs you', running: 'working', done: 'done' },
+    other_machines_state: 'On another computer: {state}',
     groups: {
       needs: 'Needs you',
       running: 'Running',

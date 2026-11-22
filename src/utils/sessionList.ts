@@ -243,14 +243,15 @@ export const withManualOrder = (
     isSortableGroup(entry.group) ? { ...entry, rows: applyManualOrder(entry.rows, order) } : entry
   )
 
+/** What a machine's tabs are up to, most pressing first. */
+export const machineActivityList = ['needs', 'running', 'done'] as const
+export type MachineActivity = (typeof machineActivityList)[number]
+
 /**
  * The most pressing state of a machine's tabs, for the dot on its segment. Only a turn that
  * ended today counts as done; a tab that merely ended or lost its connection says nothing.
  */
-export const machineStateOf = (
-  tabs: ChatTabState[],
-  now: number
-): 'needs' | 'running' | 'done' | null => {
+export const machineStateOf = (tabs: ChatTabState[], now: number): MachineActivity | null => {
   const listed = tabs.map(listedTabOf)
   if (listed.some((tab) => tab.status === 'asking' || waitsForAnswer(tab, now))) return 'needs'
   const isRunning = (tab: ChatTabState) =>
@@ -260,6 +261,10 @@ export const machineStateOf = (
   const isDone = listed.some((tab) => tab.finishedAt !== null && tab.finishedAt >= today)
   return isDone ? 'done' : null
 }
+
+/** The most pressing of several machines' states, for a switch that shows only one machine. */
+export const mostPressingOf = (states: (MachineActivity | null)[]): MachineActivity | null =>
+  machineActivityList.find((activity) => states.includes(activity)) ?? null
 
 /** What a waiting or running tab is doing right now; `null` once it is done. */
 export const rowActivityOf = (tab: ChatTabState): RowActivity | null => {

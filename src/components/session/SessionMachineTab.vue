@@ -3,6 +3,7 @@ import { computed, useTemplateRef } from 'vue'
 import { Monitor, Server } from '@lucide/vue'
 import { useElementSize } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
+import SessionMachineBadges from '@/components/session/SessionMachineBadges.vue'
 import { TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ChatTabState } from '@/utils/chatTab'
@@ -23,8 +24,6 @@ const name = useTemplateRef<HTMLElement>('name')
 
 const { t } = useI18n()
 
-const DOT_CLASS = { needs: 'bg-critical', running: 'bg-warning', done: 'bg-good' } as const
-
 // One source for the breakpoint: the CSS. A hidden name is sr-only, one pixel wide.
 const { width: nameWidth } = useElementSize(name)
 const isNameHidden = computed(() => nameWidth.value < 2)
@@ -43,19 +42,10 @@ const state = computed(() => (isSelected ? null : machineStateOf(tabs, now)))
       </TooltipTrigger>
       <TooltipContent>{{ label }}</TooltipContent>
     </Tooltip>
-    <span
-      v-if="state"
-      class="size-1.5 shrink-0 rounded-full"
-      :class="DOT_CLASS[state]"
-      aria-hidden="true"
+    <SessionMachineBadges
+      :state
+      :state-label="state ? t(`sidebar.machine_state.${state}`) : ''"
+      :count="tabs.length"
     />
-    <span v-if="state" class="sr-only">{{ t(`sidebar.machine_state.${state}`) }}</span>
-    <span
-      v-if="tabs.length"
-      class="shrink-0 rounded-full bg-foreground/10 px-1.5 text-meta text-muted-foreground tabular-nums"
-    >
-      <span aria-hidden="true">{{ tabs.length }}</span>
-      <span class="sr-only">{{ t('sidebar.tab_count', tabs.length) }}</span>
-    </span>
   </TabsTrigger>
 </template>

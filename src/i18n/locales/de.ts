@@ -350,6 +350,7 @@ export default {
     search_placeholder: 'Titel, Ordner oder Account',
     tab_count: '{n} offener Tab | {n} offene Tabs',
     machine_state: { needs: 'braucht dich', running: 'arbeitet', done: 'fertig' },
+    other_machines_state: 'Auf einem anderen Rechner: {state}',
     groups: {
       needs: 'Braucht dich',
       running: 'Läuft',

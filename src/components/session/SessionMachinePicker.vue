@@ -12,6 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import type { MachineSegment } from '@/composables/useSidebarMachine'
 import type { ChatTabState } from '@/utils/chatTab'
 import { machineStateOf, mostPressingOf } from '@/utils/sessionList'
 
@@ -19,7 +20,7 @@ import { machineStateOf, mostPressingOf } from '@/utils/sessionList'
 // its menu. The dot on the button keeps what the segments said about the hidden machines: the most
 // pressing state among them.
 const { segments, tabsByMachine, now } = defineProps<{
-  segments: { key: string; machine: string | null; label: string }[]
+  segments: MachineSegment[]
   tabsByMachine: Map<string | null, ChatTabState[]>
   now: number
 }>()

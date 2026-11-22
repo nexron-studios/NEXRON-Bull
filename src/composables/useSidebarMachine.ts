@@ -10,6 +10,19 @@ import type { ChatTabState } from '@/utils/chatTab'
 export const THIS_MACHINE = 'this'
 const MACHINE_STORAGE_KEY = 'bull.sidebar.machine'
 const KNOWN_HOSTS_STORAGE_KEY = 'bull.sidebar.knownHosts'
+// Two machines share the row as segments; from three on, the names would shrink to identical
+// server icons, so the switch becomes a picker that names the shown machine. Also when the panel
+// is wide: the switch should not change shape with the panel width.
+const MAX_MACHINE_SEGMENTS = 2
+
+/** What stands where the machine switch goes: nothing while there is only this computer. */
+export type SwitcherKind = 'pending' | 'segments' | 'picker' | 'none'
+
+export interface MachineSegment {
+  key: string
+  machine: string | null
+  label: string
+}
 
 /**
  * Which machine the sidebar shows. Shared: panel and rail ask at the same time, and the hosts,
@@ -42,7 +55,7 @@ export const useSidebarMachine = createSharedComposable(() => {
     }
   })
   const machine = computed(() => (machineKey.value === THIS_MACHINE ? null : machineKey.value))
-  const segments = computed(() => [
+  const segments = computed<MachineSegment[]>(() => [
     { key: THIS_MACHINE, machine: null, label: t('chat.this_machine') },
     ...hosts.value.map((host) => ({ key: host, machine: host, label: host }))
   ])
@@ -50,9 +63,12 @@ export const useSidebarMachine = createSharedComposable(() => {
     () => segments.value.find((segment) => segment.key === machineKey.value)?.label ?? ''
   )
   // Only the very first start has nothing to show yet; afterwards the known hosts stand in.
-  const isSwitcherPending = computed(
-    () => machines.isPending.value && knownHosts.value === null && segments.value.length < 2
-  )
+  const switcherKind = computed<SwitcherKind>(() => {
+    const count = segments.value.length
+    if (machines.isPending.value && knownHosts.value === null && count < 2) return 'pending'
+    if (count > MAX_MACHINE_SEGMENTS) return 'picker'
+    return count > 1 ? 'segments' : 'none'
+  })
   // One pass over the tabs for all segments; it runs on every streamed token.
   const tabsByMachine = computed(() => {
     const byMachine = new Map<string | null, ChatTabState[]>()
@@ -96,6 +112,6 @@ export const useSidebarMachine = createSharedComposable(() => {
     machineLabel,
     segments,
     tabsByMachine,
-    isSwitcherPending
+    switcherKind
   }
 })

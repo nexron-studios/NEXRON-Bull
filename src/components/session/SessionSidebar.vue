@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { PanelLeftClose, Plus, Search } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -27,11 +27,6 @@ import { NEW_SESSION_CHORD } from '@/utils/shortcuts'
 import { useChatStore } from '@/stores/chat'
 import type { SessionRow } from '@/utils/sessionList'
 
-// Two machines share the row as segments; from three on, the names would shrink to identical
-// server icons, so the switch becomes a picker that names the shown machine. Also when the panel
-// is wide: the switch should not change shape with the panel width.
-const MAX_MACHINE_SEGMENTS = 2
-
 // `isWide`: the sidebar fills the window, rows become one-line columns and the header tools move in.
 // `isPhone`: the list is the phone's home screen, with its own top bar.
 const {
@@ -54,11 +49,8 @@ const { labelOf } = useShortcutLabels()
 const chat = useChatStore()
 const { activeId } = storeToRefs(chat)
 const { shownChatId } = useChatNavigation()
-const { machineKey, machine, machineLabel, segments, tabsByMachine, isSwitcherPending } =
+const { machineKey, machine, machineLabel, segments, tabsByMachine, switcherKind } =
   useSidebarMachine()
-const hasSegments = computed(
-  () => segments.value.length > 1 && segments.value.length <= MAX_MACHINE_SEGMENTS
-)
 const { rows, groups, now, isRanked, isPending, isError, refetch, reorder } = useSessionList(
   machine,
   query
@@ -155,12 +147,12 @@ onMounted(() => {
     <Tabs v-model="machineKey" class="min-h-0 flex-1 gap-0">
       <!-- Hosts come from ~/.ssh/config; until they arrive the switcher keeps its place. -->
       <Skeleton
-        v-if="isSwitcherPending"
+        v-if="switcherKind === 'pending'"
         class="mx-3 h-9 shrink-0 rounded-lg"
         :class="{ 'max-w-md': isWide }"
       />
       <div
-        v-else-if="segments.length > MAX_MACHINE_SEGMENTS"
+        v-else-if="switcherKind === 'picker'"
         class="mx-3 shrink-0"
         :class="{ 'max-w-md': isWide }"
       >
@@ -172,7 +164,7 @@ onMounted(() => {
         />
       </div>
       <TabsList
-        v-else-if="hasSegments"
+        v-else-if="switcherKind === 'segments'"
         :aria-label="t('chat.machine')"
         class="mx-3 h-9 w-auto max-w-full shrink-0 scrollbar-none justify-start overflow-x-auto group-data-horizontal/tabs:h-9"
         :class="{ 'max-w-md': isWide }"
@@ -194,7 +186,7 @@ onMounted(() => {
         :value="machineKey"
         class="flex min-h-0 flex-col"
         v-bind="
-          hasSegments
+          switcherKind === 'segments'
             ? {}
             : { role: 'region', 'aria-labelledby': undefined, 'aria-label': machineLabel }
         "

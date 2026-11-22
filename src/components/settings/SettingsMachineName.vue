@@ -5,8 +5,8 @@ import { useI18n } from 'vue-i18n'
 import type { Machine } from '@/api/services/agentd.service'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Input } from '@/components/ui/input'
-import { useMachines } from '@/composables/useAgentdCatalog'
 import { useMachineNames } from '@/composables/useMachineNames'
+import { useSidebarMachine } from '@/composables/useSidebarMachine'
 import { MAX_MACHINE_NAME_CHARS, isMachineNameTaken } from '@/utils/machineLabel'
 
 // The name on a machine card, and renaming it in place. Only the shown name changes: tabs, Bull's
@@ -18,7 +18,7 @@ const draft = ref('')
 const isSubmitted = ref(false)
 
 const { t } = useI18n()
-const machines = useMachines()
+const { segments } = useSidebarMachine()
 const { nameOf, defaultNameOf, rename } = useMachineNames()
 const inputId = useId()
 const hintId = useId()
@@ -26,12 +26,14 @@ const editButtonId = useId()
 
 const name = computed(() => nameOf(machine))
 const isRenamed = computed(() => name.value !== defaultNameOf(machine))
+// The sidebar's machines: they stand in with the last known list while Bull's list loads.
 const otherNames = computed(() =>
-  [null, ...(machines.data.value ?? [])]
-    .filter((other) => other !== machine)
-    .map((other) => nameOf(other))
+  segments.value.filter((segment) => segment.machine !== machine).map((segment) => segment.label)
 )
-const isTaken = computed(() => isMachineNameTaken(draft.value, otherNames.value))
+// An empty field shows the default name, which another machine may carry by now.
+const isTaken = computed(() =>
+  isMachineNameTaken(draft.value.trim() || defaultNameOf(machine), otherNames.value)
+)
 const isProblemShown = computed(() => isSubmitted.value && isTaken.value)
 const subtitle = computed(() => {
   if (machine === null) return t('settings.machines.local')
@@ -76,6 +78,8 @@ const save = () => {
     @submit.prevent="save"
     @keydown.esc.stop.prevent="stopEditing"
   >
+    <!-- The card stays named by this heading while its name is being edited. -->
+    <h2 :id="headingId" class="sr-only">{{ name }}</h2>
     <div class="flex items-center gap-1">
       <Input
         :id="inputId"

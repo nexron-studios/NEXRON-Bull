@@ -40,24 +40,26 @@ const { data: entries } = useMachineEntries()
 const { state, start, check, install, finish, back } = useMachineAssistant()
 const { nameOf } = useMachineNames()
 
-// A listed machine is named on the card; here only how ssh reaches it.
+// Changing a listed machine: it is named on the card, here only how ssh reaches it.
+const isEditing = computed(() => initial !== null && startsAt === 'form')
 const title = computed(() =>
-  initial
+  initial && isEditing.value
     ? t('settings.machines.assistant.edit_title', { machine: nameOf(initial.name) })
     : t('settings.machines.assistant.title')
 )
 const description = computed(() =>
-  initial
+  isEditing.value
     ? t('settings.machines.assistant.edit_description')
     : t('settings.machines.assistant.description')
 )
 
-// The machine being changed may keep its own name.
-const takenNames = computed(() =>
-  (entries.value ?? [])
-    .map((entry) => entry.name)
-    .filter((name) => name !== state.value.entry?.name)
-)
+// A new machine may not take a name another one has or shows; the one of this run may keep its own.
+const takenNames = computed(() => [
+  nameOf(null),
+  ...(entries.value ?? [])
+    .filter((entry) => entry.name !== state.value.entry?.name)
+    .flatMap((entry) => [entry.name, nameOf(entry.name)])
+])
 
 const addAccount = (machine: string) => {
   isHandingOver.value = true
@@ -85,7 +87,7 @@ watch(open, (isOpen) => {
       class="motion-fade-in"
       :initial="state.entry"
       :taken-names
-      :has-name="initial === null"
+      :kept-name="initial?.name ?? null"
       @check="check"
       @cancel="open = false"
     />
@@ -115,7 +117,7 @@ watch(open, (isOpen) => {
         </span>
         <div class="flex min-w-0 flex-col gap-0.5">
           <p class="font-semibold break-words">
-            {{ t('settings.machines.assistant.done_title', { machine: state.entry.name }) }}
+            {{ t('settings.machines.assistant.done_title', { machine: nameOf(state.entry.name) }) }}
           </p>
           <p class="text-small text-muted-foreground">
             {{ t('settings.machines.assistant.done_hint', { version: state.probe.version ?? '' }) }}

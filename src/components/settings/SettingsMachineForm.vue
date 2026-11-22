@@ -21,13 +21,16 @@ import {
 const {
   initial,
   takenNames,
-  hasName = true
+  keptName = null
 } = defineProps<{
   initial: MachineEntry | null
   /** Names of the machines Bull lists, without the one being changed */
   takenNames: string[]
-  /** A listed machine keeps its own name; the card renames what Bull shows. */
-  hasName?: boolean
+  /**
+   * The own name a listed machine keeps, whatever its address becomes: tabs and queries use it.
+   * The card renames what Bull shows. `null` asks for a name (a new machine).
+   */
+  keptName?: string | null
 }>()
 
 const emit = defineEmits<{ check: [entry: MachineEntry]; cancel: [] }>()
@@ -46,7 +49,9 @@ const suggestions = useQuery({
   staleTime: 0
 })
 
-const problem = computed(() => machineFormProblemOf(form.value, takenNames))
+const problem = computed(() =>
+  machineFormProblemOf(form.value, keptName === null ? takenNames : [])
+)
 const shownProblem = computed(() => (isSubmitted.value ? problem.value : null))
 const problemField = computed(() =>
   shownProblem.value === 'port' ? 'port' : shownProblem.value === 'name_taken' ? 'name' : 'host'
@@ -62,7 +67,8 @@ const submit = () => {
     document.getElementById(`machine-${problemField.value}`)?.focus()
     return
   }
-  emit('check', machineEntryOf(form.value))
+  const entry = machineEntryOf(form.value)
+  emit('check', keptName === null ? entry : { ...entry, name: keptName })
 }
 </script>
 
@@ -159,7 +165,7 @@ const submit = () => {
       </p>
     </div>
 
-    <div v-if="hasName" class="flex flex-col gap-1.5">
+    <div v-if="keptName === null" class="flex flex-col gap-1.5">
       <Label for="machine-name">{{ t('settings.machines.assistant.name') }}</Label>
       <Input
         id="machine-name"

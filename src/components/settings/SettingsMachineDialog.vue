@@ -8,17 +8,13 @@ import SettingsMachineForm from '@/components/settings/SettingsMachineForm.vue'
 import SettingsMachineInstall from '@/components/settings/SettingsMachineInstall.vue'
 import { Button } from '@/components/ui/button'
 import { useMachineEntries } from '@/composables/useAgentdCatalog'
-import { useMachineAssistant, type AssistantStart } from '@/composables/useMachineAssistant'
+import { useMachineAssistant, type AssistantOpening } from '@/composables/useMachineAssistant'
 import { useMachineNames } from '@/composables/useMachineNames'
-import type { MachineEntry } from '@/types/machine.type'
 
 // "Connect another machine" (decision of 22.11.2026): which machine, the check with its cause in
 // plain words, agentd copied over with its steps, then on to an account there. A card that asks
 // to check its machine opens it at the check.
-const { initial = null, startsAt = 'check' } = defineProps<{
-  initial?: MachineEntry | null
-  startsAt?: AssistantStart
-}>()
+const { opening } = defineProps<{ opening: AssistantOpening }>()
 
 const emit = defineEmits<{ addAccount: [machine: string] }>()
 
@@ -41,17 +37,18 @@ const { state, start, check, install, finish, back } = useMachineAssistant()
 const { nameOf } = useMachineNames()
 
 // Changing a listed machine: it is named on the card, here only how ssh reaches it.
-const isEditing = computed(() => initial !== null && startsAt === 'form')
 const title = computed(() =>
-  initial && isEditing.value
-    ? t('settings.machines.assistant.edit_title', { machine: nameOf(initial.name) })
+  opening.purpose === 'edit'
+    ? t('settings.machines.assistant.edit_title', { machine: nameOf(opening.entry.name) })
     : t('settings.machines.assistant.title')
 )
 const description = computed(() =>
-  isEditing.value
+  opening.purpose === 'edit'
     ? t('settings.machines.assistant.edit_description')
     : t('settings.machines.assistant.description')
 )
+// A listed machine keeps its own name, whatever it is checked or changed to.
+const keptName = computed(() => (opening.purpose === 'connect' ? null : opening.entry.name))
 
 // A new machine may not take a name another one has or shows; the one of this run may keep its own.
 const takenNames = computed(() => [
@@ -70,7 +67,7 @@ const addAccount = (machine: string) => {
 watch(open, (isOpen) => {
   if (!isOpen) return
   isHandingOver.value = false
-  start(initial, startsAt)
+  start(opening)
 })
 </script>
 
@@ -87,7 +84,7 @@ watch(open, (isOpen) => {
       class="motion-fade-in"
       :initial="state.entry"
       :taken-names
-      :kept-name="initial?.name ?? null"
+      :kept-name
       @check="check"
       @cancel="open = false"
     />

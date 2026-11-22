@@ -13,20 +13,18 @@ import SettingsMachineRemoveDialog from '@/components/settings/SettingsMachineRe
 import SettingsSectionHeader from '@/components/settings/SettingsSectionHeader.vue'
 import { MACHINES_KEY, useMachineEntries } from '@/composables/useAgentdCatalog'
 import { useAgentdVersions } from '@/composables/useAgentdVersions'
-import type { AssistantStart } from '@/composables/useMachineAssistant'
+import type { AssistantOpening } from '@/composables/useMachineAssistant'
 import { useMachineNames } from '@/composables/useMachineNames'
 import { useSettingsAccounts } from '@/composables/useSettingsAccounts'
 import { handleError } from '@/lib/error'
 import { useChatStore } from '@/stores/chat'
-import type { MachineEntry } from '@/types/machine.type'
 
 // This PC and every machine in Bull's list, side by side as peers once there is room for two, and
 // the place of the next one beside them, which opens the assistant.
 const { isPhone = false } = defineProps<{ isPhone?: boolean }>()
 
 const isAssistantOpen = ref(false)
-const assistantEntry = ref<MachineEntry | null>(null)
-const assistantStart = ref<AssistantStart>('check')
+const assistantOpening = ref<AssistantOpening>({ purpose: 'connect' })
 const removing = ref<string | null>(null)
 const accountMachine = ref<Machine>(null)
 const isAddAccountOpen = ref(false)
@@ -66,10 +64,15 @@ const entryOf = (machine: Machine) =>
 // A host that comes back is asked for its accounts and its version again, not only one of them.
 const retry = () => void Promise.all([refetch(), refetchVersions()])
 
-const openAssistant = (entry: MachineEntry | null, startsAt: AssistantStart = 'check') => {
-  assistantEntry.value = entry
-  assistantStart.value = startsAt
+const openAssistant = (opening: AssistantOpening) => {
+  assistantOpening.value = opening
   isAssistantOpen.value = true
+}
+
+// Only a listed machine has a card with these buttons.
+const openAssistantOn = (purpose: 'check' | 'edit', machine: Machine) => {
+  const entry = entryOf(machine)
+  if (entry) openAssistant({ purpose, entry })
 }
 
 const addAccountOn = (machine: string) => {
@@ -98,8 +101,8 @@ const addAccountOn = (machine: string) => {
         :entry="entryOf(group.machine)"
         class="flex-1"
         @retry="retry"
-        @check="openAssistant(entryOf(group.machine))"
-        @edit="openAssistant(entryOf(group.machine), 'form')"
+        @check="openAssistantOn('check', group.machine)"
+        @edit="openAssistantOn('edit', group.machine)"
         @remove="removing = group.machine"
       />
     </li>
@@ -111,14 +114,13 @@ const addAccountOn = (machine: string) => {
       <SettingsMachineAddCard
         :is-alone="isAddCardAlone"
         class="flex-1"
-        @connect="openAssistant(null)"
+        @connect="openAssistant({ purpose: 'connect' })"
       />
     </li>
   </ul>
   <SettingsMachineDialog
     v-model:open="isAssistantOpen"
-    :initial="assistantEntry"
-    :starts-at="assistantStart"
+    :opening="assistantOpening"
     @add-account="addAccountOn"
   />
   <SettingsMachineRemoveDialog

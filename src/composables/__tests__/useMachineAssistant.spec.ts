@@ -64,7 +64,7 @@ describe('useMachineAssistant', () => {
 
   it('should keep a machine a card asks to check in its place', async () => {
     const { start } = useMachineAssistant()
-    start(SERVER)
+    start({ purpose: 'check', entry: SERVER })
     await vi.waitFor(() => expect(service.test).toHaveBeenCalledWith(SERVER))
     expect(service.add).toHaveBeenCalledWith(SERVER, 'server')
   })

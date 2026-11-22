@@ -1,5 +1,6 @@
 import { computed, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { useMentionMenu } from '@/composables/useMentionMenu'
 import { useSlashMenu } from '@/composables/useSlashMenu'
 import type { MenuRowProps, MenuSectionProps } from '@/types/composerMenu.type'
@@ -44,6 +45,7 @@ export const useComposerMenu = ({
   onInsert
 }: ComposerMenuOptions) => {
   const { t } = useI18n()
+  const { nameOf } = useMachineNames()
 
   const dismissedAt = ref<number | null>(null)
   const activeIndex = ref(0)
@@ -117,7 +119,7 @@ export const useComposerMenu = ({
     if (mention.isPending.value) return t('prompt_input.files_loading')
     if (isUnknownOpError(mention.error.value, 'list_files'))
       return t('prompt_input.agentd_outdated', {
-        machine: toValue(tab).machine ?? t('chat.this_machine')
+        machine: nameOf(toValue(tab).machine)
       })
     if (mention.isError.value) return t('prompt_input.files_failed')
     return t('prompt_input.no_files', { query: current.query })

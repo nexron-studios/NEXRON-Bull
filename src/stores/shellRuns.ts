@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { agentdService } from '@/api/services/agentd.service'
+import { useMachineNames } from '@/composables/useMachineNames'
 import i18n from '@/i18n'
 import type { ChatTabState } from '@/utils/chatTab'
 import { isUnknownOpError } from '@/utils/sessionActions'
@@ -71,7 +72,7 @@ export const useShellRunsStore = defineStore('shellRuns', () => {
       })
     } catch (error) {
       // Shown in the block itself, where the command was typed; no toast on top.
-      const machine = tab.machine ?? i18n.global.t('chat.this_machine')
+      const machine = useMachineNames().nameOf(tab.machine)
       const message = isUnknownOpError(error, 'run_shell')
         ? i18n.global.t('prompt_input.agentd_outdated', { machine })
         : (error as Error).message

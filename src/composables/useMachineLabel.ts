@@ -1,6 +1,6 @@
-import { useI18n } from 'vue-i18n'
 import type { Machine } from '@/api/services/agentd.service'
 import { useHasOtherMachines } from '@/composables/useAgentdCatalog'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { machineLabelOf } from '@/utils/machineLabel'
 
 /**
@@ -9,11 +9,11 @@ import { machineLabelOf } from '@/utils/machineLabel'
  * counts machines, not SSH hosts, so a phone paired later counts too.
  */
 export const useMachineLabel = () => {
-  const { t } = useI18n()
   const hasOtherMachines = useHasOtherMachines()
+  const { nameOf } = useMachineNames()
 
   const labelOf = (machine: Machine): string | null =>
-    machineLabelOf(machine, hasOtherMachines.value, t('chat.this_machine'))
+    machineLabelOf(machine, hasOtherMachines.value, nameOf(machine))
 
   return { hasOtherMachines, labelOf }
 }

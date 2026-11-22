@@ -18,10 +18,16 @@ import {
 
 // The first step of the assistant: which machine. Hosts from ~/.ssh/config are one click away;
 // any other is typed in, with user and port only when ssh needs them.
-const { initial, takenNames } = defineProps<{
+const {
+  initial,
+  takenNames,
+  hasName = true
+} = defineProps<{
   initial: MachineEntry | null
   /** Names of the machines Bull lists, without the one being changed */
   takenNames: string[]
+  /** A listed machine keeps its own name; the card renames what Bull shows. */
+  hasName?: boolean
 }>()
 
 const emit = defineEmits<{ check: [entry: MachineEntry]; cancel: [] }>()
@@ -153,7 +159,7 @@ const submit = () => {
       </p>
     </div>
 
-    <div class="flex flex-col gap-1.5">
+    <div v-if="hasName" class="flex flex-col gap-1.5">
       <Label for="machine-name">{{ t('settings.machines.assistant.name') }}</Label>
       <Input
         id="machine-name"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import UsageSeriesKey from '@/components/usage/UsageSeriesKey.vue'
 import { useUsageFormat } from '@/composables/useUsageFormat'
 import { modelFamilyList } from '@/types/agentd.type'
@@ -9,6 +10,7 @@ import type { MachineTokens } from '@/utils/usage'
 const { machines } = defineProps<{ machines: MachineTokens[] }>()
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 const format = useUsageFormat()
 
 // The `other` column only when some machine used a model outside the three families.
@@ -36,7 +38,7 @@ const families = computed(() =>
         <tbody>
           <tr v-for="row in machines" :key="row.machine ?? ''" class="border-b last:border-b-0">
             <th scope="row" class="max-w-40 truncate py-2.5 pr-3 text-left font-normal">
-              {{ row.machine ?? t('chat.this_machine') }}
+              {{ nameOf(row.machine) }}
             </th>
             <td v-for="family in families" :key="family" class="py-2.5 pr-3">
               {{ format.compact(row.byFamily[family]) }}

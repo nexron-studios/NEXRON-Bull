@@ -8,13 +8,17 @@ import SettingsMachineForm from '@/components/settings/SettingsMachineForm.vue'
 import SettingsMachineInstall from '@/components/settings/SettingsMachineInstall.vue'
 import { Button } from '@/components/ui/button'
 import { useMachineEntries } from '@/composables/useAgentdCatalog'
-import { useMachineAssistant } from '@/composables/useMachineAssistant'
+import { useMachineAssistant, type AssistantStart } from '@/composables/useMachineAssistant'
+import { useMachineNames } from '@/composables/useMachineNames'
 import type { MachineEntry } from '@/types/machine.type'
 
 // "Connect another machine" (decision of 22.11.2026): which machine, the check with its cause in
 // plain words, agentd copied over with its steps, then on to an account there. A card that asks
 // to check its machine opens it at the check.
-const { initial = null } = defineProps<{ initial?: MachineEntry | null }>()
+const { initial = null, startsAt = 'check' } = defineProps<{
+  initial?: MachineEntry | null
+  startsAt?: AssistantStart
+}>()
 
 const emit = defineEmits<{ addAccount: [machine: string] }>()
 
@@ -34,6 +38,19 @@ const isHandingOver = ref(false)
 const { t } = useI18n()
 const { data: entries } = useMachineEntries()
 const { state, start, check, install, finish, back } = useMachineAssistant()
+const { nameOf } = useMachineNames()
+
+// A listed machine is named on the card; here only how ssh reaches it.
+const title = computed(() =>
+  initial
+    ? t('settings.machines.assistant.edit_title', { machine: nameOf(initial.name) })
+    : t('settings.machines.assistant.title')
+)
+const description = computed(() =>
+  initial
+    ? t('settings.machines.assistant.edit_description')
+    : t('settings.machines.assistant.description')
+)
 
 // The machine being changed may keep its own name.
 const takenNames = computed(() =>
@@ -51,15 +68,15 @@ const addAccount = (machine: string) => {
 watch(open, (isOpen) => {
   if (!isOpen) return
   isHandingOver.value = false
-  start(initial)
+  start(initial, startsAt)
 })
 </script>
 
 <template>
   <NchResponsiveDialog
     v-model:open="open"
-    :title="t('settings.machines.assistant.title')"
-    :description="t('settings.machines.assistant.description')"
+    :title
+    :description
     :content-class="DIALOG_CLASS"
     :restores-focus="!isHandingOver"
   >
@@ -68,6 +85,7 @@ watch(open, (isOpen) => {
       class="motion-fade-in"
       :initial="state.entry"
       :taken-names
+      :has-name="initial === null"
       @check="check"
       @cancel="open = false"
     />

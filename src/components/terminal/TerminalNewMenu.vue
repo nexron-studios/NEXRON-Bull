@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { MessagesSquare, Monitor, Plus, Server, SquareTerminal } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import {
   DropdownMenu,
@@ -24,6 +25,7 @@ const { here } = defineProps<{ here: TerminalRequest }>()
 const emit = defineEmits<{ newChat: [] }>()
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 const { labelOf } = useShortcutLabels()
 const store = useTerminalStore()
 const { data: hosts } = useMachines()
@@ -68,7 +70,7 @@ const others = computed(() =>
       >
         <component :is="machine ? Server : Monitor" aria-hidden="true" />
         <span class="truncate">
-          {{ t('terminal.on_machine', { machine: machine ?? t('chat.this_machine') }) }}
+          {{ t('terminal.on_machine', { machine: nameOf(machine) }) }}
         </span>
       </DropdownMenuItem>
     </DropdownMenuContent>

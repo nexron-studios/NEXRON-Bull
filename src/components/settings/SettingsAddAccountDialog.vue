@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Check, LoaderCircle, LogIn, Plus } from '@lucide/vue'
 import { useMutation } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { toast } from 'vue-sonner'
 import { agentdService, type Machine } from '@/api/services/agentd.service'
 import NchRangeSwitch from '@/components/common/NchRangeSwitch.vue'
@@ -43,6 +44,7 @@ const isNameTouched = ref(false)
 const created = ref<{ machine: Machine; profile: ProfileProps } | null>(null)
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 const accountSettings = useAccountSettingsStore()
 const { refreshMachine } = useAccountLogin()
 
@@ -55,7 +57,7 @@ const reachable = computed(() => groups.filter((group) => group.state === 'ready
 const machineOptions = computed(() =>
   reachable.value.map((group) => ({
     value: machineKeyOf(group.machine),
-    label: group.machine ?? t('chat.this_machine')
+    label: nameOf(group.machine)
   }))
 )
 const target = computed(
@@ -83,7 +85,7 @@ const nameProblem = computed(() =>
 const folder = computed(
   () => leftover.value?.dir ?? newProfileDirOf(target.value?.profiles ?? [], trimmed.value || '…')
 )
-const machineName = computed(() => target.value?.machine ?? t('chat.this_machine'))
+const machineName = computed(() => nameOf(target.value?.machine ?? null))
 
 const create = useMutation({
   mutationFn: async ({ machine, accountName }: { machine: Machine; accountName: string }) =>

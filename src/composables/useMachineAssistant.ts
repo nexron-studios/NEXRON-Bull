@@ -5,6 +5,9 @@ import { MACHINES_KEY } from '@/composables/useAgentdCatalog'
 import { handleError } from '@/lib/error'
 import type { InstallError, InstallStep, MachineEntry, MachineProbe } from '@/types/machine.type'
 
+/** Where a run on a listed machine begins: at its check (fix it) or at its form (change it). */
+export type AssistantStart = 'check' | 'form'
+
 /** Where the assistant stands; each step carries what it shows. */
 export type AssistantState =
   /** `entry`: what the form starts with, the machine of this run once it was checked */
@@ -71,11 +74,11 @@ export const useMachineAssistant = () => {
     state.value = { step: 'done', entry, probe }
   }
 
-  /** A fresh run; `entry` starts at its check (a card that asks to fix its machine). */
-  const start = (entry: MachineEntry | null) => {
+  /** A fresh run; a listed `entry` starts at its check or, to change it, at its form. */
+  const start = (entry: MachineEntry | null, startsAt: AssistantStart = 'check') => {
     added = entry
     state.value = { step: 'pick', entry }
-    if (entry) void check(entry)
+    if (entry && startsAt === 'check') void check(entry)
   }
 
   /** Back to the form, filled with the machine as last checked, so it can be corrected. */

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { Monitor, Plus, Server, UserRound } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import type { Machine } from '@/api/services/agentd.service'
 import NchEmpty from '@/components/common/NchEmpty.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
@@ -25,6 +26,7 @@ const isLoginOpen = ref(false)
 const loginTarget = ref<{ machine: Machine; profile: ProfileProps } | null>(null)
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 const { groups, refetch } = useSettingsAccounts()
 // With this PC alone its heading names nothing to tell apart; screen readers still get it.
 const hasOtherMachines = useHasOtherMachines()
@@ -86,7 +88,7 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
           class="size-4"
           aria-hidden="true"
         />
-        {{ group.machine ?? t('chat.this_machine') }}
+        {{ nameOf(group.machine) }}
         <span
           v-if="group.state === 'ready'"
           class="rounded-md bg-muted px-1.5 text-meta leading-5 font-medium tabular-nums"
@@ -95,7 +97,7 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
       </h2>
       <template v-if="group.state === 'loading'">
         <span class="sr-only" role="status">{{
-          t('settings.accounts.loading', { machine: group.machine ?? t('chat.this_machine') })
+          t('settings.accounts.loading', { machine: nameOf(group.machine) })
         }}</span>
         <Skeleton v-for="n in SKELETON_CARDS" :key="n" class="h-24 rounded-xl" />
       </template>
@@ -105,7 +107,7 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
       >
         {{
           t('settings.accounts.machine_failed', {
-            machine: group.machine ?? t('chat.this_machine')
+            machine: nameOf(group.machine)
           })
         }}
         <Button variant="outline" size="sm" @click="refetch()">

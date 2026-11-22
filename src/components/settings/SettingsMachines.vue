@@ -13,6 +13,8 @@ import SettingsMachineRemoveDialog from '@/components/settings/SettingsMachineRe
 import SettingsSectionHeader from '@/components/settings/SettingsSectionHeader.vue'
 import { MACHINES_KEY, useMachineEntries } from '@/composables/useAgentdCatalog'
 import { useAgentdVersions } from '@/composables/useAgentdVersions'
+import type { AssistantStart } from '@/composables/useMachineAssistant'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { useSettingsAccounts } from '@/composables/useSettingsAccounts'
 import { handleError } from '@/lib/error'
 import { useChatStore } from '@/stores/chat'
@@ -24,6 +26,7 @@ const { isPhone = false } = defineProps<{ isPhone?: boolean }>()
 
 const isAssistantOpen = ref(false)
 const assistantEntry = ref<MachineEntry | null>(null)
+const assistantStart = ref<AssistantStart>('check')
 const removing = ref<string | null>(null)
 const accountMachine = ref<Machine>(null)
 const isAddAccountOpen = ref(false)
@@ -34,6 +37,7 @@ const { groups, refetch } = useSettingsAccounts()
 const { versionOf, refetch: refetchVersions } = useAgentdVersions()
 const { data: entries } = useMachineEntries()
 const { tabs } = storeToRefs(useChatStore())
+const { nameOf, rename } = useMachineNames()
 
 const isRemoveOpen = computed({
   get: () => removing.value !== null,
@@ -44,7 +48,9 @@ const isRemoveOpen = computed({
 
 const remove = useMutation({
   mutationFn: machineService.remove,
-  onSuccess: async () => {
+  // A machine added again later starts with its own name, not one given to the old entry.
+  onSuccess: async (_, machine) => {
+    rename(machine, '')
     removing.value = null
     await queryClient.invalidateQueries({ queryKey: MACHINES_KEY })
   },
@@ -60,8 +66,9 @@ const entryOf = (machine: Machine) =>
 // A host that comes back is asked for its accounts and its version again, not only one of them.
 const retry = () => void Promise.all([refetch(), refetchVersions()])
 
-const openAssistant = (entry: MachineEntry | null) => {
+const openAssistant = (entry: MachineEntry | null, startsAt: AssistantStart = 'check') => {
   assistantEntry.value = entry
+  assistantStart.value = startsAt
   isAssistantOpen.value = true
 }
 
@@ -92,6 +99,7 @@ const addAccountOn = (machine: string) => {
         class="flex-1"
         @retry="retry"
         @check="openAssistant(entryOf(group.machine))"
+        @edit="openAssistant(entryOf(group.machine), 'form')"
         @remove="removing = group.machine"
       />
     </li>
@@ -110,11 +118,12 @@ const addAccountOn = (machine: string) => {
   <SettingsMachineDialog
     v-model:open="isAssistantOpen"
     :initial="assistantEntry"
+    :starts-at="assistantStart"
     @add-account="addAccountOn"
   />
   <SettingsMachineRemoveDialog
     v-model:open="isRemoveOpen"
-    :machine="removing ?? ''"
+    :machine="removing ? nameOf(removing) : ''"
     :open-chats="openChatsOn(removing)"
     :is-working="remove.isPending.value"
     @confirm="removing && remove.mutate(removing)"

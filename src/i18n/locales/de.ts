@@ -880,6 +880,12 @@ export default {
       never: 'noch nicht',
       local: 'Lokal',
       remote: 'SSH-Host',
+      remote_as: 'SSH-Host {host}',
+      rename: '{machine} umbenennen',
+      rename_label: 'Name von {machine}',
+      rename_hint: 'Leer lassen für „{name}“.',
+      rename_taken: 'So heißt schon ein anderer Rechner.',
+      edit: 'Verbindung ändern',
       check: 'Prüfen',
       fix: 'Beheben',
       remove: 'Entfernen',
@@ -929,6 +935,8 @@ export default {
       },
       assistant: {
         title: 'Weiteren Rechner verbinden',
+        edit_title: 'Verbindung zu {machine}',
+        edit_description: 'Adresse, Benutzer und Port, mit denen Bull sich per SSH anmeldet.',
         description:
           'Bull meldet sich per SSH bei einem Windows-Rechner an und startet Claude dort.',
         suggestions: 'Aus deiner SSH-Konfiguration',

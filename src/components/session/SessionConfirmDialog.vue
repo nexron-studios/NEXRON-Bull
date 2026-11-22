@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Eraser, LoaderCircle, Square, Trash2 } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -19,6 +20,7 @@ import { confirmationTextOf } from '@/utils/sessionActions'
 // The one confirmation for clearing, stopping-and-removing and deleting a session, for the whole
 // app. It stays open while the step runs, so a slow machine does not look like nothing happened.
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 const actions = useSessionActionsStore()
 const { confirmation, confirmationTarget, isWorking } = storeToRefs(actions)
 
@@ -38,7 +40,7 @@ const text = computed(() => {
   const { notes, ...keys } = confirmationTextOf(current.kind, target)
   const params = {
     title: actions.titleOf(target),
-    machine: target.machine ?? t('chat.this_machine'),
+    machine: nameOf(target.machine),
     account: target.account
   }
   return {

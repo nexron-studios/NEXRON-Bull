@@ -11,6 +11,7 @@ import {
   Monitor,
   Server,
   ServerOff,
+  SlidersHorizontal,
   Trash2,
   UserPlus,
   Wrench
@@ -19,10 +20,12 @@ import { useI18n } from 'vue-i18n'
 import { machineService } from '@/api/services/machine.service'
 import AccountChip from '@/components/account/AccountChip.vue'
 import NchSectionEmpty from '@/components/common/NchSectionEmpty.vue'
+import SettingsMachineName from '@/components/settings/SettingsMachineName.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAgeFormat } from '@/composables/useAgeFormat'
 import { useMinuteClock } from '@/composables/useClock'
+import { useMachineNames } from '@/composables/useMachineNames'
 import type { AgentdVersion } from '@/composables/useAgentdVersions'
 import type { MachineAccounts } from '@/composables/useSettingsAccounts'
 import type { MachineEntry } from '@/types/machine.type'
@@ -43,11 +46,12 @@ const {
   entry?: MachineEntry | null
 }>()
 
-const emit = defineEmits<{ retry: []; check: []; remove: [] }>()
+const emit = defineEmits<{ retry: []; check: []; edit: []; remove: [] }>()
 
 const PROBE_STALE_TIME_MS = 60 * 1000
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 // Only a machine that does not answer is asked why, once a minute at most.
 const probe = useQuery({
   queryKey: computed(() => ['machines', 'probe', entry] as const),
@@ -64,7 +68,7 @@ const SKELETON_CHIPS = 2
 // A host alias can be any word, even "this"; a generated id never clashes with another card's.
 const headingId = useId()
 
-const name = computed(() => group.machine ?? t('chat.this_machine'))
+const name = computed(() => nameOf(group.machine))
 // The local agentd comes with the app, a host's from the deploy script: each has its own fix.
 const versionUnknownHint = computed(() =>
   group.machine === null
@@ -99,7 +103,7 @@ const answered = computed(() =>
     class="@container flex flex-col gap-4 rounded-xl border border-border bg-card p-4"
     :aria-labelledby="headingId"
   >
-    <header class="flex items-center gap-3">
+    <header class="flex flex-wrap items-center gap-3">
       <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
         <component
           :is="group.machine === null ? Monitor : Server"
@@ -107,12 +111,7 @@ const answered = computed(() =>
           aria-hidden="true"
         />
       </span>
-      <div class="flex min-w-0 flex-1 flex-col">
-        <h2 :id="headingId" class="truncate font-semibold">{{ name }}</h2>
-        <span class="truncate text-meta text-muted-foreground">{{
-          group.machine === null ? t('settings.machines.local') : t('settings.machines.remote')
-        }}</span>
-      </div>
+      <SettingsMachineName :machine="group.machine" :heading-id />
       <template v-if="group.state === 'loading'">
         <Skeleton class="h-6 w-24 rounded-full" />
         <span class="sr-only" role="status">{{ t('settings.machines.checking') }}</span>
@@ -226,6 +225,9 @@ const answered = computed(() =>
     >
       <Button variant="ghost" size="sm" @click="emit('remove')">
         <Trash2 class="size-4" aria-hidden="true" />{{ t('settings.machines.remove') }}
+      </Button>
+      <Button variant="ghost" size="sm" @click="emit('edit')">
+        <SlidersHorizontal class="size-4" aria-hidden="true" />{{ t('settings.machines.edit') }}
       </Button>
       <Button variant="outline" size="sm" class="motion-press" @click="emit('check')">
         <component

@@ -2,7 +2,7 @@ import { computed, watch } from 'vue'
 import { StorageSerializers, createSharedComposable, useStorage } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { useMachines } from '@/composables/useAgentdCatalog'
-import i18n from '@/i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { useChatStore } from '@/stores/chat'
 import type { ChatTabState } from '@/utils/chatTab'
 
@@ -16,7 +16,7 @@ const KNOWN_HOSTS_STORAGE_KEY = 'bull.sidebar.knownHosts'
  * segments and per-machine tabs are worked out once (the tabs on every streamed token).
  */
 export const useSidebarMachine = createSharedComposable(() => {
-  const { t } = i18n.global
+  const { nameOf } = useMachineNames()
   const { tabs, activeTab } = storeToRefs(useChatStore())
   const machines = useMachines()
   const storedMachine = useStorage(MACHINE_STORAGE_KEY, THIS_MACHINE)
@@ -43,8 +43,8 @@ export const useSidebarMachine = createSharedComposable(() => {
   })
   const machine = computed(() => (machineKey.value === THIS_MACHINE ? null : machineKey.value))
   const segments = computed(() => [
-    { key: THIS_MACHINE, machine: null, label: t('chat.this_machine') },
-    ...hosts.value.map((host) => ({ key: host, machine: host, label: host }))
+    { key: THIS_MACHINE, machine: null, label: nameOf(null) },
+    ...hosts.value.map((host) => ({ key: host, machine: host, label: nameOf(host) }))
   ])
   const machineLabel = computed(
     () => segments.value.find((segment) => segment.key === machineKey.value)?.label ?? ''

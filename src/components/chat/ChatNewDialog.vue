@@ -23,6 +23,7 @@ import {
   useProfiles,
   useRecentSessions
 } from '@/composables/useAgentdCatalog'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { useAccountDefaultLabels } from '@/composables/useAccountDefaultLabels'
 import { useAccountSettingsStore } from '@/stores/accountSettings'
 import { useChatStore } from '@/stores/chat'
@@ -46,6 +47,7 @@ const model = ref<string>(NEW_CHAT_DEFAULTS.model)
 const mode = ref<PermissionMode | typeof ACCOUNT_DEFAULT>(NEW_CHAT_DEFAULTS.permissionMode)
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 const chat = useChatStore()
 const accountSettings = useAccountSettingsStore()
 const machines = useMachines()
@@ -160,9 +162,9 @@ watch([offeredProfiles, folders], fillDefaults)
       <Select v-model="machineChoice">
         <SelectTrigger id="machine" class="w-full"><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem :value="THIS_MACHINE">{{ t('chat.this_machine') }}</SelectItem>
+          <SelectItem :value="THIS_MACHINE">{{ nameOf(null) }}</SelectItem>
           <SelectItem v-for="name in machines.data.value" :key="name" :value="name">
-            {{ name }}
+            {{ nameOf(name) }}
           </SelectItem>
         </SelectContent>
       </Select>

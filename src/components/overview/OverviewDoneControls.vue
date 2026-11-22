@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { ArrowUpDown, Filter, Monitor, Search, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Input } from '@/components/ui/input'
 import {
@@ -30,6 +31,7 @@ const sort = defineModel<FinishedSort>('sort', { required: true })
 const MIN_FILTER_CHOICES = 2
 
 const { t } = useI18n()
+const { nameOf } = useMachineNames()
 
 const hasAccountFilter = computed(
   () => accounts.length >= MIN_FILTER_CHOICES || account.value !== ALL_FILTER
@@ -37,8 +39,7 @@ const hasAccountFilter = computed(
 const hasMachineFilter = computed(
   () => machines.length >= MIN_FILTER_CHOICES || machine.value !== ALL_FILTER
 )
-const machineLabelOf = (value: string) =>
-  value === LOCAL_MACHINE_FILTER ? t('chat.this_machine') : value
+const machineLabelOf = (value: string) => nameOf(value === LOCAL_MACHINE_FILTER ? null : value)
 </script>
 
 <template>

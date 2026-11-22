@@ -3,6 +3,7 @@ import { useFuse } from '@vueuse/integrations/useFuse'
 import { useRouteQuery } from '@vueuse/router'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { useMachineNames } from '@/composables/useMachineNames'
 import { useChatStore } from '@/stores/chat'
 import { summaryOf } from '@/utils/finishOrder'
 import {
@@ -38,7 +39,8 @@ const FUSE_KEYS = [
  * renders the result in batches while it scrolls.
  */
 export const useFinishedList = (done: MaybeRefOrGetter<RankedDone[]>) => {
-  const { t, locale } = useI18n()
+  const { locale } = useI18n()
+  const { nameOf } = useMachineNames()
   const { tabs } = storeToRefs(useChatStore())
 
   const search = useRouteQuery<string, string>('q', '', { transform: { get: parseSearch } })
@@ -53,7 +55,7 @@ export const useFinishedList = (done: MaybeRefOrGetter<RankedDone[]>) => {
   })
 
   const collator = computed(() => new Intl.Collator(locale.value, { sensitivity: 'base' }))
-  const machineLabelOf = (entry: RankedDone) => entry.machine ?? t('chat.this_machine')
+  const machineLabelOf = (entry: RankedDone) => nameOf(entry.machine)
   const tabById = computed(() => new Map(tabs.value.map((tab) => [tab.id, tab])))
   /** Claude's last answer; only an open tab has its messages loaded. */
   const summaryOfEntry = (entry: RankedDone) => {

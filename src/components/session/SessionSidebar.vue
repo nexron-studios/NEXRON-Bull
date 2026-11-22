@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs'
 import ChatNotifyToggle from '@/components/chat/ChatNotifyToggle.vue'
 import NavSegments from '@/components/nav/NavSegments.vue'
 import SessionGroupList from '@/components/session/SessionGroupList.vue'
+import SessionMachinePicker from '@/components/session/SessionMachinePicker.vue'
 import SessionMachineTab from '@/components/session/SessionMachineTab.vue'
 import SessionPhoneHeader from '@/components/session/SessionPhoneHeader.vue'
 import SessionQuotaFooter from '@/components/session/SessionQuotaFooter.vue'
@@ -48,7 +49,7 @@ const { labelOf } = useShortcutLabels()
 const chat = useChatStore()
 const { activeId } = storeToRefs(chat)
 const { shownChatId } = useChatNavigation()
-const { machineKey, machine, machineLabel, segments, tabsByMachine, isSwitcherPending } =
+const { machineKey, machine, machineLabel, segments, tabsByMachine, switcherKind } =
   useSidebarMachine()
 const { rows, groups, now, isRanked, isPending, isError, refetch, reorder } = useSessionList(
   machine,
@@ -146,12 +147,24 @@ onMounted(() => {
     <Tabs v-model="machineKey" class="min-h-0 flex-1 gap-0">
       <!-- Hosts come from ~/.ssh/config; until they arrive the switcher keeps its place. -->
       <Skeleton
-        v-if="isSwitcherPending"
+        v-if="switcherKind === 'pending'"
         class="mx-3 h-9 shrink-0 rounded-lg"
         :class="{ 'max-w-md': isWide }"
       />
+      <div
+        v-else-if="switcherKind === 'picker'"
+        class="mx-3 shrink-0"
+        :class="{ 'max-w-md': isWide }"
+      >
+        <SessionMachinePicker
+          v-model="machineKey"
+          :segments
+          :tabs-by-machine="tabsByMachine"
+          :now="now.getTime()"
+        />
+      </div>
       <TabsList
-        v-else-if="segments.length > 1"
+        v-else-if="switcherKind === 'segments'"
         :aria-label="t('chat.machine')"
         class="mx-3 h-9 w-auto max-w-full shrink-0 scrollbar-none justify-start overflow-x-auto group-data-horizontal/tabs:h-9"
         :class="{ 'max-w-md': isWide }"
@@ -167,7 +180,17 @@ onMounted(() => {
           :is-selected="segment.key === machineKey"
         />
       </TabsList>
-      <TabsContent :value="machineKey" class="flex min-h-0 flex-col">
+      <!-- Without segments there is no tab to label the panel, so it is a region named after
+           the machine instead of a tab panel pointing at a trigger that does not exist. -->
+      <TabsContent
+        :value="machineKey"
+        class="flex min-h-0 flex-col"
+        v-bind="
+          switcherKind === 'segments'
+            ? {}
+            : { role: 'region', 'aria-labelledby': undefined, 'aria-label': machineLabel }
+        "
+      >
         <SessionGroupList
           :groups
           :query

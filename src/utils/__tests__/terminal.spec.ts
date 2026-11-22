@@ -25,11 +25,12 @@ describe('resolveShell', () => {
     expect(resolveShell('auto', ['pwsh', 'powershell', 'cmd'])).toBe('pwsh')
   })
 
-  it('should start the login shell on a Mac, also for a shell picked on Windows', () => {
-    expect([resolveShell('auto', ['login']), resolveShell('cmd', ['login'])]).toEqual([
-      'login',
-      'login'
-    ])
+  it('should start the login shell on automatic on a Mac', () => {
+    expect(resolveShell('auto', ['login'])).toBe('login')
+  })
+
+  it('should start the login shell on a Mac for a shell picked on Windows', () => {
+    expect(resolveShell('cmd', ['login'])).toBe('login')
   })
 })
 

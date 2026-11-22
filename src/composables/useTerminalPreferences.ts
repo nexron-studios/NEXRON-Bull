@@ -1,10 +1,13 @@
 import { computed } from 'vue'
 import { useStorage } from '@vueuse/core'
+import { systemNameOf } from '@/utils/platform'
+import { hasLoginShell } from '@/utils/terminal'
 import {
   DEFAULT_TERMINAL_FONT_SIZE,
   TERMINAL_FONT_SIZE_KEY,
   TERMINAL_SHELL_KEY,
   terminalShellChoiceOf,
+  type TerminalShell,
   type TerminalShellChoice
 } from '@/utils/terminalPreferences'
 
@@ -33,5 +36,11 @@ export const useTerminalPreferences = () => {
     }
   })
 
-  return { shell, fontSize }
+  // A Mac or Linux starts the login shell whatever is stored, so that is the shell to name.
+  const isLoginShell = hasLoginShell(systemNameOf(navigator.userAgent))
+  const shownShell = computed<TerminalShellChoice | TerminalShell>(() =>
+    isLoginShell ? 'login' : shell.value
+  )
+
+  return { shell, shownShell, isLoginShell, fontSize }
 }

@@ -14,8 +14,6 @@ import {
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTerminalPreferences } from '@/composables/useTerminalPreferences'
-import { systemNameOf } from '@/utils/platform'
-import { hasLoginShell } from '@/utils/terminal'
 import { terminalFontSizeList, terminalShellChoiceList } from '@/utils/terminalPreferences'
 
 // Shell and font size of new terminals, stored under `bull.terminal.*` where the terminal reads
@@ -24,8 +22,7 @@ import { terminalFontSizeList, terminalShellChoiceList } from '@/utils/terminalP
 const { isPhone = false } = defineProps<{ isPhone?: boolean }>()
 
 const { t } = useI18n()
-const { shell, fontSize } = useTerminalPreferences()
-const isLoginShell = hasLoginShell(systemNameOf(navigator.userAgent))
+const { shell, shownShell, isLoginShell, fontSize } = useTerminalPreferences()
 
 // Reka selects hold strings; the stored size stays a number.
 const fontSizeChoice = computed({
@@ -121,6 +118,6 @@ const fontSizeChoice = computed({
         </Select>
       </div>
     </div>
-    <SettingsTerminalPreview :shell="isLoginShell ? 'login' : shell" :font-size />
+    <SettingsTerminalPreview :shell="shownShell" :font-size />
   </section>
 </template>

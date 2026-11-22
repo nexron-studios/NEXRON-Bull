@@ -49,9 +49,12 @@ pub enum Shell {
 const SHELLS: [Shell; 4] = [Shell::Pwsh, Shell::Powershell, Shell::Cmd, Shell::Bash];
 #[cfg(not(windows))]
 const SHELLS: [Shell; 1] = [Shell::Login];
-/// Where `$SHELL` is not set: the default of every Mac since macOS 10.15.
-#[cfg(not(windows))]
-const FALLBACK_LOGIN_SHELL: &str = "/bin/zsh";
+/// Where `$SHELL` is not set or gone: the system's default shell, then `/bin/sh`, which every
+/// macOS and Linux has, so a terminal always starts.
+#[cfg(target_os = "macos")]
+const FALLBACK_LOGIN_SHELLS: [&str; 2] = ["/bin/zsh", "/bin/sh"];
+#[cfg(all(not(windows), not(target_os = "macos")))]
+const FALLBACK_LOGIN_SHELLS: [&str; 2] = ["/bin/bash", "/bin/sh"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -387,8 +390,8 @@ fn login_shell() -> Option<PathBuf> {
 
 #[cfg(not(windows))]
 fn login_shell() -> Option<PathBuf> {
-    let shell = std::env::var_os("SHELL").map(PathBuf::from).filter(|shell| shell.is_file());
-    shell.or_else(|| Some(PathBuf::from(FALLBACK_LOGIN_SHELL)).filter(|shell| shell.is_file()))
+    let own = std::env::var_os("SHELL").map(PathBuf::from);
+    own.into_iter().chain(FALLBACK_LOGIN_SHELLS.map(PathBuf::from)).find(|shell| shell.is_file())
 }
 
 #[tauri::command(async)]

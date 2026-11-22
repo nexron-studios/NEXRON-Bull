@@ -16,7 +16,7 @@ import { SETTINGS_SECTION_ICON, settingsSectionList, type SettingsSection } from
 const { t } = useI18n()
 const { offeredCount, machines } = useSettingsAccounts()
 const { settings: notifications } = useNotificationSetting()
-const { shell } = useTerminalPreferences()
+const { shownShell } = useTerminalPreferences()
 const { choice } = useThemeChoice()
 const { policy } = storeToRefs(useLimitPolicyStore())
 
@@ -25,7 +25,7 @@ const values = computed<Record<SettingsSection, string>>(() => ({
   limits: t(`settings.limits.modes_short.${policy.value.mode}`),
   machines: String(machines.value.length),
   notifications: notifications.value.isOn ? t('settings.summary.on') : t('settings.summary.off'),
-  terminal: t(`settings.terminal.shells.${shell.value}`),
+  terminal: t(`settings.terminal.shells.${shownShell.value}`),
   appearance: t(`settings.appearance.themes.${choice.value}`)
 }))
 </script>

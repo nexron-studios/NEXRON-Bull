@@ -710,6 +710,20 @@ describe('a reply agentd replays on attach', () => {
     ])
   })
 
+  it('should keep the tab as it is when a known message comes again with nothing live', () => {
+    const known = applyEvent(tab(), {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    const again = applyEvent(known, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    expect(again).toBe(known)
+  })
+
   it('should drop the rest of a block too long to replay until its finished message', () => {
     const cut = { ...replay(''), chars: 2_000_000, is_truncated: true }
     let next = applyEvent(tab(), cut)

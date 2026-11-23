@@ -9,7 +9,8 @@ use serde_json::Value;
 use crate::protocol::Event;
 
 /// Text plus reasoning kept per tab. A reply rarely streams more than a few hundred KB before its
-/// block completes; past this the replay is skipped and the app waits for the message as before.
+/// block completes; past this the text is dropped and the replay tells the app the block is cut,
+/// so it shows nothing of it until the finished message instead of a reply that starts mid-way.
 pub(crate) const MAX_PARTIAL_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Default)]
@@ -70,23 +71,23 @@ impl PartialReply {
         let kept = self.text.len() + self.thinking.as_ref().map_or(0, String::len);
         if self.is_overflowed || kept + piece.len() > MAX_PARTIAL_BYTES {
             self.is_overflowed = true;
+            self.text = String::new();
+            self.thinking = None;
             return;
         }
         let target = if is_text { &mut self.text } else { self.thinking.get_or_insert_with(String::new) };
         target.push_str(piece);
     }
 
-    /// What an attaching app shows as live text; `None` once it grew past the limit.
+    /// What an attaching app shows as live text. Past the limit it carries no text but `is_truncated`.
     pub(crate) fn replay(&self, tab: &str) -> Option<Event> {
-        if self.is_overflowed {
-            return None;
-        }
         Some(Event::Streaming {
             tab: tab.to_string(),
             message_id: self.message_id.clone(),
             chars: self.chars,
             text: self.text.clone(),
             thinking: self.thinking.clone(),
+            is_truncated: self.is_overflowed,
         })
     }
 }
@@ -119,7 +120,7 @@ mod tests {
         partial.observe(&text_delta("lo"));
 
         assert_eq!(replayed(&partial), json!({ "type": "streaming", "tab": "t1", "message_id": "msg_1",
-            "chars": 16, "text": "Hallo", "thinking": "Erst lesen." }));
+            "chars": 16, "text": "Hallo", "thinking": "Erst lesen.", "is_truncated": false }));
     }
 
     #[test]
@@ -145,15 +146,18 @@ mod tests {
     }
 
     #[test]
-    fn replays_nothing_past_the_limit_until_the_next_block() {
+    fn marks_a_block_past_the_limit_as_cut_until_the_next_block() {
         let mut partial = PartialReply::default();
+        partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
         partial.observe(&text_delta(&"x".repeat(MAX_PARTIAL_BYTES)));
-        assert!(partial.replay("t1").is_some());
+        assert_eq!(replayed(&partial)["is_truncated"], false);
         partial.observe(&text_delta("y"));
-        assert!(partial.replay("t1").is_none());
+        let chars = MAX_PARTIAL_BYTES as u64 + 1;
+        assert_eq!(replayed(&partial), json!({ "type": "streaming", "tab": "t1", "message_id": "msg_1",
+            "chars": chars, "text": "", "thinking": null, "is_truncated": true }));
 
         partial.finish_block();
         partial.observe(&text_delta("neu"));
-        assert_eq!(replayed(&partial)["text"], "neu");
+        assert_eq!((replayed(&partial)["text"].clone(), replayed(&partial)["is_truncated"].clone()), (json!("neu"), json!(false)));
     }
 }

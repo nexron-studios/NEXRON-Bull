@@ -79,6 +79,11 @@ export interface ChatTabState {
   streaming: string
   /** Reasoning Claude is streaming right now; `null` while it is not thinking */
   thinking: string | null
+  /**
+   * The block Claude is writing was too long for agentd to replay on attach: its further deltas
+   * are dropped until its finished message, so the reply never shows starting mid-way. Live only.
+   */
+  isStreamCut: boolean
   /** The turn Claude is working on; `null` while idle */
   turn: RunningTurn | null
   /** When the last turn ended here (ms); `null` until one did in this run of the app */
@@ -212,6 +217,7 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   messages: [],
   streaming: '',
   thinking: null,
+  isStreamCut: false,
   turn: null,
   finishedAt: null,
   pending: [],
@@ -249,7 +255,9 @@ const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => 
   if (tab.messages.some((known) => known.uuid === received.uuid))
     // On reattach the transcript can hold a block before its live message arrives; the block is
     // finished all the same, so its replayed live text must not stay as a second copy.
-    return received.role === 'assistant' ? { ...tab, streaming: '', thinking: null } : tab
+    return received.role === 'assistant'
+      ? { ...tab, streaming: '', thinking: null, isStreamCut: false }
+      : tab
   const isPrompt = isPromptEcho(received)
   const isFromAgent = isAgentMessage(received)
   // A prompt that arrives after Claude already answered in this turn was typed while it worked;
@@ -270,6 +278,7 @@ const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => 
     isFresh: tab.isFresh && !isPrompt,
     streaming: message.role === 'assistant' ? '' : tab.streaming,
     thinking: message.role === 'assistant' ? null : tab.thinking,
+    isStreamCut: message.role === 'assistant' ? false : tab.isStreamCut,
     title: tab.title || (prompt ?? '').slice(0, TITLE_CHARS)
   }
 }
@@ -311,12 +320,13 @@ const withStream = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
 const withStreamText = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
   switch (inner.type) {
     case 'message_start':
-      return { ...tab, streaming: '', thinking: null, status: 'working' }
+      return { ...tab, streaming: '', thinking: null, isStreamCut: false, status: 'working' }
     case 'content_block_start': {
       const block = inner.content_block as { type?: string } | undefined
       return block?.type === 'thinking' ? { ...tab, thinking: '', status: 'working' } : tab
     }
     case 'content_block_delta': {
+      if (tab.isStreamCut) return tab
       const delta = inner.delta as { type?: string; text?: string; thinking?: string } | undefined
       if (delta?.type === 'thinking_delta')
         return {
@@ -344,6 +354,7 @@ const withEmptyChat = (tab: ChatTabState): ChatTabState => ({
   messages: [],
   streaming: '',
   thinking: null,
+  isStreamCut: false,
   permission: null,
   notice: null,
   hasMore: false,
@@ -412,6 +423,7 @@ const withClaude = (tab: ChatTabState, event: ClaudeEvent): ChatTabState => {
         status: 'idle',
         streaming: '',
         thinking: null,
+        isStreamCut: false,
         notice: event.is_error && text ? text : null,
         retry: null,
         contextWindow: contextWindowOf(event) ?? tab.contextWindow
@@ -470,6 +482,7 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
         ...tab,
         streaming: event.text,
         thinking: event.thinking,
+        isStreamCut: event.is_truncated,
         streamUsage: { messageId: event.message_id, chars: event.chars }
       }
     case 'exited':
@@ -480,6 +493,7 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
         statusBeforeMove: tab.status === 'starting' ? null : tab.statusBeforeMove,
         streaming: '',
         thinking: null,
+        isStreamCut: false,
         permission: null,
         retry: null
       }

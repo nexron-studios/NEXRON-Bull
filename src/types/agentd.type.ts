@@ -237,6 +237,8 @@ export type AgentdEvent =
   /**
    * The reply Claude is writing, as far as it streamed since its last finished message; agentd
    * sends it to an app that attaches mid-turn. `thinking` is `null` while Claude is not thinking.
+   * `is_truncated`: the block outgrew what agentd keeps; `text` is empty and the block's further
+   * deltas are dropped until its finished message.
    */
   | {
       type: 'streaming'
@@ -245,6 +247,7 @@ export type AgentdEvent =
       chars: number
       text: string
       thinking: string | null
+      is_truncated: boolean
     }
   | { type: 'stderr'; tab: string; text: string }
   | { type: 'exited'; tab: string; code: number | null }

@@ -317,6 +317,7 @@ export const useChatStore = defineStore(
               statusBeforeMove: null,
               streaming: '',
               thinking: null,
+              isStreamCut: false,
               turn: null,
               permission: null,
               notice

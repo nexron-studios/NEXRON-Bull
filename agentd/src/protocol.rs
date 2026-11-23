@@ -245,9 +245,11 @@ pub enum Event {
     /// again to an attaching app carries `"replay": true`.
     Claude { tab: String, event: Value },
     /// The reply Claude is writing, as far as it streamed since its last finished message; sent to
-    /// an app that attaches mid-turn. It replaces the app's live text, so a second app already
-    /// showing it stays as it is. `thinking` is `None` while Claude is not thinking.
-    Streaming { tab: String, message_id: Option<String>, chars: u64, text: String, thinking: Option<String> },
+    /// an app that attaches mid-turn, never while nothing streamed. It replaces the app's live text,
+    /// so a second app already showing it stays as it is. `thinking` is `None` while Claude is not
+    /// thinking. `is_truncated`: the block outgrew what agentd keeps, `text` is empty, and the app
+    /// drops the block's further deltas until its finished message.
+    Streaming { tab: String, message_id: Option<String>, chars: u64, text: String, thinking: Option<String>, is_truncated: bool },
     Stderr { tab: String, text: String },
     Exited { tab: String, code: Option<i32> },
     History { id: Option<u64>, messages: Vec<ChatMessage>, has_more: bool },

@@ -654,7 +654,8 @@ describe('a reply agentd replays on attach', () => {
     message_id: 'msg_1',
     chars: 17,
     text,
-    thinking
+    thinking,
+    is_truncated: false
   })
 
   it('should show what Claude streamed while the app was away', () => {
@@ -698,5 +699,19 @@ describe('a reply agentd replays on attach', () => {
       null,
       ['a1']
     ])
+  })
+
+  it('should drop the rest of a block too long to replay until its finished message', () => {
+    const cut = { ...replay(''), chars: 2_000_000, is_truncated: true }
+    let next = applyEvent(tab(), cut)
+    next = applyEvent(next, delta('mitten im Satz'))
+    const whileCut = [next.streaming, next.streamUsage.chars]
+    next = applyEvent(next, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Ganzer Text')
+    })
+    next = applyEvent(next, delta('Neu'))
+    expect([...whileCut, next.streaming]).toEqual(['', 2_000_014, 'Neu'])
   })
 })

@@ -154,7 +154,7 @@ fn replays_the_unfinished_reply_to_an_app_that_attaches_mid_stream() {
     let replay = second.expect(|e| e["type"] == "streaming");
     // The reasoning came as its own finished message, which the transcript holds; only the text is open.
     assert_eq!(replay, json!({ "type": "streaming", "tab": "t1", "message_id": "msg_stream", "chars": 17,
-        "text": "Hallo ", "thinking": null }));
+        "text": "Hallo ", "thinking": null, "is_truncated": false }));
 
     send_text(&mut second, "finish");
     let mut events = Vec::new();

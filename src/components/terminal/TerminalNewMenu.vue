@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { isTauri } from '@tauri-apps/api/core'
 import { MessagesSquare, Monitor, Plus, Server, SquareTerminal } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'
@@ -29,6 +30,8 @@ const { nameOf } = useMachineNames()
 const { labelOf } = useShortcutLabels()
 const store = useTerminalStore()
 const { data: hosts } = useMachines()
+// Terminals are processes of the app window; a browser only gets the new chat.
+const hasTerminals = isTauri()
 
 const hereLabel = computed(() => {
   const folder = folderNameOf(here.cwd)
@@ -55,24 +58,26 @@ const others = computed(() =>
           labelOf(NEW_SESSION_CHORD)
         }}</DropdownMenuShortcut>
       </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem @select="store.openTab(here)">
-        <SquareTerminal aria-hidden="true" />
-        <span class="truncate">{{ hereLabel }}</span>
-        <DropdownMenuShortcut class="pl-3 tracking-normal whitespace-nowrap">{{
-          labelOf(NEW_TERMINAL_CHORD)
-        }}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        v-for="machine in others"
-        :key="machine ?? ''"
-        @select="store.openTab({ machine, cwd: '' })"
-      >
-        <component :is="machine ? Server : Monitor" aria-hidden="true" />
-        <span class="truncate">
-          {{ t('terminal.on_machine', { machine: nameOf(machine) }) }}
-        </span>
-      </DropdownMenuItem>
+      <template v-if="hasTerminals">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem @select="store.openTab(here)">
+          <SquareTerminal aria-hidden="true" />
+          <span class="truncate">{{ hereLabel }}</span>
+          <DropdownMenuShortcut class="pl-3 tracking-normal whitespace-nowrap">{{
+            labelOf(NEW_TERMINAL_CHORD)
+          }}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          v-for="machine in others"
+          :key="machine ?? ''"
+          @select="store.openTab({ machine, cwd: '' })"
+        >
+          <component :is="machine ? Server : Monitor" aria-hidden="true" />
+          <span class="truncate">
+            {{ t('terminal.on_machine', { machine: nameOf(machine) }) }}
+          </span>
+        </DropdownMenuItem>
+      </template>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

@@ -152,6 +152,37 @@ describe('applyEvent', () => {
     ])
   })
 
+  describe('permission_resolved', () => {
+    const asking = () =>
+      applyEvent(tab(), {
+        type: 'claude',
+        tab: 't1',
+        event: {
+          type: 'control_request',
+          request_id: 'r1',
+          request: { subtype: 'can_use_tool', tool_name: 'Write', input: {} }
+        }
+      })
+
+    it('should drop the card another app decided and go back to working', () => {
+      const next = applyEvent(asking(), {
+        type: 'permission_resolved',
+        tab: 't1',
+        request_id: 'r1'
+      })
+      expect([next.status, next.permission]).toEqual(['working', null])
+    })
+
+    it('should keep the card when another ask was decided', () => {
+      const next = applyEvent(asking(), {
+        type: 'permission_resolved',
+        tab: 't1',
+        request_id: 'r0'
+      })
+      expect([next.status, next.permission?.requestId]).toEqual(['asking', 'r1'])
+    })
+  })
+
   it('should keep the rules Claude suggests to remember with an allow', () => {
     const rule = {
       type: 'addRules',

@@ -215,6 +215,25 @@ export interface ClaudeEvent {
   [key: string]: unknown
 }
 
+/** A running tab as `tabs` lists it; `null` model, mode or effort is the profile's default. */
+export interface TabInfoProps {
+  tab: string
+  session_id: string
+  /** As the recent list names the session; `null` before Claude wrote its transcript */
+  title: string | null
+  cwd: string
+  profile: string | null
+  account: string | null
+  working: boolean
+  /** Permission asks Claude waits on; `start` on the tab sends them again */
+  asks: number
+  model: string | null
+  permission_mode: string | null
+  effort: string | null
+  /** As started: the session may have no transcript yet */
+  is_fresh: boolean
+}
+
 export type AgentdEvent =
   /** An older agentd on another machine leaves `id` out: such a hello answers no request */
   | { type: 'hello'; id: number | null; version: string; os: string }
@@ -245,6 +264,9 @@ export type AgentdEvent =
   | { type: 'cleared'; id: number | null; tab: string }
   | { type: 'deleted'; id: number | null; session_id: string }
   | { type: 'running'; id: number | null; tabs: string[] }
+  | { type: 'tabs'; id: number | null; tabs: TabInfoProps[] }
+  /** An ask was answered, from this app or another one: every app drops its card */
+  | { type: 'permission_resolved'; tab: string; request_id: string }
   | { type: 'quota'; id: number | null; accounts: AccountQuotaProps[] }
   | {
       type: 'usage'
@@ -330,6 +352,7 @@ export type AgentdRequest =
       is_fresh: boolean
     }
   | { op: 'running' }
+  | { op: 'tabs' }
   /** `force` asks Anthropic again sooner than every 90 s (at most every 15 s) */
   | { op: 'quota'; force: boolean }
   | { op: 'usage'; days: number }

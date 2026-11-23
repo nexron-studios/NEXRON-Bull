@@ -6,6 +6,11 @@ import { useTerminalRequestStore } from '@/stores/terminalRequests'
 import { useTerminalStore } from '@/stores/terminals'
 import { useTerminals } from '../useTerminals'
 
+// Terminals exist in the app window only; the browser case is in terminalRequests.spec.
+vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
+  isTauri: () => true
+}))
 // The terminals themselves (xterm, shells) are not part of what is tested here.
 vi.mock('@/lib/terminalSession', () => ({
   createTerminalSession: vi.fn(),

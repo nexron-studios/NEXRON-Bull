@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const invoke = vi.fn()
 let deliver: (payload: string) => void = () => undefined
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }))
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invoke(...args),
+  isTauri: () => true
+}))
 vi.mock('@tauri-apps/api/event', () => ({
   listen: async (_name: string, handler: (event: { payload: string }) => void) => {
     deliver = (payload) => handler({ payload })

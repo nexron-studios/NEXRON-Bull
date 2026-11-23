@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { isTauri } from '@tauri-apps/api/core'
+import { toast } from 'vue-sonner'
 import { Monitor, Plus, Server, ServerOff, UserRound } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'
@@ -32,8 +34,11 @@ const { groups, refetch } = useSettingsAccounts()
 const hasOtherMachines = useHasOtherMachines()
 
 const SKELETON_CARDS = 2
+// Logging in runs `claude /login` in a terminal of the app window; a browser has none.
+const canLogIn = isTauri()
 
 const askLogin = (machine: Machine, profile: ProfileProps) => {
+  if (!canLogIn) return void toast.info(t('terminal.desktop_only'))
   loginTarget.value = { machine, profile }
   isLoginOpen.value = true
 }
@@ -45,8 +50,9 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
     :description="t('settings.accounts.description')"
     :is-phone
   >
+    <template v-if="!canLogIn" />
     <NchIconButton
-      v-if="isPhone"
+      v-else-if="isPhone"
       :label="t('settings.accounts.add')"
       size="icon-lg"
       class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
@@ -136,9 +142,9 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
     </section>
   </div>
 
-  <SettingsAddAccountDialog v-model:open="isAddOpen" :groups />
+  <SettingsAddAccountDialog v-if="canLogIn" v-model:open="isAddOpen" :groups />
   <SettingsLoginDialog
-    v-if="loginTarget"
+    v-if="canLogIn && loginTarget"
     v-model:open="isLoginOpen"
     :machine="loginTarget.machine"
     :profile="loginTarget.profile"

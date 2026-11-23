@@ -1,5 +1,6 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { bridgeService } from '@/api/services/bridge.service'
 import type { AgentdEvent, AgentdRequest } from '@/types/agentd.type'
 
 const AGENTD_EVENT = 'agentd'
@@ -85,14 +86,21 @@ const dispatch = (event: AgentdEvent) => {
   listeners.forEach((listener) => listener(event))
 }
 
-// One window listener for the whole app; components subscribe through `onEvent`.
-// Local and remote agentd share it: tab and request ids are unique app-wide.
+const dispatchLine = (line: string) => dispatch(JSON.parse(line))
+
+// One listener for the whole app; components subscribe through `onEvent`. Local and remote
+// agentd share it: tab and request ids are unique app-wide. Tauri's window event in the app,
+// the bridge's WebSocket in a browser: both deliver the same lines.
 const ensureListening = () =>
-  (unlisten ??= listen<string>(AGENTD_EVENT, ({ payload }) => dispatch(JSON.parse(payload))))
+  (unlisten ??= isTauri()
+    ? listen<string>(AGENTD_EVENT, ({ payload }) => dispatchLine(payload))
+    : Promise.resolve(bridgeService.onLine(dispatchLine)))
 
 /** Resolves with the id of the connection the line went out on. */
-const request = (line: string, machine: Machine) =>
-  invoke<number>('agentd_request', { line, machine })
+const request = (line: string, machine: Machine): Promise<number> =>
+  isTauri()
+    ? invoke<number>('agentd_request', { line, machine })
+    : bridgeService.request(line, machine)
 
 export const agentdService = {
   send: async (message: AgentdRequest, machine: Machine = null): Promise<void> => {

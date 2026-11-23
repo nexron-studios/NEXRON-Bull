@@ -7,10 +7,28 @@ import { AgentdDisconnectedError } from '@/api/services/agentd.service'
 import { newTab } from '@/utils/chatTab'
 import { useChatStore } from '../chat'
 
-const { ask, send, listeners } = vi.hoisted(() => ({
+const { ask, send, listeners, runtime, bridgeReady } = vi.hoisted(() => ({
   ask: vi.fn(),
   send: vi.fn(() => Promise.resolve()),
-  listeners: [] as ((event: AgentdEvent) => void)[]
+  listeners: [] as ((event: AgentdEvent) => void)[],
+  /** The app window by default; the browser tests switch it off. */
+  runtime: { isTauri: true },
+  bridgeReady: [] as ((machines: string[]) => void)[]
+}))
+
+vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
+  isTauri: () => runtime.isTauri
+}))
+
+vi.mock('@/api/services/bridge.service', () => ({
+  bridgeService: {
+    state: { status: 'connecting', machines: [] },
+    onReady: (listener: (machines: string[]) => void) => {
+      bridgeReady.push(listener)
+      return () => {}
+    }
+  }
 }))
 
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
@@ -454,5 +472,103 @@ describe('useChatStore: switching the account', () => {
       },
       null
     )
+  })
+})
+
+describe('useChatStore: in a browser through the bridge', () => {
+  const running = {
+    tab: 't9',
+    session_id: 's9',
+    title: 'Fix the cart',
+    cwd: 'C:\work\shop',
+    profile: null,
+    account: 'office',
+    working: true,
+    asks: 1,
+    model: 'haiku',
+    permission_mode: 'default',
+    effort: null,
+    is_fresh: false
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    listeners.length = 0
+    bridgeReady.length = 0
+    ask.mockReset()
+    send.mockClear()
+    runtime.isTauri = false
+    ask.mockImplementation(async (message: { op: string }, machine: string | null) => {
+      if (message.op === 'tabs') return { type: 'tabs', id: 1, tabs: machine ? [] : [running] }
+      return { type: 'history', id: 2, messages: [], has_more: false }
+    })
+  })
+
+  afterEach(() => {
+    runtime.isTauri = true
+  })
+
+  it('should wait for the bridge before it attaches anything', () => {
+    const chat = useChatStore()
+
+    chat.reattachAll()
+
+    expect(ask).not.toHaveBeenCalled()
+  })
+
+  it('should open and attach the tabs another app runs, on every machine the bridge reaches', async () => {
+    const chat = useChatStore()
+
+    bridgeReady.forEach((ready) => ready(['main-pc']))
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+
+    expect(ask).toHaveBeenCalledWith({ op: 'tabs' }, null)
+    expect(ask).toHaveBeenCalledWith({ op: 'tabs' }, 'main-pc')
+    expect(chat.tabs.map((tab) => [tab.id, tab.machine, tab.sessionId, tab.title])).toEqual([
+      ['t9', null, 's9', 'Fix the cart']
+    ])
+    expect(send).toHaveBeenCalledWith(
+      {
+        op: 'start',
+        tab: 't9',
+        profile: null,
+        cwd: 'C:\work\shop',
+        resume: 's9',
+        model: 'haiku',
+        permission_mode: 'default',
+        is_fresh: false,
+        effort: null
+      },
+      null
+    )
+  })
+
+  it('should ask once while an attach to the machine is still under way', async () => {
+    useChatStore()
+
+    bridgeReady.forEach((ready) => ready([]))
+    bridgeReady.forEach((ready) => ready([]))
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+
+    expect(ask.mock.calls.filter(([message]) => message.op === 'tabs')).toHaveLength(1)
+  })
+
+  it('should open a tab another app starts while this one is open', async () => {
+    const chat = useChatStore()
+
+    emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })
+    await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
+
+    expect(ask).toHaveBeenCalledWith({ op: 'tabs' }, null)
+  })
+
+  it('should open a tab once when two starts of it arrive before the first answer', async () => {
+    const chat = useChatStore()
+
+    emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })
+    emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+
+    expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9'])
   })
 })

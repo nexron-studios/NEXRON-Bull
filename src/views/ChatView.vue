@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { PanelLeftOpen, PanelRight, Plus } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
+import { isTauri } from '@tauri-apps/api/core'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -164,11 +165,14 @@ onKeyStroke(isSidebarShortcut, (event) => {
 })
 // The drawer belongs to the chat on screen; on a phone there is no room under the chat.
 onKeyStroke(isTerminalDrawerShortcut, (event) => {
+  if (!isTauri()) return
   event.preventDefault()
   if (isPhone.value || !isChatRoute.value || shownTerminal.value) return
   toggleDrawer()
 })
 onKeyStroke(isNewTerminalShortcut, (event) => {
+  // A browser keeps its own meaning of the keys: it has no terminals to open.
+  if (!isTauri()) return
   event.preventDefault()
   openHere()
 })

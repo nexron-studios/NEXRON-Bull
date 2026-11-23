@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { openLink } from '@/lib/links'
 import ChatCallout from '@/components/chat/ChatCallout.vue'
 import { copyText } from '@/lib/clipboard'
 import { handleError } from '@/lib/error'
@@ -35,7 +35,7 @@ const handleClick = (event: MouseEvent) => {
   const link = target.closest('a')
   if (!link) return
   event.preventDefault()
-  openUrl(link.href).catch(handleError)
+  openLink(link.href).catch(handleError)
 }
 </script>
 

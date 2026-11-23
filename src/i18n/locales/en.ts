@@ -6,6 +6,17 @@ export default {
     save: 'Save',
     undo: 'Undo'
   },
+  bridge: {
+    title: 'Connect Bull on this device',
+    description:
+      'Bull in the browser reaches your chats through the bridge on the server. It only lets in devices with their own token.',
+    token: 'Device token',
+    token_hint: 'Printed by “npm run token” on the server. Bull keeps it in this browser.',
+    token_empty: 'Enter the token.',
+    token_rejected:
+      'The bridge does not know this token. Make a new one on the server and enter it here.',
+    connect: 'Connect'
+  },
   chat_search: {
     open: 'Search this chat ({key})',
     placeholder: 'Search this chat …',
@@ -1245,6 +1256,7 @@ export default {
     }
   },
   terminal: {
+    desktop_only: 'This only works in the Bull app on a computer: the browser has no terminal.',
     title: 'Terminal',
     tab: 'Terminal',
     new_tab: 'New tab',

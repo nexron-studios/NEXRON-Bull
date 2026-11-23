@@ -8,6 +8,11 @@ import { providePromptEdit, type PromptEditState } from '@/composables/usePrompt
 
 const writeText = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({ writeText }))
+// Copies the way the app window does; the browser's fallback is `navigator.clipboard`.
+vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
+  isTauri: () => true
+}))
 
 // The app shares one minute clock that started with the first test, so "sent" is set from now.
 const FIVE_AND_A_HALF_MINUTES_MS = 5.5 * 60 * 1000

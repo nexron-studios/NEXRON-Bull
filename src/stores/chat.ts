@@ -1,9 +1,12 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { isTauri } from '@tauri-apps/api/core'
 import { AgentdDisconnectedError, agentdService, type Machine } from '@/api/services/agentd.service'
+import { bridgeService } from '@/api/services/bridge.service'
 import i18n from '@/i18n'
 import { handleError } from '@/lib/error'
 import { queryClient } from '@/lib/queryClient'
+import { runningTabsOn } from '@/lib/runningTabs'
 import { useConnectorSetupStore } from '@/stores/connectorSetup'
 import { useDraftStore } from '@/stores/drafts'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
@@ -252,9 +255,54 @@ export const useChatStore = defineStore(
         ? i18n.global.t('chat.disconnected', { machine })
         : i18n.global.t('chat.disconnected_local')
 
+    /** The tabs whose Claude still runs on the machine; a browser opens the ones it lacks. */
+    /**
+     * Opens the tabs another app started; a tab opened meanwhile by a second ask is left out, since
+     * every answer was computed against the tabs from before its own wait.
+     */
+    const openAdopted = (adopted: SavedTab[]): ChatTabState[] => {
+      const opened = adopted.filter((tab) => !tabOf(tab.id)).map(newTab)
+      if (opened.length) tabs.value = [...tabs.value, ...opened]
+      return opened
+    }
+
+    /** The tabs whose Claude still runs on the machine; a browser opens the ones it lacks. */
+    const runningOn = async (machine: Machine): Promise<string[]> => {
+      const known = new Set(tabs.value.map((tab) => tab.id))
+      const { running, adopted } = await runningTabsOn(machine, known)
+      openAdopted(adopted)
+      return running
+    }
+
+    /**
+     * Another app started a tab this browser has none for: open it too and attach. Only the new
+     * ones; attaching again to the others would reload their chats.
+     */
+    const adoptStarted = async () => {
+      for (const machine of [null, ...bridgeService.state.machines]) {
+        const known = new Set(tabs.value.map((tab) => tab.id))
+        const { adopted } = await runningTabsOn(machine, known)
+        for (const tab of openAdopted(adopted)) {
+          void loadHistory(tab.id)
+          start(tab)
+        }
+      }
+    }
+
+    // One attach per machine at a time: a lost bridge socket asks through its `disconnected`
+    // events and again once it is back; two would load every history twice.
+    const attaching = new Map<Machine, Promise<void>>()
+    const reattach = (machine: Machine): Promise<void> => {
+      const running = attaching.get(machine)
+      if (running) return running
+      const attached = attachTo(machine).finally(() => attaching.delete(machine))
+      attaching.set(machine, attached)
+      return attached
+    }
+
     /** Attaches to the tabs whose Claude still runs on that machine, e.g. after a restart. */
-    const reattach = async (machine: Machine) => {
-      const { tabs: running } = await agentdService.ask<'running'>({ op: 'running' }, machine)
+    const attachTo = async (machine: Machine) => {
+      const running = await runningOn(machine)
       stopReconnecting(machine)
       const notice = disconnectedNotice(machine)
       for (const tab of tabs.value.filter((t) => t.machine === machine)) {
@@ -273,13 +321,18 @@ export const useChatStore = defineStore(
       }
     }
 
-    const reattachAll = () => {
-      for (const machine of new Set(tabs.value.map((tab) => tab.machine)))
+    const attachAll = (others: Machine[]) => {
+      for (const machine of new Set([...tabs.value.map((tab) => tab.machine), ...others]))
         reattach(machine).catch((error: unknown) => {
           // A machine that is not reachable yet is tried again until its tabs can attach.
           if (error instanceof AgentdDisconnectedError) scheduleReconnect(machine)
           else handleError(error)
         })
+    }
+
+    // A browser attaches each time the bridge lets it in, to every machine the bridge reaches.
+    const reattachAll = () => {
+      if (isTauri()) attachAll([])
     }
 
     // Attached, or nothing left to attach: a try still waiting would only start the tabs twice.
@@ -342,6 +395,8 @@ export const useChatStore = defineStore(
       if (event.type === 'disconnected') return markDisconnected(event.machine)
       if (!('tab' in event) || !event.tab) return
       const id = event.tab
+      if (event.type === 'started' && !tabOf(id) && !isTauri())
+        return void adoptStarted().catch(handleError)
       const now = Date.now()
       const wasBusy = !!tabOf(id)?.turn
       const pendingBefore = tabOf(id)?.pending ?? []
@@ -779,6 +834,11 @@ export const useChatStore = defineStore(
     }
 
     agentdService.onEvent(onEvent)
+    if (!isTauri()) {
+      const attachBridged = (others: string[]) => attachAll([null, ...others])
+      bridgeService.onReady(attachBridged)
+      if (bridgeService.state.status === 'ready') attachBridged([...bridgeService.state.machines])
+    }
 
     return {
       tabs,

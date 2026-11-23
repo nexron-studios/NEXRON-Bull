@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import SettingsAboutCard from '@/components/settings/SettingsAboutCard.vue'
-import { SETTINGS_SECTION_ICON, settingsSectionList, type SettingsSection } from '@/utils/settings'
+import { isTauri } from '@tauri-apps/api/core'
+import {
+  offeredSettingsSectionsOf,
+  SETTINGS_SECTION_ICON,
+  type SettingsSection
+} from '@/utils/settings'
 
 // The sections of the settings page, as links: each has its own URL (Figma "22"). The current
 // one sits on a marker of its own, so a section change can glide it to the next link while the
@@ -9,13 +14,14 @@ import { SETTINGS_SECTION_ICON, settingsSectionList, type SettingsSection } from
 defineProps<{ current: SettingsSection }>()
 
 const { t } = useI18n()
+const sections = offeredSettingsSectionsOf(isTauri())
 </script>
 
 <template>
   <div class="flex flex-col gap-6" data-route-still>
     <nav :aria-label="t('settings.nav_label')" class="flex flex-col gap-0.5">
       <RouterLink
-        v-for="section in settingsSectionList"
+        v-for="section in sections"
         :key="section"
         :to="{ name: 'settings', params: { section } }"
         :aria-current="section === current ? 'page' : undefined"

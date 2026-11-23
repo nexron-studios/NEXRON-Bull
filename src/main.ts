@@ -1,8 +1,10 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { isTauri } from '@tauri-apps/api/core'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import App from '@/App.vue'
+import { bridgeService } from '@/api/services/bridge.service'
 import i18n from '@/i18n'
 import router from '@/router'
 import { handleError } from '@/lib/error'
@@ -20,3 +22,5 @@ app
   .use(VueQueryPlugin, { queryClient })
   .mount('#app')
 registerServiceWorker()
+// The app window has Tauri's own way to agentd; a browser signs in to the bridge.
+if (!isTauri()) bridgeService.start()

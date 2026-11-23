@@ -210,20 +210,26 @@ pub(crate) fn detail_of(stderr: &str) -> Option<String> {
 /// The name `known_hosts` keeps the machine under, from `ssh -G` (reads the config, connects
 /// nowhere).
 fn known_host_of(entry: &MachineEntry) -> Option<String> {
+    known_host_in(&ssh_config_of(entry)?)
+}
+
+/// What `ssh -G` makes of the machine: one `key value` line per option.
+fn ssh_config_of(entry: &MachineEntry) -> Option<String> {
     let mut command = Command::new(connections::ssh_program());
     command.arg("-G").args(entry.ssh_args());
-    let asked = ask(command, "", "").ok()?;
-    known_host_in(&asked.stdout)
+    Some(ask(command, "", "").ok()?.stdout)
+}
+
+fn config_value(config: &str, key: &str) -> Option<String> {
+    config.lines().find_map(|line| {
+        let (name, value) = line.split_once(' ')?;
+        name.eq_ignore_ascii_case(key).then(|| value.trim().to_string())
+    })
 }
 
 /// `hostkeyalias` wins over `hostname`; a port other than 22 is stored as `[host]:port`.
 fn known_host_in(config: &str) -> Option<String> {
-    let value = |key: &str| {
-        config.lines().find_map(|line| {
-            let (name, value) = line.split_once(' ')?;
-            name.eq_ignore_ascii_case(key).then(|| value.trim().to_string())
-        })
-    };
+    let value = |key: &str| config_value(config, key);
     let host = value("hostkeyalias").filter(|alias| alias != "none").or_else(|| value("hostname"))?;
     match value("port").filter(|port| port != DEFAULT_SSH_PORT) {
         Some(port) => Some(format!("[{host}]:{port}")),
@@ -235,6 +241,14 @@ fn known_host_in(config: &str) -> Option<String> {
 #[tauri::command(async)]
 pub fn test_machine(entry: MachineEntry) -> Result<Probe, machines::MachinesError> {
     Ok(probe(&machines::validated(entry)?, true))
+}
+
+/// The host ssh really connects to for a machine (`HostName`, the alias resolved), for the
+/// preview: a dev server's `localhost` there is that host from here. `None` when ssh cannot say.
+#[tauri::command(async)]
+pub fn machine_host_name(name: String) -> Result<Option<String>, machines::MachinesError> {
+    let entry = machines::resolve(&name)?;
+    Ok(ssh_config_of(&entry).and_then(|config| config_value(&config, "hostname")))
 }
 
 #[cfg(test)]
@@ -277,6 +291,17 @@ mod tests {
         assert_eq!(known_host_in("hostname box\nport 2222\n").as_deref(), Some("[box]:2222"));
         assert_eq!(known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(), Some("pc"));
         assert_eq!(known_host_in("hostname box\nhostkeyalias none\n").as_deref(), Some("box"));
+    }
+
+    #[test]
+    fn reads_one_option_of_ssh_g() {
+        let config = "user dev
+hostname devbox.example
+port 22
+";
+        assert_eq!(config_value(config, "hostname").as_deref(), Some("devbox.example"));
+        assert_eq!(config_value(config, "HostName").as_deref(), Some("devbox.example"));
+        assert_eq!(config_value(config, "proxyjump"), None);
     }
 
     #[test]

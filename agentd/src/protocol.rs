@@ -15,6 +15,7 @@ use crate::quota::AccountQuota;
 use crate::rewind::RewindPoint;
 use crate::subagents::SubagentTranscript;
 use crate::usage::{SessionRow, ToolRow, UsageRow};
+use crate::worktree::{MergeOutcome, RemoveOutcome};
 
 /// A request with an optional id, echoed back on the reply it causes.
 #[derive(Debug, Deserialize)]
@@ -97,6 +98,13 @@ pub enum Request {
     /// Sends running Bash calls and subagents to the background, like Ctrl+B in the terminal: only
     /// the one `tool_use_id` started, or every one in the foreground.
     Background { tab: String, tool_use_id: Option<String> },
+    /// A new worktree and `feat/…` branch for the repository of `cwd`, named after `hint` (the
+    /// chat's first prompt); `root` replaces the default folder beside the projects.
+    CreateWorktree { cwd: String, hint: String, root: Option<String> },
+    /// Merges the worktree's branch into `preview` in the main checkout.
+    MergeIntoPreview { worktree: String },
+    /// Removes the worktree and its branch; refuses while anything in it could be lost.
+    RemoveWorktree { worktree: String },
 }
 
 /// The app's limit settings, the same on every machine. Accounts are named by their label
@@ -258,7 +266,11 @@ pub enum Event {
     Quota { id: Option<u64>, accounts: Vec<AccountQuota> },
     Usage { id: Option<u64>, days: u32, rows: Vec<UsageRow>, tools: Vec<ToolRow>, sessions: Vec<SessionRow> },
     /// `None` outside a repository; a short commit id when `HEAD` is detached.
-    Branch { id: Option<u64>, branch: Option<String> },
+    /// `is_worktree`: the folder is in a linked git worktree, not the main checkout.
+    Branch { id: Option<u64>, branch: Option<String>, is_worktree: bool },
+    WorktreeCreated { id: Option<u64>, path: String, branch: String, base: String },
+    PreviewMerged { id: Option<u64>, branch: String, outcome: MergeOutcome, created_preview: bool, has_uncommitted: bool },
+    WorktreeRemoved { id: Option<u64>, outcome: RemoveOutcome },
     /// Empty while the session has no transcript or never started a subagent.
     SubagentHistory { id: Option<u64>, agents: Vec<SubagentTranscript> },
     Error { id: Option<u64>, tab: Option<String>, message: String },

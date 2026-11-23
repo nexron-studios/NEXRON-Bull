@@ -32,6 +32,20 @@ pub fn branch_of(cwd: &str) -> Option<String> {
     }
 }
 
+/// The folder is (inside) a linked worktree: its `.git` is a file pointing into the main
+/// repository's `worktrees/`, unlike a submodule's, which points into `modules/`.
+pub fn is_linked_worktree(cwd: &str) -> bool {
+    let cwd = native_path(cwd);
+    if !cwd.is_absolute() {
+        return false;
+    }
+    let Some(git) = cwd.ancestors().map(|dir| dir.join(".git")).find(|git| git.exists()) else {
+        return false;
+    };
+    git.is_file()
+        && git_dir_of(&git).is_some_and(|dir| dir.parent().and_then(Path::file_name).is_some_and(|name| name == "worktrees"))
+}
+
 /// A `.git` folder itself, or for a linked worktree the folder its `.git` file points to (absolute
 /// or relative to the worktree). The worktree's own `HEAD` lives there, not in the main checkout.
 fn git_dir_of(git: &Path) -> Option<PathBuf> {
@@ -80,6 +94,8 @@ mod tests {
         fs::write(worktree.join(".git"), "gitdir: ../../repo/.git/worktrees/panel\n").unwrap();
 
         assert_eq!(branch_of(&text(&worktree)).as_deref(), Some("feat/panel"));
+        assert!(is_linked_worktree(&text(&worktree)));
+        assert!(!is_linked_worktree(&text(&base.join("repo"))));
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub mod quota;
 pub mod tokenscope;
 pub mod transfer;
 pub mod usage;
+pub mod worktree;
 pub mod commands;
 pub mod files;
 pub mod hooks;

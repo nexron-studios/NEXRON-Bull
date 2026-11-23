@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -33,6 +33,7 @@ use crate::removal;
 use crate::rewind;
 use crate::subagents;
 use crate::transfer;
+use crate::worktree;
 use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
 
 /// What Claude reads as the answer to the approval `/clear` cut short.
@@ -235,7 +236,11 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::QueueRemove { tab, entry } => self.queue_remove(&tab, entry),
             Request::QueueSend { tab } => self.resume(&tab, false),
             Request::Branch { cwd } => {
-                self.answer_later(move || Event::Branch { id, branch: git::branch_of(&cwd) });
+                self.answer_later(move || Event::Branch {
+                    id,
+                    branch: git::branch_of(&cwd),
+                    is_worktree: git::is_linked_worktree(&cwd),
+                });
                 Ok(())
             }
             Request::ListFiles { cwd, limit } => {
@@ -278,6 +283,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Configure { tab, permission_mode, model, effort } => self.configure(id, &tab, permission_mode, model, effort),
             Request::ProfileDefaults { profile } => profile_dir(profile)
                 .map(|dir| self.emit(&Event::ProfileDefaults { id, defaults: profile_defaults::read(&dir) })),
+            request @ (Request::CreateWorktree { .. } | Request::MergeIntoPreview { .. } | Request::RemoveWorktree { .. }) => {
+                self.worktree_request(id, request);
+                Ok(())
+            }
         };
         if let Err(err) = outcome {
             self.emit(&Event::Error { id, tab, message: err.to_string() });
@@ -294,6 +303,38 @@ impl<W: Write + Send + 'static> Daemon<W> {
         let daemon = Arc::clone(self);
         self.answer_later(move || answer(&daemon, catalog::profiles(&home)));
         Ok(())
+    }
+
+    /// A fetch or a merge takes seconds; like the other slow answers, on its own thread.
+    fn worktree_request(self: &Arc<Self>, id: Option<u64>, request: Request) {
+        let error = move |err: worktree::WorktreeError| Event::Error { id, tab: None, message: err.to_string() };
+        match request {
+            Request::CreateWorktree { cwd, hint, root } => self.answer_later(move || {
+                worktree::create(&cwd, &hint, root.as_deref())
+                    .map_or_else(error, |made| Event::WorktreeCreated { id, path: made.path, branch: made.branch, base: made.base })
+            }),
+            Request::MergeIntoPreview { worktree } => self.answer_later(move || {
+                worktree::merge_into_preview(&worktree).map_or_else(error, |merge| Event::PreviewMerged {
+                    id,
+                    branch: merge.branch,
+                    outcome: merge.outcome,
+                    created_preview: merge.created_preview,
+                    has_uncommitted: merge.has_uncommitted,
+                })
+            }),
+            Request::RemoveWorktree { worktree } => {
+                let daemon = Arc::clone(self);
+                // Any tab in the worktree counts, also one opened on a subfolder of it.
+                let is_in_use = move |top: &Path| {
+                    let top = top.to_string_lossy();
+                    daemon.sessions().values().any(|s| worktree::is_inside(&s.params.cwd, &top))
+                };
+                self.answer_later(move || {
+                    worktree::remove(&worktree, is_in_use).map_or_else(error, |outcome| Event::WorktreeRemoved { id, outcome })
+                })
+            }
+            _ => {}
+        }
     }
 
     /// Computes the answer on its own thread and emits it from there.
@@ -682,7 +723,10 @@ fn tab_of(request: &Request) -> Option<String> {
         | Request::Control { .. }
         // Only the asker hears of a refused change; it is no notice of the chat.
         | Request::Configure { .. }
-        | Request::ProfileDefaults { .. } => None,
+        | Request::ProfileDefaults { .. }
+        | Request::CreateWorktree { .. }
+        | Request::MergeIntoPreview { .. }
+        | Request::RemoveWorktree { .. } => None,
     }
 }
 

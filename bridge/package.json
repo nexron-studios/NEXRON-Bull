@@ -1,0 +1,23 @@
+{
+  "name": "bull-bridge",
+  "private": true,
+  "type": "module",
+  "description": "Lets the Bull web app reach agentd from a phone: one WebSocket per device, one agentd connect per machine",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/main.ts serve",
+    "token": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/main.ts token",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test src/__tests__/*.test.ts",
+    "check": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "~6.0.3"
+  }
+}

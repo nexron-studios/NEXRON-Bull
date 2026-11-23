@@ -28,9 +28,16 @@ const NO_AGENTD: MachineProbe = {
   reason: 'no_agentd',
   version: null,
   detail: null,
-  known_host: null
+  known_host: null,
+  os: 'linux'
 }
-const OK: MachineProbe = { reason: 'ok', version: '0.1.0', detail: null, known_host: null }
+const OK: MachineProbe = {
+  reason: 'ok',
+  version: '0.1.0',
+  detail: null,
+  known_host: null,
+  os: 'linux'
+}
 
 describe('useMachineAssistant', () => {
   beforeEach(() => {

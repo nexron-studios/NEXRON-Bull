@@ -37,6 +37,11 @@ const failureText = computed(() => {
       return t(`settings.machines.reasons.${failure.reason}.hint`, { machine: entry.name })
     case 'copy_failed':
       return t('settings.machines.assistant.failures.copy_failed')
+    case 'download_failed':
+      return t('settings.machines.assistant.failures.download_failed', {
+        machine: entry.name,
+        url: failure.url
+      })
     case 'invalid':
       return t('settings.machines.assistant.failures.invalid')
     default: {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Copy, KeyRound, SquareTerminal } from '@lucide/vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
@@ -9,18 +9,36 @@ import NchSectionEmpty from '@/components/common/NchSectionEmpty.vue'
 import SettingsSwitchRow from '@/components/settings/SettingsSwitchRow.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useMachineEntries } from '@/composables/useAgentdCatalog'
 import { copyText } from '@/lib/clipboard'
 import { useTerminalRequestStore } from '@/stores/terminalRequests'
 import type { MachineEntry } from '@/types/machine.type'
-import { authorizedKeysCommandOf, KEYGEN_COMMAND } from '@/utils/machineAssistant'
+import {
+  authorizedKeysCommandOf,
+  KEYGEN_COMMAND,
+  unixAuthorizedKeysCommandOf
+} from '@/utils/machineAssistant'
 
 // A machine that refuses this PC's key: log in there once with the password in Bull's terminal and
 // paste one line that adds the key. Without a key, the first step makes one.
 const { entry } = defineProps<{ entry: MachineEntry }>()
 
 const isAdmin = ref(false)
+// A refused login tells nothing about the system there; an earlier check may have.
+const isUnix = ref(false)
 
 const { t } = useI18n()
+const machines = useMachineEntries()
+const knownOs = computed(
+  () => machines.data.value?.find((listed) => listed.name === entry.name)?.os ?? null
+)
+watch(
+  knownOs,
+  (os) => {
+    if (os) isUnix.value = os !== 'windows'
+  },
+  { immediate: true }
+)
 const terminals = useTerminalRequestStore()
 const publicKey = useQuery({
   queryKey: ['machines', 'public-key'],
@@ -28,9 +46,13 @@ const publicKey = useQuery({
   staleTime: 0
 })
 
-const commandLine = computed(() =>
-  publicKey.data.value ? authorizedKeysCommandOf(publicKey.data.value, isAdmin.value) : ''
-)
+const commandLine = computed(() => {
+  const key = publicKey.data.value
+  if (!key) return ''
+  return isUnix.value
+    ? unixAuthorizedKeysCommandOf(key)
+    : authorizedKeysCommandOf(key, isAdmin.value)
+})
 
 const openRemoteTerminal = () =>
   terminals.request({ machine: entry.name, cwd: '', title: entry.name })
@@ -80,6 +102,12 @@ const makeKey = () =>
             </NchIconButton>
           </div>
           <SettingsSwitchRow
+            v-model="isUnix"
+            :title="t('settings.machines.assistant.key.unix')"
+            :hint="t('settings.machines.assistant.key.unix_hint')"
+          />
+          <SettingsSwitchRow
+            v-if="!isUnix"
             v-model="isAdmin"
             :title="t('settings.machines.assistant.key.admin')"
             :hint="t('settings.machines.assistant.key.admin_hint')"

@@ -1,7 +1,7 @@
 //! Checks whether another machine can run Bull's chats. Every check is an ssh call whose answer
 //! (agentd's `hello`, or ssh's complaint on stderr) is turned into one reason the assistant
-//! explains; `machine_install` copies agentd over with the same calls. Windows targets only, like
-//! the connection itself.
+//! explains; `machine_install` copies agentd over with the same calls. The first call asks which
+//! system the machine runs (`machine_os`), the others are written for it.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
@@ -11,15 +11,12 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::Value;
+use tauri::State;
 
 use crate::connections;
-use crate::machines::{self, MachineEntry};
+use crate::machine_os::{self, MachineOs, Platform, UNAME_COMMAND};
+use crate::machines::{self, MachineEntry, MachineStore};
 
-/// `stdio` serves one client and ends with its input, so asking `hello` starts nothing that
-/// stays behind (unlike `connect`, which starts the background server).
-const PROBE_COMMAND: &str = r"cmd /d /c .nexron-chat\agentd.exe stdio";
-/// Tells a missing agentd from one Windows refuses to start, without reading localised text.
-const PRESENCE_COMMAND: &str = r"cmd /d /c dir /b .nexron-chat\agentd.exe";
 const HELLO_LINE: &str = r#"{"op":"hello","id":1}"#;
 /// ssh's own exit code for its failures; anything else is the remote command's.
 pub(crate) const SSH_FAILED: i32 = 255;
@@ -40,7 +37,8 @@ pub enum ProbeReason {
     HostKeyUnknown,
     NoAgentd,
     AgentdBlocked,
-    NotWindows,
+    /// Neither Windows, macOS nor Linux, or no shell at all (a Git host)
+    UnsupportedSystem,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -53,11 +51,13 @@ pub struct Probe {
     /// How `known_hosts` names the machine, for forgetting a changed key: ssh stores the
     /// resolved host name, not the alias from `~/.ssh/config`
     pub known_host: Option<String>,
+    /// The system it runs, once ssh got that far
+    pub os: Option<MachineOs>,
 }
 
 impl Probe {
-    fn failed(reason: ProbeReason, stderr: &str) -> Self {
-        Self { reason, version: None, detail: detail_of(stderr), known_host: None }
+    pub(crate) fn failed(reason: ProbeReason, stderr: &str) -> Self {
+        Self { reason, version: None, detail: detail_of(stderr), known_host: None, os: None }
     }
 }
 
@@ -142,30 +142,55 @@ fn read_until(lines: &mpsc::Receiver<String>, wanted: &str) -> (Option<Value>, S
     }
 }
 
-/// Asks the machine's agentd for `hello`; when it does not answer, a second call finds out why.
+/// Finds the system, then asks the machine's agentd for `hello`; when it does not answer, a
+/// further call finds out why.
 pub fn probe(entry: &MachineEntry, should_accept_new_key: bool) -> Probe {
-    let asked = match ask(ssh(entry, should_accept_new_key, PROBE_COMMAND), HELLO_LINE, "hello") {
+    let platform = match platform(entry, should_accept_new_key) {
+        Ok(Some(platform)) => platform,
+        Ok(None) => return Probe::failed(ProbeReason::UnsupportedSystem, ""),
+        Err(failed) => return failed,
+    };
+    Probe { os: Some(platform.os), ..probe_agentd(entry, should_accept_new_key, platform.os) }
+}
+
+/// What `uname` says about the machine: `Ok(None)` for a system Bull does not run on, `Err` when
+/// ssh got nowhere.
+pub(crate) fn platform(entry: &MachineEntry, should_accept_new_key: bool) -> Result<Option<Platform>, Probe> {
+    let asked = ask(ssh(entry, should_accept_new_key, UNAME_COMMAND), "", "")
+        .map_err(|err| Probe::failed(ProbeReason::Offline, &err.to_string()))?;
+    if asked.code == Some(SSH_FAILED) {
+        return Err(ssh_failed(entry, &asked.stderr));
+    }
+    Ok(machine_os::platform_of(asked.code, &asked.stdout))
+}
+
+fn probe_agentd(entry: &MachineEntry, should_accept_new_key: bool, os: MachineOs) -> Probe {
+    let asked = match ask(ssh(entry, should_accept_new_key, os.probe_command()), HELLO_LINE, "hello") {
         Ok(asked) => asked,
         Err(err) => return Probe::failed(ProbeReason::Offline, &err.to_string()),
     };
     if let Some(hello) = &asked.answer {
         let version = hello["version"].as_str().map(str::to_string);
-        return Probe { reason: ProbeReason::Ok, version, detail: None, known_host: None };
+        return Probe { version, ..Probe::failed(ProbeReason::Ok, "") };
     }
     if asked.code == Some(SSH_FAILED) {
-        let reason = ssh_failure(&asked.stderr);
-        let known_host = (reason == ProbeReason::HostKeyChanged).then(|| known_host_of(entry)).flatten();
-        return Probe { known_host, ..Probe::failed(reason, &asked.stderr) };
+        return ssh_failed(entry, &asked.stderr);
     }
-    match ask(ssh(entry, should_accept_new_key, PRESENCE_COMMAND), "", "") {
+    match ask(ssh(entry, should_accept_new_key, os.presence_command()), "", "") {
         Ok(presence) => {
             let reason = presence_reason(&presence);
-            // A blocked agentd is explained by what starting it said, not by `dir`.
+            // A blocked agentd is explained by what starting it said, not by the presence check.
             let stderr = if reason == ProbeReason::AgentdBlocked { &asked.stderr } else { &presence.stderr };
             Probe::failed(reason, stderr)
         }
         Err(err) => Probe::failed(ProbeReason::Offline, &err.to_string()),
     }
+}
+
+fn ssh_failed(entry: &MachineEntry, stderr: &str) -> Probe {
+    let reason = ssh_failure(stderr);
+    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| known_host_of(entry)).flatten();
+    Probe { known_host, ..Probe::failed(reason, stderr) }
 }
 
 /// ssh failed before the remote command ran: refused key, a changed host key, or no way there.
@@ -196,7 +221,7 @@ fn presence_reason(presence: &Asked) -> ProbeReason {
     let text = presence.stderr.to_lowercase();
     let no_cmd = ["command not found", "cmd: not found", "unknown command", "does not provide shell access"];
     if presence.code == Some(SHELL_COMMAND_MISSING) || no_cmd.iter().any(|phrase| text.contains(phrase)) {
-        return ProbeReason::NotWindows;
+        return ProbeReason::UnsupportedSystem;
     }
     ProbeReason::NoAgentd
 }
@@ -231,10 +256,16 @@ fn known_host_in(config: &str) -> Option<String> {
     }
 }
 
-/// Checks a machine the user typed in or picked; it need not be in the list yet.
+/// Checks a machine the user typed in or picked; it need not be in the list yet. A listed one
+/// remembers the system found: its next connection speaks that system's shell.
 #[tauri::command(async)]
-pub fn test_machine(entry: MachineEntry) -> Result<Probe, machines::MachinesError> {
-    Ok(probe(&machines::validated(entry)?, true))
+pub fn test_machine(store: State<'_, MachineStore>, entry: MachineEntry) -> Result<Probe, machines::MachinesError> {
+    let entry = machines::validated(entry)?;
+    let probe = probe(&entry, true);
+    if let Some(os) = probe.os {
+        store.record_os(&entry, os)?;
+    }
+    Ok(probe)
 }
 
 #[cfg(test)]
@@ -265,9 +296,9 @@ mod tests {
         assert_eq!(presence_reason(&asked(0, "")), ProbeReason::AgentdBlocked);
         assert_eq!(presence_reason(&asked(1, "Datei nicht gefunden")), ProbeReason::NoAgentd);
         assert_eq!(presence_reason(&asked(1, "File Not Found")), ProbeReason::NoAgentd);
-        assert_eq!(presence_reason(&asked(127, "bash: line 1: cmd: command not found")), ProbeReason::NotWindows);
+        assert_eq!(presence_reason(&asked(127, "bash: line 1: cmd: command not found")), ProbeReason::UnsupportedSystem);
         let github = "Hi alex! You've successfully authenticated, but GitHub does not provide shell access.";
-        assert_eq!(presence_reason(&asked(1, github)), ProbeReason::NotWindows);
+        assert_eq!(presence_reason(&asked(1, github)), ProbeReason::UnsupportedSystem);
         assert_eq!(presence_reason(&asked(255, "Connection closed by 10.0.0.2 port 22")), ProbeReason::Offline);
     }
 

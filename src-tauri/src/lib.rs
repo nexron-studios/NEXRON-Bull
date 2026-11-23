@@ -2,6 +2,7 @@ mod agent_host;
 mod connections;
 mod local_agentd;
 mod machine_install;
+mod machine_os;
 mod machine_setup;
 mod machines;
 mod notification_setting;

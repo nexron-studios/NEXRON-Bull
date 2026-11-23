@@ -6,7 +6,8 @@ import {
   machineEntryOf,
   machineFormOf,
   machineFormProblemOf,
-  probeActionOf
+  probeActionOf,
+  unixAuthorizedKeysCommandOf
 } from '../machineAssistant'
 
 const form = (overrides: Partial<Record<'host' | 'user' | 'port' | 'name', string>> = {}) => ({
@@ -32,7 +33,7 @@ describe('probeActionOf', () => {
     expect(probeActionOf('ok')).toBe('add')
     expect(probeActionOf('offline')).toBe('retry')
     expect(probeActionOf('host_key_unknown')).toBe('retry')
-    expect(probeActionOf('not_windows')).toBe('none')
+    expect(probeActionOf('unsupported_system')).toBe('none')
   })
 })
 
@@ -104,6 +105,20 @@ describe('authorizedKeysCommandOf', () => {
   it('should double a quote in the key comment', () => {
     expect(authorizedKeysCommandOf("ssh-ed25519 AAA o'brien", false)).toContain(
       "'ssh-ed25519 AAA o''brien'"
+    )
+  })
+})
+
+describe('unixAuthorizedKeysCommandOf', () => {
+  it('should append the key with the modes ssh insists on', () => {
+    expect(unixAuthorizedKeysCommandOf('ssh-ed25519 AAAAC3Nza alex@pc\n')).toBe(
+      "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo 'ssh-ed25519 AAAAC3Nza alex@pc' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    )
+  })
+
+  it('should close and reopen the quotes around a quote in the comment', () => {
+    expect(unixAuthorizedKeysCommandOf("ssh-ed25519 AAA o'brien")).toContain(
+      `echo 'ssh-ed25519 AAA o'"'"'brien' >>`
     )
   })
 })

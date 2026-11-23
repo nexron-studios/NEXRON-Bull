@@ -1,8 +1,8 @@
 //! One `agentd connect` per machine, JSON lines both ways: for this machine a local child
 //! process, for another one over `ssh -T`. Either way Claude runs under a background
 //! `agentd serve` and outlives the app. Events go to one window event; tab ids and request ids
-//! are unique app-wide, so the frontend needs no machine on events. Only Windows targets for
-//! other machines for now (`cmd /d /c`).
+//! are unique app-wide, so the frontend needs no machine on events. The line ssh runs there
+//! depends on the machine's system (`machine_os`).
 
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, BufReader, Write};
@@ -17,10 +17,6 @@ use tauri::{AppHandle, Emitter};
 use crate::agent_host::AGENTD_EVENT;
 use crate::local_agentd;
 use crate::machines::{self, MachineEntry};
-
-/// Where the setup assistant puts agentd, relative to the SSH login folder.
-/// `cmd` instead of the PowerShell login shell: only the first stdin line would reach a script.
-pub(crate) const REMOTE_COMMAND: &str = r"cmd /d /c .nexron-chat\agentd.exe connect";
 
 /// How long ssh tries to reach a host. Without it Windows gives up on an unreachable one after
 /// ~21 s (measured against `nexron-server` offline), and every view asking it waits that long;
@@ -148,7 +144,7 @@ fn ssh_command(entry: &MachineEntry) -> Command {
     command
         .args(["-T", "-o", "BatchMode=yes", "-o", SSH_CONNECT_TIMEOUT, "-o", "ServerAliveInterval=15"])
         .args(entry.ssh_args())
-        .arg(REMOTE_COMMAND)
+        .arg(entry.system().connect_command())
         .stderr(Stdio::null());
     command
 }

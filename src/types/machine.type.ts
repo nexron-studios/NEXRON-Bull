@@ -1,3 +1,6 @@
+export const machineOsList = ['windows', 'macos', 'linux'] as const
+export type MachineOs = (typeof machineOsList)[number]
+
 /** Another machine in Bull's own list; `name` is what tabs and queries call it. */
 export interface MachineEntry {
   name: string
@@ -5,6 +8,8 @@ export interface MachineEntry {
   host: string
   user?: string
   port?: number
+  /** What the last check found; unknown before the first one got through */
+  os?: MachineOs
 }
 
 export const probeReasonList = [
@@ -15,7 +20,7 @@ export const probeReasonList = [
   'host_key_unknown',
   'no_agentd',
   'agentd_blocked',
-  'not_windows'
+  'unsupported_system'
 ] as const
 export type ProbeReason = (typeof probeReasonList)[number]
 
@@ -28,6 +33,8 @@ export interface MachineProbe {
   detail: string | null
   /** How known_hosts names the machine (the resolved host, not the alias); with a changed key */
   known_host: string | null
+  /** The system it runs, once ssh got that far */
+  os: MachineOs | null
 }
 
 export const installStepList = ['checking', 'stopping', 'copying', 'verifying'] as const
@@ -40,6 +47,8 @@ export type InstallError =
   | { kind: 'tabs_unknown' }
   | { kind: 'unreachable'; reason: ProbeReason; detail: string | null }
   | { kind: 'copy_failed'; detail: string }
+  /** The machine could not fetch agentd from the GitHub release of this Bull version */
+  | { kind: 'download_failed'; url: string; detail: string }
   | { kind: 'invalid'; detail: string }
 
 export interface InstallProgress {

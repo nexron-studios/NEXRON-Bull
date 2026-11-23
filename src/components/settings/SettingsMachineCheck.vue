@@ -42,7 +42,7 @@ const REASON_ICON: Record<ProbeReason, LucideIcon> = {
   host_key_unknown: ShieldQuestion,
   no_agentd: Download,
   agentd_blocked: ShieldAlert,
-  not_windows: Unplug
+  unsupported_system: Unplug
 }
 
 const { t } = useI18n()
@@ -50,6 +50,7 @@ const terminals = useTerminalRequestStore()
 
 const action = computed(() => (probe ? probeActionOf(probe.reason) : null))
 const params = computed(() => ({ machine: entry.name, version: probe?.version ?? '' }))
+const oldAgentdFile = computed(() => (probe?.os === 'windows' ? 'agentd.old.exe' : 'agentd.old'))
 
 const forgetKey = () =>
   terminals.request({
@@ -104,7 +105,7 @@ const forgetKey = () =>
       v-if="isAfterInstall && probe.reason === 'agentd_blocked'"
       class="text-meta text-muted-foreground"
     >
-      {{ t('settings.machines.assistant.old_kept') }}
+      {{ t('settings.machines.assistant.old_kept', { file: oldAgentdFile }) }}
     </p>
     <p v-if="action === 'forget_key'" class="text-meta text-muted-foreground">
       {{ t('settings.machines.assistant.forget_key_hint') }}

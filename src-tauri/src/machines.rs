@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::connections::{Connections, home_folder, lock};
-use crate::machine_setup::{self, ProbeReason};
+use crate::machine_os::MachineOs;
+use crate::machine_setup::{self, Probe, ProbeReason};
 
 const DATA_FOLDER: &str = ".nexron-chat";
 const STORE_FILE: &str = "machines.json";
@@ -32,7 +33,6 @@ const GIT_SERVICES: [&str; 7] = [
     "codeberg.org",
 ];
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MachineEntry {
     pub name: String,
@@ -42,9 +42,23 @@ pub struct MachineEntry {
     pub user: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
+    /// What the last check found; see `system`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<MachineOs>,
 }
 
 impl MachineEntry {
+    /// A machine never checked counts as Windows: every machine listed before Bull knew other
+    /// systems was one.
+    pub fn system(&self) -> MachineOs {
+        self.os.unwrap_or(MachineOs::Windows)
+    }
+
+    /// A `~/.ssh/config` host as a machine of the same name.
+    fn for_host(host: String) -> Self {
+        Self { name: host.clone(), host, user: None, port: None, os: None }
+    }
+
     /// `user@host`, or the host alone so `~/.ssh/config` supplies the user.
     pub fn destination(&self) -> String {
         match &self.user {
@@ -127,7 +141,7 @@ impl MachineStore {
         if let Some(entries) = load()? {
             return Ok(entries);
         }
-        let entries = migrate(ssh_config_hosts(), |entry| machine_setup::probe(entry, false).reason);
+        let entries = migrate(ssh_config_hosts(), |entry| machine_setup::probe(entry, false));
         save(&entries)?;
         Ok(entries)
     }
@@ -139,6 +153,21 @@ impl MachineStore {
         let entries = put(load()?.unwrap_or_default(), entry, replacing)?;
         save(&entries)?;
         Ok(entries)
+    }
+
+    /// Remembers what a check found the machine to run, for its next connection. Only for the
+    /// entry that still has the checked host: the user may have changed it meanwhile.
+    pub fn record_os(&self, checked: &MachineEntry, os: MachineOs) -> Result<(), MachinesError> {
+        let _guard = lock(&self.0);
+        let mut entries = load()?.unwrap_or_default();
+        let Some(listed) = entries.iter_mut().find(|entry| entry.name == checked.name && entry.host == checked.host) else {
+            return Ok(());
+        };
+        if listed.os == Some(os) {
+            return Ok(());
+        }
+        listed.os = Some(os);
+        save(&entries)
     }
 
     pub fn remove(&self, name: &str) -> Result<Vec<MachineEntry>, MachinesError> {
@@ -159,35 +188,39 @@ fn put(mut entries: Vec<MachineEntry>, entry: MachineEntry, replacing: Option<&s
         return Err(MachinesError::Taken(entry.name));
     }
     match at {
-        Some(index) => entries[index] = entry,
+        Some(index) => {
+            // The assistant's form knows no system; the same host still runs the one checked.
+            let os = entry.os.or(entries[index].os.filter(|_| entries[index].host == entry.host));
+            entries[index] = MachineEntry { os, ..entry };
+        }
         None => entries.push(entry),
     }
     Ok(entries)
 }
 
 /// Before this list, every `~/.ssh/config` host was a machine. Each one is asked once, in
-/// parallel, and kept unless it proves it is none: refused login, no agentd, not Windows, a host
+/// parallel, and kept unless it proves it is none: refused login, no agentd, no system Bull runs on, a host
 /// ssh never connected to (`github.com` usually). An offline host stays, it may be the server that
 /// is off right now, and so does one whose key changed: its card says how to fix that. Without
 /// accepting new host keys, so the user's `known_hosts` stays as it is.
-fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> ProbeReason + Sync) -> Vec<MachineEntry> {
-    let candidates: Vec<MachineEntry> =
-        hosts.into_iter().map(|host| MachineEntry { name: host.clone(), host, user: None, port: None }).collect();
-    let reasons: Vec<ProbeReason> = thread::scope(|scope| {
+fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> Probe + Sync) -> Vec<MachineEntry> {
+    let candidates: Vec<MachineEntry> = hosts.into_iter().map(MachineEntry::for_host).collect();
+    let probes: Vec<Option<Probe>> = thread::scope(|scope| {
         let probe = &probe;
         let asks: Vec<_> = candidates.iter().map(|entry| scope.spawn(move || probe(entry))).collect();
-        asks.into_iter().map(|ask| ask.join().unwrap_or(ProbeReason::Offline)).collect()
+        asks.into_iter().map(|ask| ask.join().ok()).collect()
     });
     candidates
         .into_iter()
-        .zip(reasons)
-        .filter(|(_, reason)| {
-            matches!(
+        .zip(probes)
+        .filter_map(|(entry, probe)| {
+            let (reason, os) = probe.map_or((ProbeReason::Offline, None), |probe| (probe.reason, probe.os));
+            let is_kept = matches!(
                 reason,
                 ProbeReason::Ok | ProbeReason::Offline | ProbeReason::AgentdBlocked | ProbeReason::HostKeyChanged
-            )
+            );
+            is_kept.then_some(MachineEntry { os, ..entry })
         })
-        .map(|(entry, _)| entry)
         .collect()
 }
 
@@ -199,7 +232,7 @@ pub fn resolve(name: &str) -> Result<MachineEntry, MachinesError> {
         Some(entry) => Ok(entry),
         None => {
             check_host(name)?;
-            Ok(MachineEntry { name: name.to_string(), host: name.to_string(), user: None, port: None })
+            Ok(MachineEntry::for_host(name.to_string()))
         }
     }
 }
@@ -230,7 +263,7 @@ pub fn validated(entry: MachineEntry) -> Result<MachineEntry, MachinesError> {
     if entry.port == Some(0) {
         return Err(MachinesError::Invalid("port"));
     }
-    Ok(MachineEntry { name, host, user, port: entry.port })
+    Ok(MachineEntry { name, host, user, port: entry.port, os: entry.os })
 }
 
 fn check_host(host: &str) -> Result<(), MachinesError> {
@@ -362,7 +395,7 @@ mod tests {
     use super::*;
 
     fn entry(name: &str, host: &str) -> MachineEntry {
-        MachineEntry { name: name.into(), host: host.into(), user: None, port: None }
+        MachineEntry { name: name.into(), host: host.into(), user: None, port: None, os: None }
     }
 
     #[test]
@@ -394,17 +427,39 @@ mod tests {
     #[test]
     fn migration_keeps_working_and_offline_hosts_only() {
         let hosts = ["server", "github.com", "laptop", "pi", "blocked", "reinstalled", "new"].map(String::from).to_vec();
-        let kept = migrate(hosts, |entry| match entry.host.as_str() {
-            "server" => ProbeReason::Ok,
-            "github.com" => ProbeReason::NotWindows,
-            "laptop" => ProbeReason::Offline,
-            "pi" => ProbeReason::AuthFailed,
-            "reinstalled" => ProbeReason::HostKeyChanged,
-            "new" => ProbeReason::HostKeyUnknown,
-            _ => ProbeReason::AgentdBlocked,
+        let kept = migrate(hosts, |entry| {
+            let reason = match entry.host.as_str() {
+                "server" => ProbeReason::Ok,
+                "github.com" => ProbeReason::UnsupportedSystem,
+                "laptop" => ProbeReason::Offline,
+                "pi" => ProbeReason::AuthFailed,
+                "reinstalled" => ProbeReason::HostKeyChanged,
+                "new" => ProbeReason::HostKeyUnknown,
+                _ => ProbeReason::AgentdBlocked,
+            };
+            let os = (reason == ProbeReason::Ok).then_some(MachineOs::Linux);
+            Probe { reason, version: None, detail: None, known_host: None, os }
         });
         let names: Vec<&str> = kept.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(names, ["server", "laptop", "blocked", "reinstalled"]);
+        assert_eq!(kept[0].os, Some(MachineOs::Linux));
+        assert_eq!(kept[1].os, None);
+    }
+
+    #[test]
+    fn a_corrected_entry_keeps_the_system_of_its_host() {
+        let listed = vec![MachineEntry { os: Some(MachineOs::Macos), ..entry("mac", "mac.local") }];
+        let renamed = MachineEntry { user: Some("alex".into()), ..entry("mac", "mac.local") };
+        assert_eq!(put(listed.clone(), renamed, Some("mac")).unwrap()[0].os, Some(MachineOs::Macos));
+        assert_eq!(put(listed, entry("mac", "10.0.0.9"), Some("mac")).unwrap()[0].os, None);
+    }
+
+    #[test]
+    fn a_machine_listed_before_systems_were_known_is_windows() {
+        let old: MachineEntry = serde_json::from_str(r#"{"name":"server","host":"nexron-server"}"#).unwrap();
+        assert_eq!(old.system(), MachineOs::Windows);
+        let mac = MachineEntry { os: Some(MachineOs::Macos), ..entry("mac", "mac") };
+        assert_eq!(serde_json::to_string(&mac).unwrap(), r#"{"name":"mac","host":"mac","os":"macos"}"#);
     }
 
     #[test]

@@ -20,7 +20,7 @@ export const probeActionOf = (reason: ProbeReason): ProbeAction => {
     case 'offline':
     case 'host_key_unknown':
       return 'retry'
-    case 'not_windows':
+    case 'unsupported_system':
       return 'none'
     default: {
       const unhandled: never = reason
@@ -99,6 +99,15 @@ export const authorizedKeysCommandOf = (publicKey: string, isAdmin: boolean): st
   if (isAdmin)
     return `powershell -NoProfile -Command "Add-Content ${ADMIN_KEYS_FILE} ${key}; icacls.exe ${ADMIN_KEYS_FILE} ${ADMIN_KEYS_GRANTS}"`
   return `powershell -NoProfile -Command "New-Item -Force -ItemType Directory ~\\.ssh | Out-Null; Add-Content ~\\.ssh\\authorized_keys ${key}"`
+}
+
+/**
+ * The same for macOS and Linux, typed into the login shell there; also fine in fish. ssh ignores
+ * the keys file when the folder or file may be written by others, hence the modes.
+ */
+export const unixAuthorizedKeysCommandOf = (publicKey: string): string => {
+  const key = `'${publicKey.trim().replaceAll("'", `'"'"'`)}'`
+  return `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo ${key} >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`
 }
 
 /**

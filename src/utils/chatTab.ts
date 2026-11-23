@@ -459,6 +459,9 @@ const movedAccountOf = (
 export const listedTabOf = (tab: ChatTabState): ChatTabState =>
   tab.statusBeforeMove ? { ...tab, status: tab.statusBeforeMove } : tab
 
+const isStreamingReply = (event: Extract<AgentdEvent, { type: 'streaming' }>): boolean =>
+  event.text !== '' || event.thinking !== null || event.is_truncated
+
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
   switch (event.type) {
@@ -483,7 +486,9 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
         streaming: event.text,
         thinking: event.thinking,
         isStreamCut: event.is_truncated,
-        streamUsage: { messageId: event.message_id, chars: event.chars }
+        streamUsage: { messageId: event.message_id, chars: event.chars },
+        // Text on its way means a turn runs, also one Claude started by itself, as a live delta says.
+        status: isStreamingReply(event) ? 'working' : tab.status
       }
     case 'exited':
       return {

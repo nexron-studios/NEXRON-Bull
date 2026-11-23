@@ -667,6 +667,15 @@ describe('a reply agentd replays on attach', () => {
     ])
   })
 
+  it('should mark an idle tab working while a replayed reply streams', () => {
+    const idle = { ...tab(), status: 'idle' as const }
+    expect([
+      applyEvent(idle, replay('Hallo ')).status,
+      applyEvent(idle, replay('', 'Erst lesen.')).status,
+      applyEvent(idle, replay('')).status
+    ]).toEqual(['working', 'working', 'idle'])
+  })
+
   it('should leave an app that already shows the text as it is and keep appending', () => {
     let next = applyEvent(tab(), delta('Hal'))
     next = applyEvent(next, delta('lo '))

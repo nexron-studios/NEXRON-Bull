@@ -105,6 +105,15 @@ pub(crate) struct Session {
     pub(crate) configuring: Vec<PendingChange>,
 }
 
+/// How attaching to a tab's running Claude went.
+enum Attach {
+    Done,
+    /// Another Claude runs in the tab now.
+    Replaced,
+    /// No Claude runs in the tab anymore; it starts anew.
+    Ended,
+}
+
 /// A control request the app sent through `control`, waiting for Claude's response.
 struct PendingControl {
     tab: String,
@@ -309,32 +318,15 @@ impl<W: Write + Send + 'static> Daemon<W> {
     pub(crate) fn start(self: &Arc<Self>, id: Option<u64>, params: StartParams) -> Result<(), DaemonError> {
         // A reloaded window or a reconnected app asks again for a tab that never stopped: report
         // the running session with its state instead of failing, so its queued message goes through.
-        let running = self
-            .sessions()
-            .get(&params.tab)
-            .map(|session| {
-                let working = session.is_working || session.clearing.is_some();
-                (session.session_id.clone(), working, session.asks.clone(), session.params.profile.clone(), session.limit.clone(), session.commands.clone())
-            });
-        if let Some((session_id, working, asks, profile, limit, commands)) = running {
-            let (profile, account) = Self::account_of(profile);
-            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id, working, profile, account });
-            if let Some(commands) = commands {
-                self.emit(&Event::Commands { tab: params.tab.clone(), commands });
+        // Its own statement: in the `if let` the sessions lock would live on into `attach`.
+        let gate = self.sessions().get(&params.tab).map(|session| Arc::clone(&session.partial));
+        if let Some(gate) = gate {
+            match self.attach(id, &params, &gate) {
+                Attach::Done => return self.catch_up(&params.tab, &params),
+                // Claude was replaced in between (a move): attach to the one running now.
+                Attach::Replaced => return self.start(id, params),
+                Attach::Ended => {}
             }
-            // Before the asks: an open ask is what the app shows last.
-            self.replay_partial(&params.tab);
-            // Marked, so the app can tell an approval it already knew from a new one.
-            for mut event in asks {
-                if let Some(fields) = event.as_object_mut() {
-                    fields.insert("replay".into(), Value::Bool(true));
-                }
-                self.emit(&Event::Claude { tab: params.tab.clone(), event });
-            }
-            if limit != LimitState::None {
-                self.emit(&Event::Limit { tab: params.tab.clone(), state: limit });
-            }
-            return self.catch_up(&params.tab, &params);
         }
         let (params, session_id) = session_to_start(params);
         let program = claude::find_claude()?;
@@ -384,6 +376,42 @@ impl<W: Write + Send + 'static> Daemon<W> {
         Ok(())
     }
 
+    /// Reports a running tab to an app that attaches. Holds the tab's reply lock throughout: its pump
+    /// is then between two lines, so no ask gets answered and no delta goes out meanwhile, and the
+    /// app gets nothing twice or stale.
+    fn attach(&self, id: Option<u64>, params: &StartParams, gate: &Arc<Mutex<PartialReply>>) -> Attach {
+        let partial = locked(gate);
+        let (session_id, working, asks, profile, limit, commands) = {
+            let sessions = self.sessions();
+            let Some(session) = sessions.get(&params.tab) else { return Attach::Ended };
+            if !Arc::ptr_eq(gate, &session.partial) {
+                return Attach::Replaced;
+            }
+            let working = session.is_working || session.clearing.is_some();
+            (session.session_id.clone(), working, session.asks.clone(), session.params.profile.clone(), session.limit.clone(), session.commands.clone())
+        };
+        let (profile, account) = Self::account_of(profile);
+        self.emit(&Event::Started { id, tab: params.tab.clone(), session_id, working, profile, account });
+        if let Some(commands) = commands {
+            self.emit(&Event::Commands { tab: params.tab.clone(), commands });
+        }
+        // Before the asks: an open ask is what the app shows last.
+        if let Some(event) = partial.replay(&params.tab) {
+            self.emit(&event);
+        }
+        // Marked, so the app can tell an approval it already knew from a new one.
+        for mut event in asks {
+            if let Some(fields) = event.as_object_mut() {
+                fields.insert("replay".into(), Value::Bool(true));
+            }
+            self.emit(&Event::Claude { tab: params.tab.clone(), event });
+        }
+        if limit != LimitState::None {
+            self.emit(&Event::Limit { tab: params.tab.clone(), state: limit });
+        }
+        Attach::Done
+    }
+
     fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read, partial: &Mutex<PartialReply>) {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let event: Value = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));
@@ -392,6 +420,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 let _ = answer.send(event["response"].clone());
                 continue;
             }
+            let message = chat::message_from(&event);
+            // From the state an attaching app reads (working, asks) through the emit, see `start`.
+            let mut partial = locked(partial);
             self.with_session(tab, |session| track_turn(session, &event));
             self.observe_limits(tab, &event);
             if let Some(commands) = commands::commands_in(&event) {
@@ -400,8 +431,6 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             self.settle_setting(tab, &event);
             // Messages arrive parsed, everything else (deltas, results, permission asks) raw.
-            let message = chat::message_from(&event);
-            let mut partial = locked(partial);
             match message {
                 Some(message) => {
                     if message.role == chat::Role::Assistant {
@@ -430,15 +459,6 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.emit(&Event::Exited { tab: tab.to_string(), code });
         // Only now may a move start Claude again: the app must see this exit before the new start.
         self.moving().remove(tab);
-    }
-
-    /// What the tab's Claude has streamed of its unfinished reply, for an app that attaches.
-    fn replay_partial(&self, tab: &str) {
-        let Some(partial) = self.sessions().get(tab).map(|session| Arc::clone(&session.partial)) else { return };
-        let partial = locked(&partial);
-        if let Some(event) = partial.replay(tab) {
-            self.emit(&event);
-        }
     }
 
     pub(crate) fn moving(&self) -> MutexGuard<'_, HashSet<String>> {

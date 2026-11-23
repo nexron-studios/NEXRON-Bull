@@ -224,6 +224,8 @@ pub struct StartParams {
 pub struct TabInfo {
     pub tab: String,
     pub session_id: String,
+    /// As the recent list names the session; `None` before Claude wrote its transcript.
+    pub title: Option<String>,
     pub cwd: PathBuf,
     pub profile: Option<PathBuf>,
     pub account: Option<String>,
@@ -233,6 +235,8 @@ pub struct TabInfo {
     pub model: Option<String>,
     pub permission_mode: Option<String>,
     pub effort: Option<String>,
+    /// As the tab was started: its session may have no transcript yet, so `history` must not fail.
+    pub is_fresh: bool,
 }
 
 #[derive(Debug, Deserialize)]

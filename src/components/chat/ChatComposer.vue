@@ -190,7 +190,14 @@ const takeMarkup = ({ sourceId, images: incoming, name, comment }: MarkupResult)
   return true
 }
 
-defineExpose({ addFiles, fill, focus: focusField, quote, takeMarkup })
+/** Line comments from the diff review, in front of the draft like a marked image's; nothing is sent. */
+const takeReview = (comments: string) => {
+  isShell.value = false
+  draft.value = prependLine(draft.value, comments)
+  setCaret(draft.value.length)
+}
+
+defineExpose({ addFiles, fill, focus: focusField, quote, takeMarkup, takeReview })
 </script>
 
 <template>

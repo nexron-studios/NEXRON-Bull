@@ -684,4 +684,19 @@ describe('a reply agentd replays on attach', () => {
     })
     expect([next.streaming, next.messages.map((known) => known.uuid)]).toEqual(['', ['a1']])
   })
+
+  it('should drop the replayed text when the history already brought its finished message', () => {
+    let next = applyEvent(tab(), replay('Hallo Welt', 'Erst lesen.'))
+    next = withHistory(next, [message('a1', 'assistant', 'Hallo Welt')], false)
+    next = applyEvent(next, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    expect([next.streaming, next.thinking, next.messages.map((known) => known.uuid)]).toEqual([
+      '',
+      null,
+      ['a1']
+    ])
+  })
 })

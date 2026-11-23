@@ -246,7 +246,10 @@ export const hasRepliedThisTurn = (tab: ChatTabState): boolean =>
   turnMessagesOf(tab).some((known) => known.role === 'assistant')
 
 const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => {
-  if (tab.messages.some((known) => known.uuid === received.uuid)) return tab
+  if (tab.messages.some((known) => known.uuid === received.uuid))
+    // On reattach the transcript can hold a block before its live message arrives; the block is
+    // finished all the same, so its replayed live text must not stay as a second copy.
+    return received.role === 'assistant' ? { ...tab, streaming: '', thinking: null } : tab
   const isPrompt = isPromptEcho(received)
   const isFromAgent = isAgentMessage(received)
   // A prompt that arrives after Claude already answered in this turn was typed while it worked;

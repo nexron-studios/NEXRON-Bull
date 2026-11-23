@@ -433,6 +433,46 @@ fn lists_files_and_runs_a_shell_command_in_a_folder() {
     assert_eq!(agentd.expect(|e| e["id"] == 62)["message"], "folder relative not found");
 }
 
+fn git_in(dir: &PathBuf, args: &[&str]) -> bool {
+    Command::new("git").args(["-c", "user.name=test", "-c", "user.email=test", "-c", "core.autocrlf=false"]).args(args).current_dir(dir).status().is_ok_and(|status| status.success())
+}
+
+#[test]
+fn diffs_changed_new_and_deleted_files_against_head() {
+    let repo = temp_dir("file-diff");
+    let _ = std::fs::remove_dir_all(repo.join(".git"));
+    if !git_in(&repo, &["init", "-q"]) {
+        return; // No git on this machine: the app then shows the chat's own edits.
+    }
+    std::fs::write(repo.join("kept.txt"), "one\ntwo\nthree\n").unwrap();
+    std::fs::write(repo.join("gone.txt"), "bye\n").unwrap();
+    assert!(git_in(&repo, &["add", "."]) && git_in(&repo, &["commit", "-q", "-m", "init"]));
+    std::fs::write(repo.join("kept.txt"), "one\n2\nthree\n").unwrap();
+    std::fs::remove_file(repo.join("gone.txt")).unwrap();
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    std::fs::write(repo.join("src/new.ts"), "a\nb\n").unwrap();
+    let mut agentd = Agentd::spawn();
+
+    agentd.send(json!({ "id": 70, "op": "file_diff", "cwd": repo, "path": "kept.txt" }));
+    let modified = agentd.expect(|e| e["id"] == 70);
+    assert_eq!((modified["type"].as_str(), &modified["diff"]["status"]), (Some("file_diff"), &json!("modified")));
+    assert_eq!(modified["diff"]["hunks"], json!([{ "old_start": 1, "new_start": 1, "lines": [" one", "-two", "+2", " three"] }]));
+
+    agentd.send(json!({ "id": 71, "op": "file_diff", "cwd": repo, "path": repo.join("src/new.ts") }));
+    let untracked = agentd.expect(|e| e["id"] == 71);
+    assert_eq!(untracked["diff"]["status"], "untracked");
+    assert_eq!(untracked["diff"]["hunks"][0]["lines"], json!(["+a", "+b"]));
+
+    agentd.send(json!({ "id": 72, "op": "file_diff", "cwd": repo, "path": "gone.txt" }));
+    let deleted = agentd.expect(|e| e["id"] == 72);
+    assert_eq!((&deleted["diff"]["status"], &deleted["diff"]["hunks"][0]["lines"]), (&json!("deleted"), &json!(["-bye"])));
+
+    let plain = temp_dir("file-diff-plain");
+    std::fs::write(plain.join("a.txt"), "a").unwrap();
+    agentd.send(json!({ "id": 73, "op": "file_diff", "cwd": plain, "path": "a.txt" }));
+    assert_eq!(agentd.expect(|e| e["id"] == 73)["diff"], Value::Null);
+}
+
 #[test]
 fn changes_mode_model_and_effort_of_a_running_session() {
     let mut agentd = Agentd::spawn();

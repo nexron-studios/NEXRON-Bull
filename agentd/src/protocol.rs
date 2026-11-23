@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::catalog::{Profile, SessionSummary};
 use crate::chat::ChatMessage;
 use crate::commands::SlashCommand;
+use crate::file_diff::FileDiff;
 use crate::profile_defaults::ProfileDefaults;
 use crate::quota::AccountQuota;
 use crate::rewind::RewindPoint;
@@ -97,6 +98,8 @@ pub enum Request {
     /// Sends running Bash calls and subagents to the background, like Ctrl+B in the terminal: only
     /// the one `tool_use_id` started, or every one in the foreground.
     Background { tab: String, tool_use_id: Option<String> },
+    /// A file's changes in the working tree against `HEAD`; `path` may be relative to `cwd`.
+    FileDiff { cwd: String, path: String },
 }
 
 /// The app's limit settings, the same on every machine. Accounts are named by their label
@@ -275,4 +278,6 @@ pub enum Event {
     /// The control requests of a `configure` are on their way to Claude.
     Configured { id: Option<u64>, tab: String },
     ProfileDefaults { id: Option<u64>, defaults: ProfileDefaults },
+    /// `None` outside a repository or without git: the app falls back to the chat's edits.
+    FileDiff { id: Option<u64>, diff: Option<FileDiff> },
 }

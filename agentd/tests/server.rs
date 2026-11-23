@@ -167,9 +167,15 @@ fn replays_the_unfinished_reply_to_an_app_that_attaches_mid_stream() {
     assert!(events.iter().any(|e| is_text_delta(e, "Welt")));
     assert!(!events.iter().any(|e| e["type"] == "streaming"));
 
-    // Finished: an app attaching now has no half-written text to show.
+    // Finished: an app attaching now has no half-written text to show, so nothing is replayed.
     second.send(start("t1", &setup.home));
-    assert_eq!(second.expect(|e| e["type"] == "streaming")["text"], "");
+    second.send(json!({ "op": "hello", "id": 7 }));
+    let mut attached = Vec::new();
+    while attached.last().is_none_or(|e: &Value| e["type"] != "hello") {
+        attached.push(second.expect(|_| true));
+    }
+    assert!(attached.iter().any(|e| e["type"] == "started"));
+    assert!(!attached.iter().any(|e| e["type"] == "streaming"));
 
     second.send(json!({ "op": "stop", "tab": "t1" }));
     second.expect(|e| e["type"] == "exited");

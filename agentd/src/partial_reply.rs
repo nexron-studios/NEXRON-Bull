@@ -79,8 +79,13 @@ impl PartialReply {
         target.push_str(piece);
     }
 
-    /// What an attaching app shows as live text. Past the limit it carries no text but `is_truncated`.
+    /// What an attaching app shows as live text; `None` while nothing streamed, so apps that are
+    /// already attached keep their state. Past the limit it carries no text but `is_truncated`.
     pub(crate) fn replay(&self, tab: &str) -> Option<Event> {
+        let is_empty = self.text.is_empty() && self.thinking.is_none() && self.chars == 0;
+        if is_empty && !self.is_overflowed {
+            return None;
+        }
         Some(Event::Streaming {
             tab: tab.to_string(),
             message_id: self.message_id.clone(),
@@ -142,7 +147,14 @@ mod tests {
         let mut delta = text_delta("inside the Agent call");
         delta["parent_tool_use_id"] = json!("toolu_1");
         partial.observe(&delta);
-        assert_eq!(replayed(&partial)["text"], "");
+        assert!(partial.replay("t1").is_none());
+    }
+
+    #[test]
+    fn replays_nothing_while_nothing_streamed() {
+        let mut partial = PartialReply::default();
+        partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
+        assert!(partial.replay("t1").is_none());
     }
 
     #[test]

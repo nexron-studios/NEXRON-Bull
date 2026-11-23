@@ -34,7 +34,9 @@ const delegatedProps = reactiveOmit(props, 'class', 'toastOptions')
     :toast-options="
       props.toastOptions ?? {
         classes: {
-          toast: 'rounded-2xl'
+          toast: 'rounded-2xl',
+          // Sonner colours the description for its own light theme; on our dark popover it vanished.
+          description: 'text-muted-foreground!'
         }
       }
     "

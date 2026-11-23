@@ -1,4 +1,5 @@
 import type { ChatMessage } from '@/types/agentd.type'
+import { chatHunksOf, type ReviewHunk } from '@/utils/diffReview'
 import { timeOf } from '@/utils/tabInsights'
 import { diffCountsOf, diffOf, inputRowsOf, patchRowsOf } from '@/utils/toolInput'
 import { resultsByToolId } from '@/utils/toolPairs'
@@ -16,6 +17,8 @@ export interface ChangedFile {
   removed: number
   /** The card a click shows: the latest change's own, or the Agent call of the subagent that made it */
   cardId: string
+  /** Every change as recorded in the chat, oldest first: the review's fallback outside git */
+  hunks: ReviewHunk[]
 }
 
 /** Messages that change files, and where a click on such a change goes. */
@@ -46,6 +49,7 @@ interface FileChange {
   removed: number
   cardId: string
   at: number | null
+  hunks: ReviewHunk[]
 }
 
 /** The Edit, MultiEdit and Write calls of one source that went through, with their counts. */
@@ -59,7 +63,15 @@ const changesOf = ({ messages, cardId }: ChangeSource): FileChange[] => {
       const result = results.get(block.id)
       if (typeof path !== 'string' || !lines || !result || result.is_error) return []
       const rows = result.patch?.length ? patchRowsOf(result.patch) : inputRowsOf(lines)
-      return [{ path, ...diffCountsOf(rows), cardId: cardId ?? block.id, at: timeOf(message) }]
+      return [
+        {
+          path,
+          ...diffCountsOf(rows),
+          cardId: cardId ?? block.id,
+          at: timeOf(message),
+          hunks: chatHunksOf(block.name, lines, result.patch)
+        }
+      ]
     })
   )
 }
@@ -84,7 +96,8 @@ export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
       ...nameAndFolderOf(before?.path ?? change.path),
       added: (before?.added ?? 0) + change.added,
       removed: (before?.removed ?? 0) + change.removed,
-      cardId: change.cardId
+      cardId: change.cardId,
+      hunks: [...(before?.hunks ?? []), ...change.hunks]
     })
   }
   return [...files.values()].reverse()

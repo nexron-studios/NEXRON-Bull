@@ -44,6 +44,25 @@ export interface PatchHunk {
   lines: string[]
 }
 
+/** How git sees a file in the working tree against `HEAD` (`agentd/src/file_diff.rs`). */
+export const fileStatusList = [
+  'modified',
+  'added',
+  'untracked',
+  'deleted',
+  'unchanged',
+  'ignored'
+] as const
+export type FileStatus = (typeof fileStatusList)[number]
+
+export interface FileDiffProps {
+  status: FileStatus
+  hunks: PatchHunk[]
+  is_binary: boolean
+  /** Only the lines around each change came, or the file was cut at agentd's size limit */
+  is_truncated: boolean
+}
+
 export const hookOutcomeList = ['blocked', 'failed', 'output'] as const
 export type HookOutcome = (typeof hookOutcomeList)[number]
 
@@ -257,6 +276,8 @@ export type AgentdEvent =
     }
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
   | { type: 'branch'; id: number | null; branch: string | null }
+  /** `null` outside a repository or without git: the chat's own edits count then */
+  | { type: 'file_diff'; id: number | null; diff: FileDiffProps | null }
   /** Empty while the session has no transcript or never started a subagent */
   | { type: 'subagent_history'; id: number | null; agents: SubagentTranscript[] }
   /** Sent by the app, not agentd: the connection to a machine ended; `null` is this computer. */
@@ -358,6 +379,8 @@ export type AgentdRequest =
   | { op: 'queue_send'; tab: string }
   /** Files of a working folder for the `@` menu, relative with `/`, gitignore respected */
   | { op: 'list_files'; cwd: string; limit: number }
+  /** A file's changes in the working tree against `HEAD`; `path` may be relative to `cwd` */
+  | { op: 'file_diff'; cwd: string; path: string }
   /** One `!` command in the chat's folder, through Git Bash on Windows */
   | { op: 'run_shell'; cwd: string; command: string }
   /** Hands a control request (`get_context_usage`, `rewind_files`, ...) to the tab's Claude */

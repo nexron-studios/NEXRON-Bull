@@ -1311,6 +1311,48 @@ export default {
     refused: 'Could not rewind: {reason}',
     refused_code_back: 'The files went back, the chat did not. Claude says: {reason}'
   },
+  review: {
+    title: 'Review changes',
+    description: 'Pick lines and comment on them. The comments go into the message box together.',
+    all: 'All changes',
+    open_file: 'Review changes to {name}, {added} lines added, {removed} removed',
+    show_in_chat: 'Show in chat',
+    show_in_chat_of: 'Show {name} in the chat',
+    files: 'Changed files',
+    position: '{n} of {count}',
+    previous: 'Previous file ({key})',
+    next: 'Next file ({key})',
+    status: { added: 'new', deleted: 'deleted' },
+    source: {
+      no_repo: 'Not a git repository. These are the changes Claude made in this chat.',
+      unchanged:
+        'The file matches the last commit. These are the changes Claude made in this chat.',
+      ignored: 'git ignores this file. These are the changes Claude made in this chat.',
+      failed: "The machine didn't send the file. These are the changes from the chat."
+    },
+    truncated: 'The file is very large. Only the lines around the changes are shown.',
+    binary_title: 'Binary file',
+    binary_hint: 'This file has no lines to show.',
+    nothing_title: 'No changes',
+    nothing_hint: 'The file matches the last commit, and the chat has no lines for it.',
+    diff_label: 'Changes in {path}',
+    diff_hint:
+      'Arrow keys pick a line, with Shift several. Enter writes a comment, Esc clears the selection. J and K switch the file.',
+    chosen: '{reference} selected: {text}',
+    unfold: 'Show 1 unchanged line | Show {n} unchanged lines',
+    line_added: 'Added, line {line}:',
+    line_removed: 'Removed, line {line}:',
+    line_kept: 'Line {line}:',
+    old_reference: '{reference} (before)',
+    comment_on: 'Comment',
+    comment_label: 'Comment on {reference}',
+    comment_placeholder: 'What should Claude change here?',
+    comment_cancel: 'Cancel',
+    comment_add: 'Add',
+    comment_remove: 'Remove comment on {reference}',
+    comment_count: 'No comments | 1 comment | {n} comments',
+    insert: 'Into message box'
+  },
   context: {
     title: 'Context',
     description: 'What fills the context and how much is still free.',

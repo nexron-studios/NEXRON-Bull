@@ -35,6 +35,21 @@ describe('changedFilesOf', () => {
     expect([file?.added, file?.removed]).toEqual([4, 2])
   })
 
+  it('should keep every change as hunks for the review, oldest first', () => {
+    const patch = [{ old_start: 7, new_start: 7, lines: ['-a', '+b'] }]
+    const [file] = changedFilesOf([
+      chat([
+        message([edit('1', '/x/a.ts'), edit('2', '/x/a.ts')]),
+        message([result('1'), result('2', false, patch)])
+      ])
+    ])
+
+    expect(file?.hunks).toEqual([
+      { old_start: null, new_start: null, lines: ['-a', '+b', '+c'] },
+      { old_start: 7, new_start: 7, lines: ['-a', '+b'] }
+    ])
+  })
+
   it('should put the latest changed file first', () => {
     const files = changedFilesOf([
       chat([

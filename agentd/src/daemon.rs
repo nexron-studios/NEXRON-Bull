@@ -278,7 +278,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             Request::Configure { tab, permission_mode, model, effort } => self.configure(id, &tab, permission_mode, model, effort),
             Request::FileDiff { cwd, path } => {
-                self.answer_later(move || Event::FileDiff { id, diff: file_diff::file_diff(&cwd, &path) });
+                self.answer_later(move || Event::FileDiff { id, answer: file_diff::file_diff(&cwd, &path).into() });
                 Ok(())
             }
             Request::ProfileDefaults { profile } => profile_dir(profile)

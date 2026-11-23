@@ -1,14 +1,14 @@
 //! A file's current changes for the app's diff review: the working tree against `HEAD`, read with
-//! git on the machine the chat runs on. Outside a repository there is no answer, and the app shows
-//! the edits recorded in the chat instead.
+//! git on the machine the chat runs on. Outside a repository, or without git, the app shows the
+//! edits recorded in the chat instead and says why.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use serde::Serialize;
 
-use crate::claude::hide_console;
+use crate::git::{run_git, GitError};
 use crate::usage::native_path;
 
 /// Git's id of the empty tree: the base of a repository that has no commit yet.
@@ -19,13 +19,16 @@ const FULL_CONTEXT: &str = "--unified=100000";
 const SHORT_CONTEXT: &str = "--unified=3";
 /// More than a review reads; a remote machine must not send a generated file over SSH.
 const MAX_DIFF_BYTES: usize = 1024 * 1024;
+/// Past this, even a diff with little context could hold most of the file in memory twice.
+const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const HUNK_HEADER: &str = "@@ ";
+const NOT_A_REPOSITORY: &str = "not a git repository";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FileStatus {
     Modified,
-    /// New in the index or a new commit-less repository.
+    /// New in the index, renamed or copied there, or in a repository without a commit.
     Added,
     /// Not known to git yet; the whole file counts as added.
     Untracked,
@@ -34,6 +37,8 @@ pub enum FileStatus {
     Unchanged,
     /// Matched by `.gitignore`; git has no history of it.
     Ignored,
+    /// Neither on disk nor in `HEAD`: created and removed again, or never there.
+    Missing,
 }
 
 /// Like Claude Code's `structuredPatch`, so the app draws both the same way.
@@ -50,76 +55,148 @@ pub struct FileDiff {
     pub status: FileStatus,
     pub hunks: Vec<Hunk>,
     pub is_binary: bool,
-    /// Only the lines around each change came, or (untracked) the file was cut.
+    /// Only the lines around each change came, the file was cut, or (no hunks) it was too big.
     pub is_truncated: bool,
 }
 
-/// `None` when the file is in no repository or git is missing: the chat's own edits then count.
-pub fn file_diff(cwd: &str, path: &str) -> Option<FileDiff> {
+#[derive(Debug, thiserror::Error)]
+pub enum FileDiffError {
+    #[error("not in a git repository")]
+    NotInRepository,
+    #[error("the folder must be absolute")]
+    RelativeFolder,
+    #[error(transparent)]
+    Git(#[from] GitError),
+    #[error("cannot read the file: {0}")]
+    Read(io::Error),
+}
+
+/// The app's answer: the diff, or which of the reasons it fell back to the chat's edits.
+#[derive(Debug, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum FileDiffAnswer {
+    Diff(FileDiff),
+    NotInRepository,
+    GitMissing,
+    Failed { message: String },
+}
+
+impl From<Result<FileDiff, FileDiffError>> for FileDiffAnswer {
+    fn from(result: Result<FileDiff, FileDiffError>) -> Self {
+        match result {
+            Ok(diff) => Self::Diff(diff),
+            Err(FileDiffError::NotInRepository) => Self::NotInRepository,
+            Err(FileDiffError::Git(GitError::Missing)) => Self::GitMissing,
+            Err(err) => Self::Failed { message: err.to_string() },
+        }
+    }
+}
+
+pub fn file_diff(cwd: &str, path: &str) -> Result<FileDiff, FileDiffError> {
     let cwd = native_path(cwd);
-    let file = cwd.join(native_path(path));
     // A relative folder would be looked up from agentd's own folder.
-    if !file.is_absolute() {
-        return None;
+    if !cwd.is_absolute() {
+        return Err(FileDiffError::RelativeFolder);
     }
-    // The file's own repository, which need not be the chat's; a deleted file's folder may be gone.
-    let dir = file.ancestors().skip(1).find(|dir| dir.is_dir())?.to_path_buf();
-    let status = status_of(&dir, &file)?;
+    let file = cwd.join(native_path(path));
+    // Git runs in the file's own folder with a relative path: its repository need not be the
+    // chat's, a symlinked folder still matches the work tree, and a deleted file's folder may be
+    // gone (then the nearest one that is left).
+    let dir = file.ancestors().skip(1).find(|dir| dir.is_dir()).ok_or(FileDiffError::NotInRepository)?;
+    let spec = pathspec_in(dir, &file);
+    ensure_repository(dir)?;
+    let status = status_of(dir, &spec, &file)?;
     match status {
-        FileStatus::Unchanged | FileStatus::Ignored => Some(FileDiff { status, hunks: Vec::new(), is_binary: false, is_truncated: false }),
-        FileStatus::Untracked => Some(untracked_diff(&file)),
-        _ => tracked_diff(&dir, &file, status),
+        FileStatus::Unchanged | FileStatus::Ignored | FileStatus::Missing => {
+            Ok(FileDiff { status, hunks: Vec::new(), is_binary: false, is_truncated: false })
+        }
+        FileStatus::Untracked => untracked_diff(&file),
+        FileStatus::Modified | FileStatus::Added | FileStatus::Deleted => tracked_diff(dir, &spec, &file, status),
     }
 }
 
-fn git(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let mut git = Command::new("git");
-    git.args(["-c", "core.quotepath=off"]).args(args).current_dir(dir).stdin(Stdio::null()).stderr(Stdio::null());
-    hide_console(&mut git);
-    git.output().ok().filter(|output| output.status.success()).map(|output| output.stdout)
+/// `file` relative to `dir`, with `/`; git takes it literally (`--literal-pathspecs`).
+fn pathspec_in(dir: &Path, file: &Path) -> String {
+    let relative = file.strip_prefix(dir).unwrap_or(file);
+    relative.components().map(|part| part.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
 }
 
-fn pathspec(file: &Path) -> String {
-    file.to_string_lossy().into_owned()
+fn ensure_repository(dir: &Path) -> Result<(), FileDiffError> {
+    match run_git(dir, &["rev-parse", "--is-inside-work-tree"]) {
+        Ok(_) => Ok(()),
+        Err(GitError::Failed(message)) if message.contains(NOT_A_REPOSITORY) => Err(FileDiffError::NotInRepository),
+        Err(err) => Err(err.into()),
+    }
 }
 
-fn status_of(dir: &Path, file: &Path) -> Option<FileStatus> {
-    let out = git(dir, &["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", "--", &pathspec(file)])?;
+fn status_of(dir: &Path, spec: &str, file: &Path) -> Result<FileStatus, FileDiffError> {
+    let out = run_git(dir, &["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", "--", spec])?;
     let out = String::from_utf8_lossy(&out);
-    let Some(code) = out.get(..2) else { return Some(FileStatus::Unchanged) };
-    Some(match code {
-        "??" => FileStatus::Untracked,
-        "!!" => FileStatus::Ignored,
-        code if code.contains('D') => FileStatus::Deleted,
-        code if code.starts_with('A') => FileStatus::Added,
-        _ => FileStatus::Modified,
-    })
+    Ok(status_from_code(out.get(..2), file.exists()))
 }
 
-fn tracked_diff(dir: &Path, file: &Path, status: FileStatus) -> Option<FileDiff> {
-    let base = if git(dir, &["rev-parse", "--verify", "-q", "HEAD"]).is_some() { "HEAD" } else { EMPTY_TREE };
-    let spec = pathspec(file);
-    let diff_with = |context: &str| git(dir, &["diff", "--no-color", "--no-ext-diff", context, base, "--", &spec]);
-    let full = diff_with(FULL_CONTEXT)?;
-    let (out, is_short) = if full.len() > MAX_DIFF_BYTES { (diff_with(SHORT_CONTEXT)?, true) } else { (full, false) };
+/// The two letters of `git status --porcelain` (index, work tree); none when git has nothing to say.
+fn status_from_code(code: Option<&str>, exists: bool) -> FileStatus {
+    let Some(code) = code else {
+        return if exists { FileStatus::Unchanged } else { FileStatus::Missing };
+    };
+    let mut letters = code.chars();
+    match (letters.next().unwrap_or(' '), letters.next().unwrap_or(' ')) {
+        ('?', '?') => FileStatus::Untracked,
+        ('!', '!') => FileStatus::Ignored,
+        // Added to the index, then removed from disk: `HEAD` never had it either.
+        ('A', 'D') => FileStatus::Missing,
+        ('D', _) | (_, 'D') => FileStatus::Deleted,
+        // `HEAD` has nothing under a renamed or copied file's new path.
+        ('A' | 'R' | 'C', _) => FileStatus::Added,
+        _ => FileStatus::Modified,
+    }
+}
+
+fn tracked_diff(dir: &Path, spec: &str, file: &Path, status: FileStatus) -> Result<FileDiff, FileDiffError> {
+    let base = if run_git(dir, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok() { "HEAD" } else { EMPTY_TREE };
+    let size = size_of(dir, spec, file, base);
+    if size > MAX_FILE_BYTES {
+        return Ok(FileDiff { status, hunks: Vec::new(), is_binary: false, is_truncated: true });
+    }
+    let is_short = size > MAX_DIFF_BYTES as u64;
+    let context = if is_short { SHORT_CONTEXT } else { FULL_CONTEXT };
+    let out = run_git(dir, &["diff", "--no-color", "--no-ext-diff", context, base, "--", spec])?;
     let text = String::from_utf8_lossy(&out);
     let is_binary = text.lines().any(|line| line.starts_with("Binary files "));
     let mut hunks = parse_hunks(&text);
     let is_cut = cut_to_limit(&mut hunks);
-    Some(FileDiff { status, hunks, is_binary, is_truncated: is_short || is_cut })
+    Ok(FileDiff { status, hunks, is_binary, is_truncated: is_short || is_cut })
 }
 
-/// The whole file as added lines; git has nothing to compare it with.
-fn untracked_diff(file: &Path) -> FileDiff {
-    let bytes = fs::read(file).unwrap_or_default();
+/// The bigger of the file on disk and in the base; a deleted file is only in the base.
+fn size_of(dir: &Path, spec: &str, file: &Path, base: &str) -> u64 {
+    let on_disk = fs::metadata(file).map(|meta| meta.len()).unwrap_or(0);
+    let in_base = run_git(dir, &["cat-file", "-s", &format!("{base}:./{spec}")])
+        .ok()
+        .and_then(|out| String::from_utf8_lossy(&out).trim().parse().ok())
+        .unwrap_or(0);
+    on_disk.max(in_base)
+}
+
+/// The whole file as added lines, read only up to the limit and cut at a line end.
+fn untracked_diff(file: &Path) -> Result<FileDiff, FileDiffError> {
+    let handle = File::open(file).map_err(FileDiffError::Read)?;
+    let size = handle.metadata().map_err(FileDiffError::Read)?.len();
+    let mut bytes = Vec::new();
+    handle.take(MAX_DIFF_BYTES as u64).read_to_end(&mut bytes).map_err(FileDiffError::Read)?;
     if bytes.contains(&0) {
-        return FileDiff { status: FileStatus::Untracked, hunks: Vec::new(), is_binary: true, is_truncated: false };
+        return Ok(FileDiff { status: FileStatus::Untracked, hunks: Vec::new(), is_binary: true, is_truncated: false });
     }
-    let is_truncated = bytes.len() > MAX_DIFF_BYTES;
-    let text = String::from_utf8_lossy(&bytes[..bytes.len().min(MAX_DIFF_BYTES)]);
+    let is_truncated = size > MAX_DIFF_BYTES as u64;
+    if is_truncated {
+        // A cut inside a line could split a character; the last whole line ends the review.
+        bytes.truncate(memchr::memrchr(b'\n', &bytes).map_or(0, |end| end + 1));
+    }
+    let text = String::from_utf8_lossy(&bytes);
     let lines: Vec<String> = text.lines().map(|line| format!("+{line}")).collect();
     let hunks = if lines.is_empty() { Vec::new() } else { vec![Hunk { old_start: 0, new_start: 1, lines }] };
-    FileDiff { status: FileStatus::Untracked, hunks, is_binary: false, is_truncated }
+    Ok(FileDiff { status: FileStatus::Untracked, hunks, is_binary: false, is_truncated })
 }
 
 /// The hunks of a unified diff; the file headers above the first `@@` and git's
@@ -195,9 +272,21 @@ mod tests {
         fs::write(dir.join("new.txt"), "one\ntwo\n").unwrap();
         fs::write(dir.join("blob.bin"), [1u8, 0, 2]).unwrap();
 
-        let text = untracked_diff(&dir.join("new.txt"));
+        let text = untracked_diff(&dir.join("new.txt")).unwrap();
         assert_eq!(text.hunks, vec![Hunk { old_start: 0, new_start: 1, lines: vec!["+one".into(), "+two".into()] }]);
-        assert!(untracked_diff(&dir.join("blob.bin")).is_binary);
+        assert!(untracked_diff(&dir.join("blob.bin")).unwrap().is_binary);
+        assert!(matches!(untracked_diff(&dir.join("gone.txt")), Err(FileDiffError::Read(_))));
+    }
+
+    #[test]
+    fn cuts_a_big_untracked_file_at_a_line_end() {
+        let dir = temp_folder("big");
+        let line = format!("{}\n", "ä".repeat(99));
+        fs::write(dir.join("big.txt"), line.repeat(MAX_DIFF_BYTES / line.len() + 10)).unwrap();
+
+        let diff = untracked_diff(&dir.join("big.txt")).unwrap();
+        assert!(diff.is_truncated);
+        assert_eq!(diff.hunks[0].lines.last(), Some(&format!("+{}", "ä".repeat(99))));
     }
 
     #[test]
@@ -209,10 +298,40 @@ mod tests {
     }
 
     #[test]
-    fn has_no_answer_outside_a_repository_or_for_a_relative_folder() {
+    fn reads_the_status_letters() {
+        let cases = [
+            (Some("??"), FileStatus::Untracked),
+            (Some("!!"), FileStatus::Ignored),
+            (Some(" M"), FileStatus::Modified),
+            (Some("A "), FileStatus::Added),
+            (Some("R "), FileStatus::Added),
+            (Some("C "), FileStatus::Added),
+            (Some(" D"), FileStatus::Deleted),
+            (Some("D "), FileStatus::Deleted),
+            (Some("AD"), FileStatus::Missing),
+        ];
+        for (code, status) in cases {
+            assert_eq!(status_from_code(code, true), status, "{code:?}");
+        }
+        assert_eq!(status_from_code(None, true), FileStatus::Unchanged);
+        assert_eq!(status_from_code(None, false), FileStatus::Missing);
+    }
+
+    #[test]
+    fn names_the_file_relative_to_its_folder() {
+        let dir = Path::new("/repo/src");
+        assert_eq!(pathspec_in(dir, &dir.join("pages").join("[id].vue")), "pages/[id].vue");
+    }
+
+    #[test]
+    fn tells_a_relative_folder_from_one_outside_a_repository() {
         let dir = temp_folder("none");
         fs::write(dir.join("a.txt"), "a").unwrap();
-        assert_eq!(file_diff(&dir.to_string_lossy(), "a.txt"), None);
-        assert_eq!(file_diff("relative", "a.txt"), None);
+        assert!(matches!(file_diff("relative", "a.txt"), Err(FileDiffError::RelativeFolder)));
+        // Without git on the machine the answer is that git is missing; both mean "use the chat".
+        assert!(matches!(
+            file_diff(&dir.to_string_lossy(), "a.txt"),
+            Err(FileDiffError::NotInRepository | FileDiffError::Git(GitError::Missing))
+        ));
     }
 }

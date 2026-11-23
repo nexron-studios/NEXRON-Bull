@@ -446,7 +446,11 @@ fn diffs_changed_new_and_deleted_files_against_head() {
     }
     std::fs::write(repo.join("kept.txt"), "one\ntwo\nthree\n").unwrap();
     std::fs::write(repo.join("gone.txt"), "bye\n").unwrap();
+    std::fs::create_dir_all(repo.join("pages")).unwrap();
+    std::fs::write(repo.join("pages/[id].vue"), "id\n").unwrap();
+    std::fs::write(repo.join("pages/i.vue"), "i\n").unwrap();
     assert!(git_in(&repo, &["add", "."]) && git_in(&repo, &["commit", "-q", "-m", "init"]));
+    std::fs::write(repo.join("pages/i.vue"), "changed\n").unwrap();
     std::fs::write(repo.join("kept.txt"), "one\n2\nthree\n").unwrap();
     std::fs::remove_file(repo.join("gone.txt")).unwrap();
     std::fs::create_dir_all(repo.join("src")).unwrap();
@@ -455,22 +459,30 @@ fn diffs_changed_new_and_deleted_files_against_head() {
 
     agentd.send(json!({ "id": 70, "op": "file_diff", "cwd": repo, "path": "kept.txt" }));
     let modified = agentd.expect(|e| e["id"] == 70);
-    assert_eq!((modified["type"].as_str(), &modified["diff"]["status"]), (Some("file_diff"), &json!("modified")));
-    assert_eq!(modified["diff"]["hunks"], json!([{ "old_start": 1, "new_start": 1, "lines": [" one", "-two", "+2", " three"] }]));
+    assert_eq!((modified["type"].as_str(), &modified["answer"]["state"]), (Some("file_diff"), &json!("diff")));
+    assert_eq!(modified["answer"]["status"], "modified");
+    assert_eq!(modified["answer"]["hunks"], json!([{ "old_start": 1, "new_start": 1, "lines": [" one", "-two", "+2", " three"] }]));
 
     agentd.send(json!({ "id": 71, "op": "file_diff", "cwd": repo, "path": repo.join("src/new.ts") }));
     let untracked = agentd.expect(|e| e["id"] == 71);
-    assert_eq!(untracked["diff"]["status"], "untracked");
-    assert_eq!(untracked["diff"]["hunks"][0]["lines"], json!(["+a", "+b"]));
+    assert_eq!(untracked["answer"]["status"], "untracked");
+    assert_eq!(untracked["answer"]["hunks"][0]["lines"], json!(["+a", "+b"]));
 
     agentd.send(json!({ "id": 72, "op": "file_diff", "cwd": repo, "path": "gone.txt" }));
     let deleted = agentd.expect(|e| e["id"] == 72);
-    assert_eq!((&deleted["diff"]["status"], &deleted["diff"]["hunks"][0]["lines"]), (&json!("deleted"), &json!(["-bye"])));
+    assert_eq!((&deleted["answer"]["status"], &deleted["answer"]["hunks"][0]["lines"]), (&json!("deleted"), &json!(["-bye"])));
+
+    // Brackets are part of the name, not a pattern that also matches `i.vue`.
+    agentd.send(json!({ "id": 74, "op": "file_diff", "cwd": repo, "path": "pages/[id].vue" }));
+    assert_eq!(agentd.expect(|e| e["id"] == 74)["answer"]["status"], "unchanged");
+
+    agentd.send(json!({ "id": 75, "op": "file_diff", "cwd": repo, "path": "never.txt" }));
+    assert_eq!(agentd.expect(|e| e["id"] == 75)["answer"]["status"], "missing");
 
     let plain = temp_dir("file-diff-plain");
     std::fs::write(plain.join("a.txt"), "a").unwrap();
     agentd.send(json!({ "id": 73, "op": "file_diff", "cwd": plain, "path": "a.txt" }));
-    assert_eq!(agentd.expect(|e| e["id"] == 73)["diff"], Value::Null);
+    assert_eq!(agentd.expect(|e| e["id"] == 73)["answer"]["state"], "not_in_repository");
 }
 
 #[test]

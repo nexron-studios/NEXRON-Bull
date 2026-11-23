@@ -5,11 +5,10 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use serde::Serialize;
 
-use crate::claude::hide_console;
+use crate::git::run_git;
 use crate::usage::native_path;
 
 /// More than any menu shows; a remote folder must not send a whole monorepo over SSH.
@@ -43,14 +42,8 @@ pub fn list_files(cwd: &str, limit: usize) -> FileList {
 /// Tracked files plus untracked ones `.gitignore` lets through; `None` outside a repository or
 /// without git.
 fn git_files(cwd: &Path) -> Option<Vec<String>> {
-    let mut git = Command::new("git");
-    git.args(["-c", "core.quotepath=off", "ls-files", "--cached", "--others", "--exclude-standard", "-z"])
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null());
-    hide_console(&mut git);
-    let output = git.output().ok().filter(|output| output.status.success())?;
-    let text = String::from_utf8_lossy(&output.stdout);
+    let out = run_git(cwd, &["ls-files", "--cached", "--others", "--exclude-standard", "-z"]).ok()?;
+    let text = String::from_utf8_lossy(&out);
     Some(text.split('\0').filter(|path| !path.is_empty()).map(str::to_string).collect())
 }
 
@@ -83,6 +76,7 @@ fn walk(cwd: &Path, limit: usize) -> Vec<String> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::process::Command;
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("agentd-files-{name}-{}", std::process::id()));

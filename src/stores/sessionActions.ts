@@ -9,6 +9,7 @@ import { handleError } from '@/lib/error'
 import { ClearRefusedError, useChatStore } from '@/stores/chat'
 import { useHiddenSessionsStore } from '@/stores/hiddenSessions'
 import { useRememberedSettingsStore } from '@/stores/rememberedSettings'
+import { useWorktreeActionsStore } from '@/stores/worktreeActions'
 import { savedTabOf } from '@/utils/chatTab'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
 import {
@@ -24,7 +25,12 @@ import {
 const UNDO_TOAST_MS = 8000
 
 /** The agentd op behind each confirmation; an agentd without it names it in its error. */
-const OP_OF = { clear: 'clear', stop_and_remove: null, delete: 'delete_session' } as const
+const OP_OF = {
+  clear: 'clear',
+  stop_and_remove: null,
+  delete: 'delete_session',
+  remove_worktree: 'remove_worktree'
+} as const
 
 /** A step the user confirms in the dialog first. `sessionId` is the one they saw when asking. */
 export interface SessionConfirmation {
@@ -81,6 +87,7 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
 
   const requestClear = (target: SessionTarget) => ask('clear', target)
   const requestDelete = (target: SessionTarget) => ask('delete', target)
+  const requestRemoveWorktree = (target: SessionTarget) => ask('remove_worktree', target)
 
   /** Closes the tabs and hides the sessions, with an undo that brings both back. */
   const hideAll = async (targets: SessionTarget[]) => {
@@ -167,6 +174,13 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     toast.success(t('session_actions.deleted', { title: titleOf(target) }))
   }
 
+  /** The tab goes once its folder is gone: Claude could not start there again. */
+  const removeWorktree = async ({ target }: SessionConfirmation) => {
+    if (!target.tab) return
+    const outcome = await useWorktreeActionsStore().remove(target.tab)
+    if (outcome.kind === 'removed') closeTab(target.tab.id)
+  }
+
   const run = async (current: SessionConfirmation) => {
     switch (current.kind) {
       case 'clear':
@@ -175,6 +189,8 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
         return hideAll([current.target])
       case 'delete':
         return deleteForGood(current)
+      case 'remove_worktree':
+        return removeWorktree(current)
       default: {
         const unhandled: never = current.kind
         throw new Error(`Unhandled session confirmation: ${unhandled}`)
@@ -206,6 +222,7 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     isWorking,
     titleOf,
     act,
+    requestRemoveWorktree,
     removeAll,
     confirm,
     cancel

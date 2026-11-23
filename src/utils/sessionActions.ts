@@ -19,8 +19,16 @@ export interface SessionTarget {
 export const sessionActionList = ['copy_id', 'clear', 'remove', 'delete'] as const
 export type SessionAction = (typeof sessionActionList)[number]
 
-/** The steps the user confirms first: clearing, removing a tab Claude still works in, deleting. */
-export const confirmationKindList = ['clear', 'stop_and_remove', 'delete'] as const
+/**
+ * The steps the user confirms first: clearing, removing a tab Claude still works in, deleting,
+ * and removing the chat's worktree with its branch.
+ */
+export const confirmationKindList = [
+  'clear',
+  'stop_and_remove',
+  'delete',
+  'remove_worktree'
+] as const
 export type ConfirmationKind = (typeof confirmationKindList)[number]
 
 /** i18n keys of a confirmation; `notes` add what happens to a turn that is still running. */
@@ -106,6 +114,8 @@ const runningNotesOf = (kind: ConfirmationKind, target: SessionTarget): string[]
       return []
     case 'delete':
       return needsStop(target) ? ['session_actions.confirm.delete.note_running'] : []
+    case 'remove_worktree':
+      return needsStop(target) ? ['session_actions.confirm.remove_worktree.note_running'] : []
     default: {
       const unhandled: never = kind
       throw new Error(`Unhandled confirmation: ${unhandled}`)

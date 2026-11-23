@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Eraser, LoaderCircle, Square, Trash2 } from '@lucide/vue'
+import { Eraser, FolderX, LoaderCircle, Square, Trash2 } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'
@@ -16,15 +16,22 @@ import {
 import { Button } from '@/components/ui/button'
 import { useSessionActionsStore } from '@/stores/sessionActions'
 import { confirmationTextOf } from '@/utils/sessionActions'
+import { folderNameOf } from '@/utils/sessionList'
 
-// The one confirmation for clearing, stopping-and-removing and deleting a session, for the whole
-// app. It stays open while the step runs, so a slow machine does not look like nothing happened.
+// The one confirmation for clearing, stopping-and-removing and deleting a session and for removing
+// a chat's worktree, for the whole app. It stays open while the step runs, so a slow machine does
+// not look like nothing happened.
 const { t } = useI18n()
 const { nameOf } = useMachineNames()
 const actions = useSessionActionsStore()
 const { confirmation, confirmationTarget, isWorking } = storeToRefs(actions)
 
-const ICONS = { clear: Eraser, stop_and_remove: Square, delete: Trash2 } as const
+const ICONS = {
+  clear: Eraser,
+  stop_and_remove: Square,
+  delete: Trash2,
+  remove_worktree: FolderX
+} as const
 
 const isOpen = computed({
   get: () => confirmation.value !== null,
@@ -41,14 +48,15 @@ const text = computed(() => {
   const params = {
     title: actions.titleOf(target),
     machine: nameOf(target.machine),
-    account: target.account
+    account: target.account,
+    folder: target.tab ? folderNameOf(target.tab.cwd) : ''
   }
   return {
     title: t(keys.title, params),
     body: [t(keys.body, params), ...notes.map((note) => t(note))].join(' '),
     confirm: t(keys.confirm),
     icon: ICONS[current.kind],
-    isDestructive: current.kind === 'delete'
+    isDestructive: current.kind === 'delete' || current.kind === 'remove_worktree'
   }
 })
 </script>

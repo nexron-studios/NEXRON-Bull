@@ -21,8 +21,9 @@ const forgetOnReconnect = () => {
 }
 
 /**
- * The git branch checked out in a tab's folder, from the machine the tab runs on. `isUnknown`:
- * that machine gave no answer, so there is nothing to wait for.
+ * The git branch checked out in a tab's folder and whether the folder is a linked worktree, from
+ * the machine the tab runs on. `isUnknown`: that machine gave no answer, so there is nothing to
+ * wait for.
  */
 export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrGetter<Machine>) => {
   forgetOnReconnect()
@@ -32,13 +33,13 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
     queryFn: async () => {
       const on = toValue(machine)
       try {
-        return (
-          await agentdService.ask<'branch'>(
-            { op: 'branch', cwd: toValue(cwd) },
-            on,
-            BRANCH_TIMEOUT_MS
-          )
-        ).branch
+        const answer = await agentdService.ask<'branch'>(
+          { op: 'branch', cwd: toValue(cwd) },
+          on,
+          BRANCH_TIMEOUT_MS
+        )
+        // `null`: an agentd from before worktrees cannot tell, and cannot make one either.
+        return { branch: answer.branch, isWorktree: answer.is_worktree ?? null }
       } catch (error) {
         // A lost connection says nothing about the agentd behind the next one, and its
         // `disconnected` event has already gone by: marking it now would stick.

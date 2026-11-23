@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   Bell,
   FolderGit2,
+  GitFork,
   Globe,
   Monitor,
   SquareTerminal,
@@ -26,6 +27,7 @@ export const settingsSectionList = [
   'machines',
   'notifications',
   'terminal',
+  'worktrees',
   'appearance'
 ] as const
 export type SettingsSection = (typeof settingsSectionList)[number]
@@ -36,6 +38,7 @@ export const SETTINGS_SECTION_ICON: Record<SettingsSection, Component> = {
   machines: Monitor,
   notifications: Bell,
   terminal: SquareTerminal,
+  worktrees: GitFork,
   appearance: Sun
 }
 

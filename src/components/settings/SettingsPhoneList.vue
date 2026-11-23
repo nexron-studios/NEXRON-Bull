@@ -9,6 +9,7 @@ import { useTerminalPreferences } from '@/composables/useTerminalPreferences'
 import { useThemeChoice } from '@/composables/useThemeToggle'
 import SettingsAboutCard from '@/components/settings/SettingsAboutCard.vue'
 import { useLimitPolicyStore } from '@/stores/limitPolicy'
+import { useWorktreeSettingsStore } from '@/stores/worktreeSettings'
 import { SETTINGS_SECTION_ICON, settingsSectionList, type SettingsSection } from '@/utils/settings'
 
 // The phone's settings (Figma "M22"): one row per section with its current value, each opens
@@ -19,6 +20,7 @@ const { settings: notifications } = useNotificationSetting()
 const { shownShell } = useTerminalPreferences()
 const { choice } = useThemeChoice()
 const { policy } = storeToRefs(useLimitPolicyStore())
+const worktrees = useWorktreeSettingsStore()
 
 const values = computed<Record<SettingsSection, string>>(() => ({
   accounts: t('settings.summary.accounts', offeredCount.value),
@@ -26,6 +28,9 @@ const values = computed<Record<SettingsSection, string>>(() => ({
   machines: String(machines.value.length),
   notifications: notifications.value.isOn ? t('settings.summary.on') : t('settings.summary.off'),
   terminal: t(`settings.terminal.shells.${shownShell.value}`),
+  worktrees: worktrees.hasOwnRoot
+    ? t('settings.worktrees.summary_own')
+    : t('settings.worktrees.summary_default'),
   appearance: t(`settings.appearance.themes.${choice.value}`)
 }))
 </script>

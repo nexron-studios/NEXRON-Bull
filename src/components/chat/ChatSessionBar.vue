@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { FolderOpen, GitBranch, History, Monitor, Search } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatWorktreeMenu from '@/components/chat/ChatWorktreeMenu.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -38,7 +39,10 @@ const canRewind = computed(
 )
 // Outside a repository, or on a machine whose agentd cannot tell, the path ends at the folder.
 const isBranchShown = computed(
-  () => !branch.isUnknown.value && (branch.isPending.value || !!branch.data.value)
+  () => !branch.isUnknown.value && (branch.isPending.value || !!branch.data.value?.branch)
+)
+const worktreeBranch = computed(() =>
+  branch.data.value?.isWorktree ? branch.data.value.branch : null
 )
 </script>
 
@@ -69,12 +73,21 @@ const isBranchShown = computed(
       </TooltipTrigger>
       <TooltipContent>{{ tab.cwd }}</TooltipContent>
     </Tooltip>
-    <template v-if="isBranchShown">
+    <!-- A chat whose worktree comes with its first message: not the main checkout's branch. -->
+    <template v-if="tab.worktreeFrom">
       <span class="text-border" aria-hidden="true">/</span>
       <GitBranch class="size-4 shrink-0" aria-hidden="true" />
+      <span class="min-w-0 truncate">{{ t('worktree.pending') }}</span>
+    </template>
+    <template v-else-if="isBranchShown">
+      <span class="text-border" aria-hidden="true">/</span>
       <span class="sr-only">{{ t('panel.branch') }}:</span>
-      <Skeleton v-if="branch.isPending.value" class="h-4 w-24" />
-      <span v-else class="min-w-0 truncate font-mono">{{ branch.data.value }}</span>
+      <ChatWorktreeMenu v-if="worktreeBranch" :tab :branch="worktreeBranch" />
+      <template v-else>
+        <GitBranch class="size-4 shrink-0" aria-hidden="true" />
+        <Skeleton v-if="branch.isPending.value" class="h-4 w-24" />
+        <span v-else class="min-w-0 truncate font-mono">{{ branch.data.value?.branch }}</span>
+      </template>
     </template>
     <span class="flex-1" aria-hidden="true" />
     <!-- One piece, so a layout snap carries it along the bar's right edge (transitions.css). -->

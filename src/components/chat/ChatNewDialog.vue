@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { refDebounced } from '@vueuse/core'
 import { FolderOpen, History, Monitor, Play, Plus, Sparkles, UserRound, Zap } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import BrandClawdMark from '@/components/brand/BrandClawdMark.vue'
 import NchEmpty from '@/components/common/NchEmpty.vue'
 import NchResponsiveDialog from '@/components/common/NchResponsiveDialog.vue'
+import SettingsSwitchRow from '@/components/settings/SettingsSwitchRow.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,8 +27,10 @@ import {
 } from '@/composables/useAgentdCatalog'
 import { useMachineNames } from '@/composables/useMachineNames'
 import { useAccountDefaultLabels } from '@/composables/useAccountDefaultLabels'
+import { useGitBranch } from '@/composables/useGitBranch'
 import { useAccountSettingsStore } from '@/stores/accountSettings'
 import { useChatStore } from '@/stores/chat'
+import { useWorktreeSettingsStore } from '@/stores/worktreeSettings'
 import type { SessionSummaryProps } from '@/types/agentd.type'
 import { modelList, permissionModeList, type PermissionMode } from '@/utils/chatTab'
 import { NEW_CHAT_DEFAULTS, newChatSettingsOf } from '@/utils/newChat'
@@ -37,6 +41,8 @@ const RESUME_SKELETON_ROWS = 5
 const ACCOUNT_DEFAULT = 'account'
 /** Select value for this computer, for the same reason. */
 const THIS_MACHINE = 'this'
+/** A typed folder is checked for a repository once typing pauses, not per keystroke. */
+const FOLDER_CHECK_MS = 300
 
 const open = defineModel<boolean>('open', { required: true })
 
@@ -56,6 +62,9 @@ const hasOtherMachines = useHasOtherMachines()
 const machine = computed(() => (machineChoice.value === THIS_MACHINE ? null : machineChoice.value))
 const profiles = useProfiles(machine)
 const recent = useRecentSessions(machine)
+const worktrees = useWorktreeSettingsStore()
+const checkedFolder = refDebounced(cwd, FOLDER_CHECK_MS)
+const folderRepo = useGitBranch(() => checkedFolder.value.trim(), machine)
 
 // Only the accounts switched on in the settings, in agentd's order; `fillDefaults` picks the default.
 const offeredProfiles = computed(() =>
@@ -65,6 +74,18 @@ const folders = computed(() => [
   ...new Set((recent.data.value ?? []).map((session) => session.cwd))
 ])
 const canStart = computed(() => !!profileDir.value && !!cwd.value.trim())
+// Only for a main checkout: a folder that already is a worktree is where the chat should work.
+// Checked against the folder the answer is about, so a quick edit cannot inherit the last one's.
+const canHaveWorktree = computed(
+  () =>
+    checkedFolder.value.trim() === cwd.value.trim() &&
+    !!folderRepo.data.value?.branch &&
+    folderRepo.data.value.isWorktree === false
+)
+const isWorktreeWanted = computed({
+  get: () => worktrees.isWanted(machine.value, cwd.value),
+  set: (isWanted: boolean) => worktrees.setWanted(machine.value, cwd.value, isWanted)
+})
 // "Wie im Profil" said nothing to the user: the default option names what will actually run.
 // Only once an account is picked: `null` would ask for the default profile instead.
 const defaults = useAccountDefaultLabels(
@@ -109,6 +130,7 @@ const startNew = () => {
     account: profile.label,
     cwd: cwd.value.trim(),
     machine: machine.value,
+    worktreeFrom: canHaveWorktree.value && isWorktreeWanted.value ? cwd.value.trim() : null,
     ...newChatSettingsOf(
       model.value === ACCOUNT_DEFAULT ? null : model.value,
       mode.value === ACCOUNT_DEFAULT ? null : mode.value
@@ -226,6 +248,12 @@ watch([offeredProfiles, folders], fillDefaults)
             </datalist>
             <p class="text-meta text-muted-foreground">{{ t('chat.folder_hint') }}</p>
           </div>
+          <SettingsSwitchRow
+            v-if="canHaveWorktree"
+            v-model="isWorktreeWanted"
+            :title="t('worktree.own')"
+            :hint="t('worktree.own_hint')"
+          />
           <div class="grid grid-cols-2 gap-3">
             <div class="flex flex-col gap-1.5">
               <Label for="model"

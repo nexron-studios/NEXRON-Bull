@@ -256,7 +256,20 @@ export type AgentdEvent =
       sessions?: SessionCountRow[]
     }
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
-  | { type: 'branch'; id: number | null; branch: string | null }
+  /** `is_worktree`: a linked git worktree; missing from an agentd older than worktrees */
+  | { type: 'branch'; id: number | null; branch: string | null; is_worktree?: boolean }
+  | { type: 'worktree_created'; id: number | null; path: string; branch: string; base: string }
+  | {
+      type: 'preview_merged'
+      id: number | null
+      branch: string
+      outcome: PreviewMergeOutcome
+      /** `preview` was missing and made from the integration branch first */
+      created_preview: boolean
+      /** Changes not committed yet; a merge takes only commits */
+      has_uncommitted: boolean
+    }
+  | { type: 'worktree_removed'; id: number | null; outcome: WorktreeRemoval }
   /** Empty while the session has no transcript or never started a subagent */
   | { type: 'subagent_history'; id: number | null; agents: SubagentTranscript[] }
   /** Sent by the app, not agentd: the connection to a machine ended; `null` is this computer. */
@@ -365,6 +378,28 @@ export type AgentdRequest =
   | { op: 'rewind_points'; profile: string | null; session_id: string }
   /** Ctrl+B: sends the running call `tool_use_id` (or every foreground one) to the background */
   | { op: 'background'; tab: string; tool_use_id: string | null }
+  /** A worktree and `feat/…` branch for the repository of `cwd`, named after `hint` */
+  | { op: 'create_worktree'; cwd: string; hint: string; root: string | null }
+  | { op: 'merge_into_preview'; worktree: string }
+  /** Refuses while anything in the worktree could be lost or a chat runs in it */
+  | { op: 'remove_worktree'; worktree: string }
+
+/** `branches`: the other chat branches in `preview` that changed the conflicting files. */
+export type PreviewMergeOutcome =
+  | { kind: 'merged'; commits: number }
+  | { kind: 'up_to_date' }
+  | { kind: 'conflict'; files: string[]; branches: string[] }
+  /** `preview` exists, but the main checkout is on `branch`; nothing was merged */
+  | { kind: 'main_elsewhere'; branch: string }
+  /** `preview` is missing and the main checkout has uncommitted changes; nothing was merged */
+  | { kind: 'main_dirty' }
+
+/** Only `removed` removed anything. */
+export type WorktreeRemoval =
+  | { kind: 'removed'; branch: string }
+  | { kind: 'uncommitted'; files: string[] }
+  | { kind: 'unmerged'; commits: number; integration: string }
+  | { kind: 'in_use' }
 
 /** auto: move to the first allowed account with room; ask: wait and offer them; wait: never move */
 export const limitModeList = ['auto', 'ask', 'wait'] as const

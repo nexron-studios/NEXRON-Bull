@@ -13,6 +13,7 @@ import { useLimitPolicyStore } from '@/stores/limitPolicy'
 import { useRememberedSettingsStore } from '@/stores/rememberedSettings'
 import { useShellRunsStore, type ShellRun } from '@/stores/shellRuns'
 import { useSlashCommandsStore } from '@/stores/slashCommands'
+import { useWorktreeSettingsStore } from '@/stores/worktreeSettings'
 import type {
   AfterMove,
   AgentdEvent,
@@ -196,7 +197,36 @@ export const useChatStore = defineStore(
         giveBack(id, [uuid])
       })
 
+    /**
+     * The chat's worktree is made when Claude first starts, so its branch can be named after the
+     * prompt that starts it, and a tab closed before anything was sent leaves no worktree behind.
+     */
+    const startInWorktree = async (tab: ChatTabState, repo: string) => {
+      update(tab.id, (t) => ({ ...t, status: 'starting', notice: null }))
+      const first = queued.value.get(tab.id)?.[0]
+      try {
+        const made = await agentdService.ask<'worktree_created'>(
+          {
+            op: 'create_worktree',
+            cwd: repo,
+            hint: (first && sentDrafts.get(first.uuid)?.text) ?? '',
+            root: useWorktreeSettingsStore().rootOrDefault(tab.machine)
+          },
+          tab.machine
+        )
+        update(tab.id, (t) => ({ ...t, cwd: made.path, worktreeFrom: null }))
+        const ready = tabOf(tab.id)
+        if (ready) start(ready)
+      } catch (error) {
+        // The tab keeps waiting for its worktree: Claude must not quietly run in the main checkout.
+        const notice = error instanceof Error ? error.message : String(error)
+        update(tab.id, (t) => ({ ...t, status: 'ended', notice }))
+        giveBack(tab.id)
+      }
+    }
+
     const start = (tab: ChatTabState) => {
+      if (tab.worktreeFrom) return void startInWorktree(tab, tab.worktreeFrom)
       update(tab.id, (t) => ({ ...t, status: 'starting', notice: null }))
       const payload = {
         tab: tab.id,
@@ -385,7 +415,7 @@ export const useChatStore = defineStore(
       })
       tabs.value = [...tabs.value, tab]
       activeId.value = tab.id
-      start(tab)
+      if (!tab.worktreeFrom) start(tab)
     }
 
     const loadHistory = async (id: string) => {
@@ -507,6 +537,8 @@ export const useChatStore = defineStore(
       const tab = tabOf(id)
       if (!tab) throw new Error(`no tab ${id}`)
       if (tab.status !== 'ended' && tab.status !== 'starting') return
+      // Its worktree is named after the first prompt; nothing else may make it before that.
+      if (tab.worktreeFrom) throw new Error(i18n.global.t('worktree.waits_for_prompt'))
       const answer = agentdService.waitFor(
         (e) => 'tab' in e && e.tab === id && ['started', 'error', 'exited'].includes(e.type)
       )

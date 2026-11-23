@@ -774,12 +774,31 @@ export default {
       source: 'Quellcode auf GitHub',
       website: 'Webseite'
     },
+    worktrees: {
+      description:
+        'Neue Chats in einem Git-Repo bekommen einen eigenen Worktree mit eigenem Branch. So kommen sich parallele Chats nicht in die Quere.',
+      root: 'Ordner für Worktrees',
+      root_hint:
+        'Leer heißt: „worktrees“ neben dem Ordner mit deinen Projekten, für dev/projects/app also dev/worktrees. Gilt für neue Chats.',
+      root_placeholder: 'Neben dem Projektordner',
+      example_title: 'So heißt ein neuer Worktree',
+      example_prompt: 'Erste Nachricht: „Bitte den Kalender um eine Wochenansicht erweitern“',
+      example_slug: 'kalender-wochenansicht-erweitern',
+      example_folder: 'Ordner',
+      example_branch: 'Branch',
+      example_preview: 'preview',
+      example_merge:
+        'Über den Branch in der Leiste des Chats: „In preview mergen“ bringt ihn in den Hauptordner, aus dem der Dev-Server läuft.',
+      summary_default: 'Neben dem Projekt',
+      summary_own: 'Eigener Ordner'
+    },
     sections: {
       accounts: 'Konten',
       limits: 'Limits',
       machines: 'Rechner',
       notifications: 'Benachrichtigungen',
       terminal: 'Terminal',
+      worktrees: 'Worktrees',
       appearance: 'Darstellung'
     },
     summary: {
@@ -1221,6 +1240,40 @@ export default {
     rank: 'Fertig, noch nicht angesehen, Platz {n}',
     new_count: '{n} neu'
   },
+  worktree: {
+    own: 'Eigener Worktree',
+    own_hint:
+      'Der Chat arbeitet in einem eigenen Ordner mit eigenem Branch, frisch vom Integrationsbranch. Name und Ordner kommen aus deiner ersten Nachricht.',
+    planned_hint: 'Mit deiner ersten Nachricht legt Bull den Worktree an und startet Claude darin.',
+    waits_for_prompt:
+      'Der Worktree dieses Chats entsteht mit der ersten Nachricht. Schreib zuerst etwas.',
+    pending: 'Eigener Worktree ab der ersten Nachricht',
+    badge: 'Worktree',
+    menu_label: 'Worktree {branch}',
+    menu_title: 'Dieser Chat arbeitet in einem eigenen Worktree',
+    merge: 'In preview mergen',
+    merging: 'Wird gemergt …',
+    remove: 'Worktree entfernen …',
+    merged: '{branch} ist in preview: {n} Commit | {branch} ist in preview: {n} Commits',
+    nothing_to_merge: 'Nichts zu mergen: preview hat schon alles von {branch}.',
+    conflict: 'Konflikt beim Mergen, preview ist unverändert.',
+    conflict_with: 'Konflikt mit {branches}, preview ist unverändert.',
+    conflict_aborted: 'Der Merge wurde abgebrochen.',
+    files: 'Betroffen: {files}.',
+    files_and_more: 'Betroffen: {files} und {n} weitere. | Betroffen: {files} und {n} weitere.',
+    preview_created: 'preview gab es noch nicht und ist jetzt im Hauptordner angelegt.',
+    uncommitted_left:
+      'Im Worktree liegen noch nicht committete Änderungen. Gemergt werden nur Commits.',
+    main_elsewhere: 'Nicht gemergt: Der Hauptordner steht auf {branch}, nicht auf preview.',
+    main_elsewhere_hint: 'Wechsle dort zuerst auf preview, dann noch einmal mergen.',
+    main_dirty:
+      'Nicht gemergt: preview fehlt, und der Hauptordner hat nicht committete Änderungen. Bull legt preview erst an, wenn er sauber ist.',
+    removed: 'Worktree entfernt, Branch {branch} gelöscht.',
+    refused_uncommitted: 'Nicht entfernt: Im Worktree gibt es nicht committete Änderungen.',
+    refused_unmerged:
+      'Nicht entfernt: {n} Commit ist noch nicht in {integration}. | Nicht entfernt: {n} Commits sind noch nicht in {integration}.',
+    refused_in_use: 'Nicht entfernt: In diesem Ordner läuft noch ein anderer Chat.'
+  },
   session_actions: {
     menu: {
       label: 'Mehr zu {title}',
@@ -1257,6 +1310,12 @@ export default {
         title: 'Claude arbeitet noch',
         body: 'In „{title}“ läuft gerade ein Schritt. Bull stoppt Claude, schließt den Tab und nimmt die Session aus der Liste. Der Verlauf bleibt gespeichert.',
         confirm: 'Stoppen und entfernen'
+      },
+      remove_worktree: {
+        title: 'Worktree von „{title}“ entfernen?',
+        body: 'Bull stoppt Claude, löscht den Ordner {folder} samt Branch und schließt den Tab. Das geht nur, wenn alles committet und im Integrationsbranch angekommen ist. Sonst bleibt alles, wie es ist.',
+        confirm: 'Worktree entfernen',
+        note_running: 'Der laufende Schritt wird dabei abgebrochen.'
       },
       delete: {
         title: '„{title}“ endgültig löschen?',

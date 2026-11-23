@@ -760,12 +760,31 @@ export default {
       source: 'Source code on GitHub',
       website: 'Website'
     },
+    worktrees: {
+      description:
+        'New chats in a git repository get a worktree and branch of their own, so parallel chats never get in each other’s way.',
+      root: 'Folder for worktrees',
+      root_hint:
+        'Empty means “worktrees” beside the folder that holds your projects: for dev/projects/app that is dev/worktrees. Applies to new chats.',
+      root_placeholder: 'Beside the projects folder',
+      example_title: 'What a new worktree is called',
+      example_prompt: 'First message: “Add a week view to the calendar”',
+      example_slug: 'add-week-view-calendar',
+      example_folder: 'Folder',
+      example_branch: 'Branch',
+      example_preview: 'preview',
+      example_merge:
+        'From the branch in the chat’s bar: “Merge into preview” brings it into the main folder the dev server runs from.',
+      summary_default: 'Beside the project',
+      summary_own: 'Own folder'
+    },
     sections: {
       accounts: 'Accounts',
       limits: 'Limits',
       machines: 'Machines',
       notifications: 'Notifications',
       terminal: 'Terminal',
+      worktrees: 'Worktrees',
       appearance: 'Appearance'
     },
     summary: {
@@ -1200,6 +1219,39 @@ export default {
     rank: 'Finished, not seen yet, place {n}',
     new_count: '{n} new'
   },
+  worktree: {
+    own: 'Own worktree',
+    own_hint:
+      'The chat works in a folder and branch of its own, fresh from the integration branch. Name and folder come from your first message.',
+    planned_hint: 'With your first message Bull creates the worktree and starts Claude in it.',
+    waits_for_prompt:
+      'The worktree of this chat is created with the first message. Write something first.',
+    pending: 'Own worktree from the first message',
+    badge: 'Worktree',
+    menu_label: 'Worktree {branch}',
+    menu_title: 'This chat works in a worktree of its own',
+    merge: 'Merge into preview',
+    merging: 'Merging …',
+    remove: 'Remove worktree …',
+    merged: '{branch} is in preview: {n} commit | {branch} is in preview: {n} commits',
+    nothing_to_merge: 'Nothing to merge: preview already has everything from {branch}.',
+    conflict: 'Conflict while merging, preview is unchanged.',
+    conflict_with: 'Conflict with {branches}, preview is unchanged.',
+    conflict_aborted: 'The merge was aborted.',
+    files: 'Affected: {files}.',
+    files_and_more: 'Affected: {files} and {n} more. | Affected: {files} and {n} more.',
+    preview_created: 'preview did not exist yet and is now created in the main folder.',
+    uncommitted_left: 'The worktree still has uncommitted changes. Only commits are merged.',
+    main_elsewhere: 'Not merged: the main folder is on {branch}, not on preview.',
+    main_elsewhere_hint: 'Switch it to preview first, then merge again.',
+    main_dirty:
+      'Not merged: preview is missing and the main folder has uncommitted changes. Bull only creates preview once it is clean.',
+    removed: 'Worktree removed, branch {branch} deleted.',
+    refused_uncommitted: 'Not removed: the worktree has uncommitted changes.',
+    refused_unmerged:
+      'Not removed: {n} commit is not in {integration} yet. | Not removed: {n} commits are not in {integration} yet.',
+    refused_in_use: 'Not removed: another chat still runs in this folder.'
+  },
   session_actions: {
     menu: {
       label: 'More for {title}',
@@ -1235,6 +1287,12 @@ export default {
         title: 'Claude is still working',
         body: 'A step is running in “{title}”. Bull stops Claude, closes the tab and removes the session from the list. The transcript stays on disk.',
         confirm: 'Stop and remove'
+      },
+      remove_worktree: {
+        title: 'Remove the worktree of “{title}”?',
+        body: 'Bull stops Claude, deletes the folder {folder} with its branch and closes the tab. This only works once everything is committed and in the integration branch. Otherwise nothing changes.',
+        confirm: 'Remove worktree',
+        note_running: 'The running step is cancelled.'
       },
       delete: {
         title: 'Delete “{title}” for good?',

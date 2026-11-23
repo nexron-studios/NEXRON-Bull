@@ -98,6 +98,11 @@ export interface ChatTabState {
    * first one, so until then a missing transcript is an empty chat, not a lost one.
    */
   isFresh: boolean
+  /**
+   * The repository this chat gets its own worktree from at its first start, named after the
+   * first prompt; `null` once the worktree is made (`cwd` is then the worktree) or without one.
+   */
+  worktreeFrom: string | null
   /** The user muted this chat: it never notifies */
   isMuted: boolean
   history: HistoryState
@@ -148,7 +153,7 @@ export type PermissionMode = OfferedMode | (typeof otherPermissionModeList)[numb
 /** What reopens a tab after a restart; everything else comes back from the transcript. */
 export type SavedTab = SavedTabFields &
   // Optional: tabs saved before muting or effort existed have neither.
-  Partial<Pick<ChatTabState, 'isMuted' | 'effort'>>
+  Partial<Pick<ChatTabState, 'isMuted' | 'effort' | 'worktreeFrom'>>
 
 type SavedTabFields = Pick<
   ChatTabState,
@@ -179,7 +184,8 @@ export const savedTabOf = ({
   permissionMode,
   effort,
   isFresh,
-  unseenAt
+  unseenAt,
+  worktreeFrom
 }: ChatTabState): SavedTab => ({
   id,
   title,
@@ -193,7 +199,8 @@ export const savedTabOf = ({
   permissionMode,
   effort,
   isFresh,
-  unseenAt
+  unseenAt,
+  worktreeFrom
 })
 
 export const newTab = (fields: SavedTab): ChatTabState => ({
@@ -207,7 +214,9 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   // Saved before the flag existed: only a tab whose prompt came back has a title.
   isFresh: fields.isFresh ?? !fields.title,
   unseenAt: fields.unseenAt ?? null,
-  status: fields.sessionId ? 'ended' : 'starting',
+  worktreeFrom: fields.worktreeFrom ?? null,
+  // A chat waiting for its worktree starts Claude only with its first prompt.
+  status: fields.sessionId || fields.worktreeFrom ? 'ended' : 'starting',
   statusBeforeMove: null,
   messages: [],
   streaming: '',

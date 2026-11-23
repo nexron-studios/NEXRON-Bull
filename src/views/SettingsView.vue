@@ -12,6 +12,7 @@ import SettingsNav from '@/components/settings/SettingsNav.vue'
 import SettingsNotifications from '@/components/settings/SettingsNotifications.vue'
 import SettingsPhoneList from '@/components/settings/SettingsPhoneList.vue'
 import SettingsTerminal from '@/components/settings/SettingsTerminal.vue'
+import SettingsWorktrees from '@/components/settings/SettingsWorktrees.vue'
 import { useScrollEdges } from '@/composables/useScrollEdges'
 import { useIsPhone } from '@/composables/useViewport'
 import { shownSettingsSectionOf, type SettingsSection } from '@/utils/settings'
@@ -32,6 +33,7 @@ const SECTION_COMPONENT: Record<SettingsSection, Component> = {
   machines: SettingsMachines,
   notifications: SettingsNotifications,
   terminal: SettingsTerminal,
+  worktrees: SettingsWorktrees,
   appearance: SettingsAppearance
 }
 

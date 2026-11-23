@@ -98,6 +98,9 @@ pub(crate) struct Session {
     pub(crate) is_draining: bool,
     /// What Claude listed last, sent again to an app that attaches later.
     commands: Option<Vec<SlashCommand>>,
+    /// The unfinished reply, for an app that attaches later. Its pump holds the lock while an event
+    /// goes out, so a replay never lands between a delta it already holds and that delta's emit.
+    partial: Arc<Mutex<PartialReply>>,
     /// Mode, model or effort changes Claude has not answered yet.
     pub(crate) configuring: Vec<PendingChange>,
 }
@@ -122,9 +125,6 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) moving: Mutex<HashSet<String>>,
     /// The waiting messages of a moving tab, from its old Claude's exit until the new one starts.
     pub(crate) carried: Mutex<HashMap<String, Vec<Queued>>>,
-    /// The unfinished reply of each tab. Its lock is held while an event goes out, so a replay
-    /// never lands between a delta it already holds and that delta's own emit.
-    partials: Mutex<HashMap<String, PartialReply>>,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -141,7 +141,6 @@ impl<W: Write + Send + 'static> Daemon<W> {
             policy: Mutex::new(policy),
             moving: Mutex::new(HashSet::new()),
             carried: Mutex::new(HashMap::new()),
-            partials: Mutex::new(HashMap::new()),
         });
         daemon.start_limit_clock();
         daemon
@@ -344,6 +343,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
         let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
         let tab = params.tab.clone();
         let (profile, account) = Self::account_of(params.profile.clone());
+        let partial = Arc::new(Mutex::new(PartialReply::default()));
         let session = Session {
             stdin: child.stdin.take(),
             child,
@@ -362,6 +362,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             is_draining: false,
             commands: None,
             configuring: Vec::new(),
+            partial: Arc::clone(&partial),
         };
         self.sessions().insert(tab.clone(), session);
         // Lists the commands and skills and makes Claude ready for control requests.
@@ -378,12 +379,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
         }
         if let Some(stdout) = stdout {
             let daemon = Arc::clone(self);
-            thread::spawn(move || daemon.pump(&tab, stdout));
+            thread::spawn(move || daemon.pump(&tab, stdout, &partial));
         }
         Ok(())
     }
 
-    fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read) {
+    fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read, partial: &Mutex<PartialReply>) {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let event: Value = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));
             if let Some(answer) = self.waiting_control(&event) {
@@ -399,9 +400,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             self.settle_setting(tab, &event);
             // Messages arrive parsed, everything else (deltas, results, permission asks) raw.
-            let mut partials = self.partials();
-            let partial = partials.entry(tab.to_string()).or_default();
-            match chat::message_from(&event) {
+            let message = chat::message_from(&event);
+            let mut partial = locked(partial);
+            match message {
                 Some(message) => {
                     if message.role == chat::Role::Assistant {
                         partial.finish_block();
@@ -414,7 +415,6 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 }
             }
         }
-        self.partials().remove(tab);
         // Taken out first so the wait below does not hold the lock for other tabs.
         let session = self.sessions().remove(tab);
         // After the session: a control request arriving now finds no tab instead of waiting on a
@@ -434,14 +434,11 @@ impl<W: Write + Send + 'static> Daemon<W> {
 
     /// What the tab's Claude has streamed of its unfinished reply, for an app that attaches.
     fn replay_partial(&self, tab: &str) {
-        let partials = self.partials();
-        if let Some(event) = partials.get(tab).and_then(|partial| partial.replay(tab)) {
+        let Some(partial) = self.sessions().get(tab).map(|session| Arc::clone(&session.partial)) else { return };
+        let partial = locked(&partial);
+        if let Some(event) = partial.replay(tab) {
             self.emit(&event);
         }
-    }
-
-    fn partials(&self) -> MutexGuard<'_, HashMap<String, PartialReply>> {
-        self.partials.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     pub(crate) fn moving(&self) -> MutexGuard<'_, HashSet<String>> {
@@ -639,6 +636,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
         // If the dashboard is gone there is nobody left to tell.
         let _ = writeln!(out, "{line}").and_then(|()| out.flush());
     }
+}
+
+fn locked(partial: &Mutex<PartialReply>) -> MutexGuard<'_, PartialReply> {
+    partial.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// The session id Claude runs under, and whether it resumes it. A tab keeps its session id from

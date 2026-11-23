@@ -33,7 +33,7 @@ use crate::removal;
 use crate::rewind;
 use crate::subagents;
 use crate::transfer;
-use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
+use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams, TabInfo};
 
 /// What Claude reads as the answer to the approval `/clear` cut short.
 const CLEAR_DENIAL: &str = "The user cleared the chat instead.";
@@ -183,10 +183,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
                 self.with_session(&tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
-                self.write(&tab, &json!({
+                let answered = self.write(&tab, &json!({
                     "type": "control_response",
-                    "response": { "subtype": "success", "request_id": request_id, "response": decision },
-                }))
+                    "response": { "subtype": "success", "request_id": &request_id, "response": decision },
+                }));
+                // Every app drops its card, also the ones that did not decide.
+                answered.map(|()| self.emit(&Event::PermissionResolved { tab, request_id }))
             }
             Request::Stop { tab } => self.stop(&tab),
             Request::Clear { tab, session_id } => self.clear(id, &tab, &session_id),
@@ -217,6 +219,11 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Running => {
                 let tabs = self.sessions().keys().cloned().collect();
                 self.emit(&Event::Running { id, tabs });
+                Ok(())
+            }
+            Request::Tabs => {
+                let tabs = self.tab_infos();
+                self.emit(&Event::Tabs { id, tabs });
                 Ok(())
             }
             Request::Quota { force } => self.in_background(move |daemon, profiles| {
@@ -412,6 +419,24 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.emit(&Event::Exited { tab: tab.to_string(), code });
         // Only now may a move start Claude again: the app must see this exit before the new start.
         self.moving().remove(tab);
+    }
+
+    fn tab_infos(&self) -> Vec<TabInfo> {
+        let sessions: Vec<_> = self
+            .sessions()
+            .iter()
+            .map(|(tab, session)| (tab.clone(), session.session_id.clone(), session.is_working || session.clearing.is_some(), session.asks.len(), session.params.clone()))
+            .collect();
+        // Outside the lock: naming the account reads the profile folder.
+        sessions
+            .into_iter()
+            .map(|(tab, session_id, working, asks, params)| {
+                // The profile as the app started it (`None` for the default), as `start` takes it again.
+                let (_, account) = Self::account_of(params.profile.clone());
+                let StartParams { cwd, profile, model, permission_mode, effort, .. } = params;
+                TabInfo { tab, session_id, cwd, profile, account, working, asks, model, permission_mode, effort }
+            })
+            .collect()
     }
 
     pub(crate) fn moving(&self) -> MutexGuard<'_, HashSet<String>> {
@@ -671,6 +696,7 @@ fn tab_of(request: &Request) -> Option<String> {
         | Request::DeleteSession { .. }
         | Request::CreateProfile { .. }
         | Request::Running
+        | Request::Tabs
         | Request::Quota { .. }
         | Request::Usage { .. }
         | Request::Branch { .. }

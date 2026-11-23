@@ -53,6 +53,9 @@ pub enum Request {
     },
     /// Tabs whose Claude is still running here, so a reconnecting app can attach to them.
     Running,
+    /// The running tabs with what an app needs to open them: an app that did not start them (the
+    /// browser) knows nothing else about them.
+    Tabs,
     /// Plan quota of every profile here; `force` asks Anthropic again sooner than every 90 s.
     Quota {
         #[serde(default)]
@@ -216,6 +219,22 @@ pub struct StartParams {
     pub effort: Option<String>,
 }
 
+/// A running tab as `tabs` lists it; `None` model, mode or effort is the profile's default.
+#[derive(Debug, Serialize)]
+pub struct TabInfo {
+    pub tab: String,
+    pub session_id: String,
+    pub cwd: PathBuf,
+    pub profile: Option<PathBuf>,
+    pub account: Option<String>,
+    pub working: bool,
+    /// Permission asks Claude waits on; `start` on the tab sends them again.
+    pub asks: usize,
+    pub model: Option<String>,
+    pub permission_mode: Option<String>,
+    pub effort: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct HistoryParams {
     pub profile: Option<PathBuf>,
@@ -255,6 +274,9 @@ pub enum Event {
     Cleared { id: Option<u64>, tab: String },
     Deleted { id: Option<u64>, session_id: String },
     Running { id: Option<u64>, tabs: Vec<String> },
+    Tabs { id: Option<u64>, tabs: Vec<TabInfo> },
+    /// A `permission` answer went to Claude; every app drops its card for that ask.
+    PermissionResolved { tab: String, request_id: String },
     Quota { id: Option<u64>, accounts: Vec<AccountQuota> },
     Usage { id: Option<u64>, days: u32, rows: Vec<UsageRow>, tools: Vec<ToolRow>, sessions: Vec<SessionRow> },
     /// `None` outside a repository; a short commit id when `HEAD` is detached.

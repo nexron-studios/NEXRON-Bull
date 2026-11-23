@@ -2,6 +2,7 @@
 //! `agentd connect`, started over SSH, relays one app to it. Claude keeps running when the SSH
 //! connection ends, because only the server, not the relay, is its parent.
 
+use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -9,6 +10,9 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
+
+use serde::Deserialize;
+use serde_json::Value;
 
 use crate::daemon::Daemon;
 use crate::paths::{home, APP_FOLDER};
@@ -21,21 +25,84 @@ const START_TIMEOUT: Duration = Duration::from_secs(15);
 const RETRY_DELAY: Duration = Duration::from_millis(200);
 const IDLE_CHECK: Duration = Duration::from_secs(30);
 
-/// Every connected app; each agentd event goes to all of them.
+/// Every connected app. An answer goes back only to the app that asked, under the id it asked
+/// with: every app counts its request ids from 1, so the server hands agentd ids of its own.
+/// Any other event goes to all of them.
 #[derive(Clone, Default)]
-struct Clients(Arc<Mutex<Vec<(u64, TcpStream)>>>);
+struct Clients(Arc<Mutex<Routes>>);
+
+#[derive(Default)]
+struct Routes {
+    streams: Vec<(u64, TcpStream)>,
+    /// Server request id → the app that asked and its own id; gone once answered.
+    asked: HashMap<u64, (u64, u64)>,
+    next_id: u64,
+    /// `emit` may write one event in pieces; it is routed once its line is complete.
+    line: Vec<u8>,
+}
 
 impl Clients {
-    fn lock(&self) -> MutexGuard<'_, Vec<(u64, TcpStream)>> {
+    fn lock(&self) -> MutexGuard<'_, Routes> {
         // A panicked client thread leaves the list usable.
         self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The request with a server id in place of the app's, which its answer gets back.
+    fn adopt(&self, client: u64, line: &str) -> String {
+        let Ok(mut request) = serde_json::from_str::<Value>(line) else { return line.to_string() };
+        let Some(own) = request["id"].as_u64() else { return line.to_string() };
+        let mut routes = self.lock();
+        routes.next_id += 1;
+        let id = routes.next_id;
+        routes.asked.insert(id, (client, own));
+        request["id"] = Value::from(id);
+        request.to_string()
+    }
+
+    fn leave(&self, client: u64) {
+        let mut routes = self.lock();
+        routes.streams.retain(|(known, _)| *known != client);
+        routes.asked.retain(|_, (asker, _)| *asker != client);
+    }
+}
+
+#[derive(Deserialize)]
+struct Answer {
+    id: Option<u64>,
+}
+
+impl Routes {
+    fn route(&mut self, line: &[u8]) {
+        let id = serde_json::from_slice::<Answer>(line).ok().and_then(|answer| answer.id);
+        let Some(id) = id else { return self.broadcast(line) };
+        let mut event: Value = match serde_json::from_slice(line) {
+            Ok(event) => event,
+            Err(_) => return self.broadcast(line),
+        };
+        let Some((client, own)) = self.asked.remove(&id) else {
+            // A second event for an answered request: its id means nothing to any app.
+            event["id"] = Value::Null;
+            return self.broadcast(format!("{event}\n").as_bytes());
+        };
+        event["id"] = Value::from(own);
+        let line = format!("{event}\n");
+        self.streams.retain_mut(|(known, stream)| *known != client || stream.write_all(line.as_bytes()).is_ok());
+    }
+
+    fn broadcast(&mut self, line: &[u8]) {
+        // An app that went away is dropped; the others still get the event.
+        self.streams.retain_mut(|(_, stream)| stream.write_all(line).is_ok());
     }
 }
 
 impl Write for Clients {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        // An app that went away is dropped; the others still get the event.
-        self.lock().retain_mut(|(_, stream)| stream.write_all(buf).is_ok());
+        let mut routes = self.lock();
+        routes.line.extend_from_slice(buf);
+        while let Some(end) = routes.line.iter().position(|&byte| byte == b'\n') {
+            let line: Vec<u8> = routes.line.drain(..=end).collect();
+            routes.route(&line);
+        }
         Ok(buf.len())
     }
 
@@ -54,7 +121,7 @@ pub fn serve() -> io::Result<()> {
     let (idle_daemon, idle_clients) = (Arc::clone(&daemon), clients.clone());
     thread::spawn(move || loop {
         thread::sleep(IDLE_CHECK);
-        if idle_daemon.is_idle() && idle_clients.lock().is_empty() {
+        if idle_daemon.is_idle() && idle_clients.lock().streams.is_empty() {
             std::process::exit(0);
         }
     });
@@ -75,11 +142,11 @@ fn serve_client(daemon: &Arc<Daemon<Clients>>, clients: &Clients, id: u64, strea
     if writer.write_all(HANDSHAKE_OK).is_err() {
         return;
     }
-    clients.lock().push((id, writer));
+    clients.lock().streams.push((id, writer));
     for line in lines.map_while(Result::ok) {
-        daemon.request(&line);
+        daemon.request(&clients.adopt(id, &line));
     }
-    clients.lock().retain(|(known, _)| *known != id);
+    clients.leave(id);
 }
 
 /// Relays stdin and stdout to the server, starting it first when none runs.

@@ -1,0 +1,151 @@
+# Builds what this Windows PC cannot: Bull for macOS (universal .dmg) and a standalone agentd for
+# every system Bull connects to. Both land on the GitHub release of the tag, next to the Windows
+# installer uploaded by hand; that one is never touched. The app installs agentd on a Mac or Linux
+# machine from `agentd-<target>` of its own version, so these names must stay as they are.
+name: Release macOS and agentd
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach to, e.g. v0.7.14
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+concurrency:
+  group: release-unix-${{ inputs.tag || github.ref_name }}
+
+jobs:
+  version:
+    name: Tag matches the app version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      # The app downloads agentd from the release named after its own version.
+      - run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match the app version $version"
+            exit 1
+          fi
+
+  agentd:
+    name: agentd ${{ matrix.target }}
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-latest, suffix: '' }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm, suffix: '' }
+          - { target: aarch64-apple-darwin, runner: macos-latest, suffix: '' }
+          - { target: x86_64-apple-darwin, runner: macos-latest, suffix: '' }
+          # For a Mac installing agentd on a Windows machine; the Windows app ships its own.
+          - { target: x86_64-pc-windows-msvc, runner: windows-latest, suffix: .exe }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: contains(matrix.target, 'linux-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build
+        shell: bash
+        run: |
+          cargo build --release --locked --bin agentd --target ${{ matrix.target }} --manifest-path agentd/Cargo.toml
+          mkdir -p out
+          cp "agentd/target/${{ matrix.target }}/release/agentd${{ matrix.suffix }}" "out/agentd-${{ matrix.target }}${{ matrix.suffix }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentd-${{ matrix.target }}
+          path: out/*
+          if-no-files-found: error
+
+  macos-app:
+    name: Bull for macOS
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - run: npm ci
+      # tauri bundles `binaries/agentd-universal-apple-darwin` for a universal build; build.rs
+      # makes only the per-processor ones, so both are built here first and joined.
+      - name: Universal agentd sidecar
+        run: |
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked --bin agentd --target "$target" --manifest-path agentd/Cargo.toml --target-dir agentd/target
+          done
+          mkdir -p src-tauri/binaries
+          lipo -create -output src-tauri/binaries/agentd-universal-apple-darwin \
+            agentd/target/aarch64-apple-darwin/release/agentd agentd/target/x86_64-apple-darwin/release/agentd
+      - name: Build the app
+        env:
+          # Ad-hoc signature: no Apple Developer ID yet. Apple silicon runs nothing unsigned.
+          APPLE_SIGNING_IDENTITY: '-'
+        run: npx tauri build --target universal-apple-darwin --bundles dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bull-macos
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Attach to the release
+    needs: [agentd, macos-app]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Draft the release if there is none yet
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --verify-tag --title "Bull ${TAG#v}" --notes ""
+          fi
+      # Appended once: a rerun finds the marker and leaves the notes alone.
+      - name: Add the macOS install note
+        run: |
+          marker='<!-- macos-install -->'
+          body=$(gh release view "$TAG" --json body --jq .body)
+          case "$body" in *"$marker"*) exit 0 ;; esac
+          cat > macos.md <<'EOF'
+          <!-- macos-install -->
+          ## macOS
+
+          Download `Bull_*_universal.dmg` below (Apple silicon and Intel) and drag Bull into Applications. The app is not notarised yet, so macOS refuses it the first time: right-click Bull › **Open** › **Open**. On macOS 15 and later use **System Settings › Privacy & Security › Open Anyway** instead. Or, in the Terminal:
+
+          ```sh
+          xattr -dr com.apple.quarantine /Applications/Bull.app
+          ```
+
+          The `agentd-<target>` files are what Bull installs on a Mac or Linux machine it connects to; you do not need to download them.
+          EOF
+          printf '%s\n\n%s\n' "$body" "$(cat macos.md)" > notes.md
+          gh release edit "$TAG" --notes-file notes.md
+      # --clobber replaces only files of the same name: a rerun's own uploads, never the installer.
+      - run: gh release upload "$TAG" assets/* --clobber

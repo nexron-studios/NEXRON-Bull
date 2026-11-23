@@ -10,6 +10,7 @@ pub mod limits;
 pub mod live;
 pub mod removal;
 pub mod rewind;
+pub mod partial_reply;
 pub mod paths;
 pub mod profile_setup;
 pub mod server;

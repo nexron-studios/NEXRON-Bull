@@ -23,6 +23,7 @@ use crate::git;
 use crate::limit_flow::Queued;
 use crate::limits::{self, RateInfo};
 use crate::live;
+use crate::partial_reply::PartialReply;
 use crate::quota::QuotaCache;
 use crate::usage::UsageIndex;
 use crate::paths::{find_transcript, home, profile_dir};
@@ -121,6 +122,9 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) moving: Mutex<HashSet<String>>,
     /// The waiting messages of a moving tab, from its old Claude's exit until the new one starts.
     pub(crate) carried: Mutex<HashMap<String, Vec<Queued>>>,
+    /// The unfinished reply of each tab. Its lock is held while an event goes out, so a replay
+    /// never lands between a delta it already holds and that delta's own emit.
+    partials: Mutex<HashMap<String, PartialReply>>,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -137,6 +141,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             policy: Mutex::new(policy),
             moving: Mutex::new(HashSet::new()),
             carried: Mutex::new(HashMap::new()),
+            partials: Mutex::new(HashMap::new()),
         });
         daemon.start_limit_clock();
         daemon
@@ -318,6 +323,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
             if let Some(commands) = commands {
                 self.emit(&Event::Commands { tab: params.tab.clone(), commands });
             }
+            // Before the asks: an open ask is what the app shows last.
+            self.replay_partial(&params.tab);
             // Marked, so the app can tell an approval it already knew from a new one.
             for mut event in asks {
                 if let Some(fields) = event.as_object_mut() {
@@ -392,11 +399,22 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             self.settle_setting(tab, &event);
             // Messages arrive parsed, everything else (deltas, results, permission asks) raw.
+            let mut partials = self.partials();
+            let partial = partials.entry(tab.to_string()).or_default();
             match chat::message_from(&event) {
-                Some(message) => self.emit(&Event::Message { tab: tab.to_string(), message }),
-                None => self.emit(&Event::Claude { tab: tab.to_string(), event }),
+                Some(message) => {
+                    if message.role == chat::Role::Assistant {
+                        partial.finish_block();
+                    }
+                    self.emit(&Event::Message { tab: tab.to_string(), message })
+                }
+                None => {
+                    partial.observe(&event);
+                    self.emit(&Event::Claude { tab: tab.to_string(), event })
+                }
             }
         }
+        self.partials().remove(tab);
         // Taken out first so the wait below does not hold the lock for other tabs.
         let session = self.sessions().remove(tab);
         // After the session: a control request arriving now finds no tab instead of waiting on a
@@ -412,6 +430,18 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.emit(&Event::Exited { tab: tab.to_string(), code });
         // Only now may a move start Claude again: the app must see this exit before the new start.
         self.moving().remove(tab);
+    }
+
+    /// What the tab's Claude has streamed of its unfinished reply, for an app that attaches.
+    fn replay_partial(&self, tab: &str) {
+        let partials = self.partials();
+        if let Some(event) = partials.get(tab).and_then(|partial| partial.replay(tab)) {
+            self.emit(&event);
+        }
+    }
+
+    fn partials(&self) -> MutexGuard<'_, HashMap<String, PartialReply>> {
+        self.partials.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     pub(crate) fn moving(&self) -> MutexGuard<'_, HashSet<String>> {

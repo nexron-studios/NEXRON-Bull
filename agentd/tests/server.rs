@@ -125,6 +125,58 @@ fn keeps_a_tab_running_while_no_app_is_connected() {
     second.child.wait().unwrap();
 }
 
+fn send_text(relay: &mut Relay, text: &str) {
+    relay.send(json!({ "op": "send", "tab": "t1", "content": [{ "type": "text", "text": text }] }));
+}
+
+fn is_text_delta(event: &Value, text: &str) -> bool {
+    event["type"] == "claude" && event["event"]["type"] == "stream_event" && event["event"]["event"]["delta"]["text"] == text
+}
+
+#[test]
+fn replays_the_unfinished_reply_to_an_app_that_attaches_mid_stream() {
+    let setup = Setup::new();
+    let mut server = setup.serve();
+
+    let mut first = setup.connect();
+    first.send(start("t1", &setup.home));
+    first.expect(|e| e["type"] == "started");
+    send_text(&mut first, "stream");
+    first.expect(|e| is_text_delta(e, "Hal"));
+    // The app closes mid-answer; Claude streams on with nobody listening.
+    first.child.kill().unwrap();
+    first.child.wait().unwrap();
+    thread::sleep(Duration::from_secs(1));
+
+    let mut second = setup.connect();
+    second.send(start("t1", &setup.home));
+    second.expect(|e| e["type"] == "started");
+    let replay = second.expect(|e| e["type"] == "streaming");
+    // The reasoning came as its own finished message, which the transcript holds; only the text is open.
+    assert_eq!(replay, json!({ "type": "streaming", "tab": "t1", "message_id": "msg_stream", "chars": 17,
+        "text": "Hallo ", "thinking": null }));
+
+    send_text(&mut second, "finish");
+    let mut events = Vec::new();
+    while events.last().is_none_or(|e: &Value| !(e["type"] == "claude" && e["event"]["type"] == "result")) {
+        events.push(second.expect(|_| true));
+    }
+    let messages: Vec<&Value> = events.iter().filter(|e| e["type"] == "message").collect();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["message"]["blocks"], json!([{ "type": "text", "text": "Hallo Welt" }]));
+    assert!(events.iter().any(|e| is_text_delta(e, "Welt")));
+    assert!(!events.iter().any(|e| e["type"] == "streaming"));
+
+    // Finished: an app attaching now has no half-written text to show.
+    second.send(start("t1", &setup.home));
+    assert_eq!(second.expect(|e| e["type"] == "streaming")["text"], "");
+
+    second.send(json!({ "op": "stop", "tab": "t1" }));
+    second.expect(|e| e["type"] == "exited");
+    server.kill().unwrap();
+    second.child.wait().unwrap();
+}
+
 #[test]
 fn refuses_a_client_without_the_token() {
     let setup = Setup::new();

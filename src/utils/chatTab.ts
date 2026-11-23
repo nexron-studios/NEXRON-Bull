@@ -460,6 +460,15 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
       return withMessage(tab, event.message)
     case 'claude':
       return withClaude(tab, event.event)
+    case 'streaming':
+      // agentd's own copy of the stream so far: it replaces the live text rather than adding to it,
+      // so a replay to an app that already shows it changes nothing.
+      return {
+        ...tab,
+        streaming: event.text,
+        thinking: event.thinking,
+        streamUsage: { messageId: event.message_id, chars: event.chars }
+      }
     case 'exited':
       return {
         ...tab,

@@ -234,6 +234,18 @@ export type AgentdEvent =
   | { type: 'limits_set'; id: number | null }
   | { type: 'message'; tab: string; message: ChatMessage }
   | { type: 'claude'; tab: string; event: ClaudeEvent }
+  /**
+   * The reply Claude is writing, as far as it streamed since its last finished message; agentd
+   * sends it to an app that attaches mid-turn. `thinking` is `null` while Claude is not thinking.
+   */
+  | {
+      type: 'streaming'
+      tab: string
+      message_id: string | null
+      chars: number
+      text: string
+      thinking: string | null
+    }
   | { type: 'stderr'; tab: string; text: string }
   | { type: 'exited'; tab: string; code: number | null }
   | { type: 'history'; id: number | null; messages: ChatMessage[]; has_more: boolean }

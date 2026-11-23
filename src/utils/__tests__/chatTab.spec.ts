@@ -646,3 +646,42 @@ describe('streamed usage and retries', () => {
     expect(applyEvent(waiting, { type: 'exited', tab: 't1', code: 0 }).retry).toBeNull()
   })
 })
+
+describe('a reply agentd replays on attach', () => {
+  const replay = (text: string, thinking: string | null = null) => ({
+    type: 'streaming' as const,
+    tab: 't1',
+    message_id: 'msg_1',
+    chars: 17,
+    text,
+    thinking
+  })
+
+  it('should show what Claude streamed while the app was away', () => {
+    const next = applyEvent(tab(), replay('Hallo ', 'Erst lesen.'))
+    expect([next.streaming, next.thinking, next.streamUsage]).toEqual([
+      'Hallo ',
+      'Erst lesen.',
+      { messageId: 'msg_1', chars: 17 }
+    ])
+  })
+
+  it('should leave an app that already shows the text as it is and keep appending', () => {
+    let next = applyEvent(tab(), delta('Hal'))
+    next = applyEvent(next, delta('lo '))
+    next = applyEvent(next, replay('Hallo '))
+    next = applyEvent(next, delta('Welt'))
+    expect(next.streaming).toBe('Hallo Welt')
+  })
+
+  it('should show the reply once when its finished message arrives', () => {
+    let next = applyEvent(tab(), replay('Hallo '))
+    next = applyEvent(next, delta('Welt'))
+    next = applyEvent(next, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    expect([next.streaming, next.messages.map((known) => known.uuid)]).toEqual(['', ['a1']])
+  })
+})

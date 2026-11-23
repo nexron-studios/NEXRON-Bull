@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  AppWindow,
   Bell,
   ChevronRight,
   FolderOpen,
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import ChatNotifyToggle from '@/components/chat/ChatNotifyToggle.vue'
 import { useSessionMenuItems } from '@/composables/useSessionMenuItems'
 import { useContextUsageStore } from '@/stores/contextUsage'
+import { usePreviewStore } from '@/stores/preview'
 import { useRewindStore } from '@/stores/rewind'
 import { useSessionSettings } from '@/composables/useSessionSettings'
 import { useChatSettingsStore } from '@/stores/chatSettings'
@@ -43,6 +45,7 @@ const { items, run } = useSessionMenuItems(() => targetOfTab(tab))
 const terminals = useTerminalStore()
 const rewind = useRewindStore()
 const contextUsage = useContextUsageStore()
+const preview = usePreviewStore()
 const chatSettings = useChatSettingsStore()
 const { settings, chipLabel } = useSessionSettings(() => tab)
 
@@ -68,6 +71,10 @@ const openTerminal = () => {
 const openRewind = () => {
   open.value = false
   rewind.openRewind(tab.id)
+}
+const openPreview = () => {
+  open.value = false
+  preview.isSheetOpen = true
 }
 const openContext = () => {
   open.value = false
@@ -148,6 +155,14 @@ const act = (action: SessionAction) => {
       >
         <SquareTerminal class="size-4" aria-hidden="true" />
         {{ t('terminal.in_folder', { folder: folderNameOf(tab.cwd) }) }}
+      </Button>
+      <Button
+        variant="outline"
+        class="h-11 w-full touch-manipulation justify-start"
+        @click="openPreview"
+      >
+        <AppWindow class="size-4" aria-hidden="true" />
+        {{ t('preview.label') }}
       </Button>
       <Button
         variant="outline"

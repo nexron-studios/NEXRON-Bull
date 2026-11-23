@@ -19,6 +19,9 @@ import NavBottomBar from '@/components/nav/NavBottomBar.vue'
 import NavRoutePage from '@/components/nav/NavRoutePage.vue'
 import PanelInfo from '@/components/panel/PanelInfo.vue'
 import PanelResizeHandle from '@/components/panel/PanelResizeHandle.vue'
+import PreviewColumn from '@/components/preview/PreviewColumn.vue'
+import PreviewSheet from '@/components/preview/PreviewSheet.vue'
+import PreviewToggle from '@/components/preview/PreviewToggle.vue'
 import SessionRail from '@/components/session/SessionRail.vue'
 import SessionResizeHandle from '@/components/session/SessionResizeHandle.vue'
 import SessionConfirmDialog from '@/components/session/SessionConfirmDialog.vue'
@@ -33,12 +36,14 @@ import { useFinishTracking } from '@/composables/useFinishTracking'
 import { useInfoPanel } from '@/composables/useInfoPanel'
 import { useLimitPolicySync } from '@/composables/useLimitPolicySync'
 import { usePhoneChatHistory } from '@/composables/usePhoneChatHistory'
+import { usePreviewPane } from '@/composables/usePreviewPane'
 import { useSidebarLayout } from '@/composables/useSidebarLayout'
 import { useTabNotifications } from '@/composables/useTabNotifications'
 import { useTerminals } from '@/composables/useTerminals'
 import { useIsNarrow, useIsPhone } from '@/composables/useViewport'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { useChatStore } from '@/stores/chat'
+import { usePreviewStore } from '@/stores/preview'
 import { foregroundShellOf } from '@/utils/activity'
 import { useTerminalStore } from '@/stores/terminals'
 import {
@@ -88,9 +93,17 @@ const { here, openHere, toggleDrawer } = useTerminals()
 const isChatShown = computed(() => isNarrow.value || layout.value !== 'full')
 // The drawer covers the chat on a narrow window: what finishes under it is not seen.
 useFinishTracking(() => (isChatShown.value && !isDrawerOpen.value ? shownChatId.value : null))
+const sidebarWidth = () => (layout.value === 'rail' ? RAIL_WIDTH : panelWidth.value)
+const previewStore = usePreviewStore()
+// Beside the chat, between it and the info panel; the drawer of a narrow window takes no room.
+const previewPane = usePreviewPane(
+  windowWidth,
+  () => (isNarrow.value ? 0 : sidebarWidth()),
+  () => isChatRoute.value && !!activeTab.value && !shownTerminal.value && isChatShown.value
+)
 const infoPanel = useInfoPanel(
   windowWidth,
-  () => (layout.value === 'rail' ? RAIL_WIDTH : panelWidth.value),
+  () => sidebarWidth() + previewPane.takenWidth.value,
   () =>
     isChatRoute.value &&
     !!activeTab.value &&
@@ -329,6 +342,10 @@ watch(
         <NchThemeToggle class="shrink-0" />
         <ChatNotifyToggle />
         <SettingsLink class="shrink-0" />
+        <PreviewToggle
+          v-if="isChatRoute && activeTab && !shownTerminal"
+          :is-pressed="previewPane.isShown.value || previewStore.isSheetOpen"
+        />
         <NchIconButton
           v-if="infoPanel.canShow.value"
           :id="INFO_PANEL_TOGGLE_ID"
@@ -361,6 +378,11 @@ watch(
             </Button>
           </NchClawdEmpty>
         </main>
+        <PreviewColumn
+          v-if="activeTab && previewPane.isShown.value"
+          :tab="activeTab"
+          :pane="previewPane"
+        />
         <div
           v-if="isChatRoute && activeTab && !shownTerminal && infoPanel.isShown.value"
           class="relative flex min-h-0 shrink-0"
@@ -387,6 +409,7 @@ watch(
     </div>
 
     <ChatNewDialog v-model:open="isNewOpen" />
+    <PreviewSheet v-if="activeTab" :tab="activeTab" />
     <SessionConfirmDialog />
   </div>
 </template>

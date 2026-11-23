@@ -1221,6 +1221,35 @@ export default {
     rank: 'Fertig, noch nicht angesehen, Platz {n}',
     new_count: '{n} neu'
   },
+  preview: {
+    label: 'Vorschau',
+    show: 'Vorschau einblenden ({key})',
+    hide: 'Vorschau ausblenden ({key})',
+    toolbar: 'Adresse der Vorschau',
+    url_label: 'Adresse',
+    url_placeholder: 'localhost:5173/seite',
+    url_invalid: 'Das ist keine http- oder https-Adresse.',
+    reload: 'Neu laden',
+    open_external: 'Im Browser öffnen',
+    close: 'Vorschau schließen',
+    resize: 'Breite der Vorschau',
+    open_in_preview: 'In Vorschau öffnen',
+    open_in_preview_short: 'Vorschau',
+    frame_title: 'Vorschau von {url}',
+    sheet_hint: 'Die Seite aus diesem Chat, so wie der Browser sie zeigt.',
+    empty_title: 'Noch keine Seite',
+    empty_hint:
+      'Nennt Claude eine localhost-Adresse, erscheint die Seite hier. Oder gib oben eine ein.',
+    remote_hint: 'localhost ist hier {machine}. Bull lädt {src}.',
+    no_host_title: 'Adresse von {machine} unbekannt',
+    no_host_hint: 'ssh kann nicht sagen, wie der Rechner heißt. Öffne die Seite dort im Browser.',
+    unreachable_title: 'Seite antwortet nicht',
+    unreachable_hint:
+      'Unter dieser Adresse läuft gerade nichts. Starte den Dev-Server und lade neu.',
+    unreachable_remote_hint:
+      'Ein Dev-Server lauscht oft nur auf localhost. Starte ihn auf {machine} mit --host (Vite: npm run dev -- --host) und lade neu.',
+    retry: 'Erneut versuchen'
+  },
   session_actions: {
     menu: {
       label: 'Mehr zu {title}',

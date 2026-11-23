@@ -24,7 +24,8 @@ const {
   title,
   description,
   contentClass = '',
-  restoresFocus = true
+  restoresFocus = true,
+  focusesFirst = true
 } = defineProps<{
   title: string
   description: string
@@ -32,6 +33,8 @@ const {
   contentClass?: HTMLAttributes['class']
   /** `false` when closing moved focus somewhere else on purpose, so it stays there */
   restoresFocus?: boolean
+  /** `false` keeps the focus on the box itself instead of its first field (no phone keyboard) */
+  focusesFirst?: boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -45,6 +48,9 @@ const { hasMoreAbove } = useScrollEdges(sheetBody)
 const keepFocus = (event: Event) => {
   if (!restoresFocus) event.preventDefault()
 }
+const skipFirstField = (event: Event) => {
+  if (!focusesFirst) event.preventDefault()
+}
 </script>
 
 <template>
@@ -53,6 +59,7 @@ const keepFocus = (event: Event) => {
       side="bottom"
       :show-close-button="false"
       class="max-h-[85dvh] gap-3 rounded-t-2xl px-4 pt-2 pb-safe"
+      @open-auto-focus="skipFirstField"
       @close-auto-focus="keepFocus"
     >
       <span class="mx-auto h-1 w-10 shrink-0 rounded-full bg-input" aria-hidden="true" />
@@ -74,6 +81,7 @@ const keepFocus = (event: Event) => {
     <DialogContent
       class="grid-cols-[minmax(0,1fr)]"
       :class="contentClass"
+      @open-auto-focus="skipFirstField"
       @close-auto-focus="keepFocus"
     >
       <DialogHeader>

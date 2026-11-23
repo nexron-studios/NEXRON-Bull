@@ -1200,6 +1200,33 @@ export default {
     rank: 'Finished, not seen yet, place {n}',
     new_count: '{n} new'
   },
+  preview: {
+    label: 'Preview',
+    show: 'Show preview ({key})',
+    hide: 'Hide preview ({key})',
+    toolbar: 'Preview address',
+    url_label: 'Address',
+    url_placeholder: 'localhost:5173/page',
+    url_invalid: 'That is no http or https address.',
+    reload: 'Reload',
+    open_external: 'Open in browser',
+    close: 'Close preview',
+    resize: 'Preview width',
+    open_in_preview: 'Open in preview',
+    open_in_preview_short: 'Preview',
+    frame_title: 'Preview of {url}',
+    sheet_hint: 'The page from this chat, as the browser shows it.',
+    empty_title: 'No page yet',
+    empty_hint: 'When Claude names a localhost address, the page shows up here. Or type one above.',
+    remote_hint: 'localhost is {machine} here. Bull loads {src}.',
+    no_host_title: 'Address of {machine} unknown',
+    no_host_hint: 'ssh cannot tell what the machine is called. Open the page in a browser there.',
+    unreachable_title: 'Page does not answer',
+    unreachable_hint: 'Nothing runs at this address right now. Start the dev server and reload.',
+    unreachable_remote_hint:
+      'Dev servers often listen on localhost only. Start it on {machine} with --host (Vite: npm run dev -- --host) and reload.',
+    retry: 'Try again'
+  },
   session_actions: {
     menu: {
       label: 'More for {title}',

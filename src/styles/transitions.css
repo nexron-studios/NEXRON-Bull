@@ -273,11 +273,11 @@ html[data-sidebar-snap] [data-snap-chat] {
    left, the new ones would wait outside the growing chat until it reached them. They travel there
    on the same spring instead. The pane leaving a tab switch keeps its copies unnamed, since a name
    may exist only once, and while the magnifier morphs the field belongs to that morph. */
-html:is([data-sidebar-snap], [data-panel-snap])
+html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap])
   [data-snap-bar-tools]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *) {
   view-transition-name: session-bar-tools;
 }
-html:is([data-sidebar-snap], [data-panel-snap]):not([data-search-morph])
+html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]):not([data-search-morph])
   [data-search-field]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *) {
   view-transition-name: chat-search-field;
 }
@@ -291,10 +291,10 @@ html:is([data-sidebar-snap], [data-panel-snap]):not([data-search-morph])
    slides in from the window's right edge on the same spring, so its left edge stays on the chat's
    right edge all the way. Shutting runs the same way back. Header, tab bar and sidebar are no part
    of it and stand still. */
-html[data-panel-snap] [data-snap-chat-pane] {
+html:is([data-panel-snap], [data-preview-snap]) [data-snap-chat-pane] {
   view-transition-name: chat-pane;
 }
-html[data-panel-snap] [data-snap-panel] {
+html:is([data-panel-snap], [data-preview-snap]) [data-snap-panel] {
   view-transition-name: info-panel;
 }
 ::view-transition-new(info-panel):only-child {
@@ -321,6 +321,36 @@ html[data-panel-snap] [data-snap-panel] {
   }
   ::view-transition-old(info-panel):only-child {
     animation: route-out 120ms var(--ease-out-soft) both;
+  }
+}
+
+/* Preview (usePreviewPane): the chat narrows on the same spring as for the info panel, and the
+   pane comes in from the chat's side: it sits between chat and info panel, so a slide from the
+   window's edge would cross the info panel. While the info panel snaps, the pane travels with the
+   chat's right edge instead of jumping. */
+html:is([data-panel-snap], [data-preview-snap]) [data-snap-preview] {
+  view-transition-name: preview-pane;
+}
+::view-transition-group(preview-pane) {
+  overflow: clip;
+  animation-duration: var(--duration-spring-smooth);
+  animation-timing-function: var(--ease-spring-smooth);
+}
+::view-transition-new(preview-pane):only-child {
+  animation: preview-in var(--duration-spring-smooth) var(--ease-spring-smooth) both;
+}
+::view-transition-old(preview-pane):only-child {
+  animation: route-out var(--duration-snap-fade) var(--ease-out-soft) both;
+}
+@keyframes preview-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(preview-pane):only-child {
+    animation: route-in 200ms var(--ease-out-soft) both;
   }
 }
 

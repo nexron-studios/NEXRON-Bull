@@ -55,7 +55,7 @@ describe('layout snap cross-fade', () => {
   it('should carry the session bar buttons as their own part, outside a leaving tab', () => {
     const tools = declarationsOf(
       transitionsCss,
-      'html:is([data-sidebar-snap], [data-panel-snap]) [data-snap-bar-tools]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *)'
+      'html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]) [data-snap-bar-tools]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *)'
     )
 
     expect(tools['view-transition-name']).toBe('session-bar-tools')

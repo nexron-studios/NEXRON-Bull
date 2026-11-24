@@ -10,8 +10,8 @@ export type UiZoomChoice = 'auto' | UiZoomStep
 export const DEFAULT_UI_ZOOM_CHOICE: UiZoomChoice = 'auto'
 
 /**
- * The window Bull is designed for. Automatic zoom never shrinks the room below it: a window
- * twice as wide and high gets the largest step, a 1920×1080 window or smaller stays at 100 %.
+ * The window Bull is designed for. Automatic zoom never shrinks the room below it: the largest
+ * step needs 1.5 times its size (2880×1620), a 1920×1080 window or smaller stays at 100 %.
  */
 const REFERENCE_WIDTH = 1920
 const REFERENCE_HEIGHT = 1080

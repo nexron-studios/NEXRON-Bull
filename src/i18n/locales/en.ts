@@ -1020,7 +1020,7 @@ export default {
     },
     appearance: {
       description:
-        'Light or dark, how large Bull draws everything, and the colour Bull accents with. The bull and the Claude mark follow it at once, in the browser tab and the taskbar too. The Start menu and desktop shortcut keep the blue icon.',
+        'Light or dark, and the colour Bull accents with. The bull and the Claude mark follow it at once, in the browser tab and the taskbar too. The Start menu and desktop shortcut keep the blue icon.',
       theme: 'Theme',
       themes: { auto: 'System', light: 'Light', dark: 'Dark' },
       zoom: 'Size',

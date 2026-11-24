@@ -34,10 +34,17 @@ export const windowService = {
   /** Calls `listener` when the window is resized or moves to a screen with other scaling. */
   onSizeChange: async (listener: () => void): Promise<UnlistenFn> => {
     const window = getCurrentWindow()
-    const unlisten = await Promise.all([
-      window.onResized(listener),
-      window.onScaleChanged(listener)
-    ])
-    return () => unlisten.forEach((stop) => stop())
+    const stopResized = await window.onResized(listener)
+    try {
+      const stopScaleChanged = await window.onScaleChanged(listener)
+      return () => {
+        stopResized()
+        stopScaleChanged()
+      }
+    } catch (error) {
+      // Not swallowed: the caller reports it; only the half that did subscribe is undone.
+      stopResized()
+      throw error
+    }
   }
 }

@@ -94,15 +94,18 @@ export const UI_ZOOM_RESET_CHORD: KeyChord = { modifier: 'command', keys: ['0'] 
 export const uiZoomActionList = ['in', 'out', 'reset'] as const
 export type UiZoomAction = (typeof uiZoomActionList)[number]
 
-// `=` is + without Shift on US keyboards; `_` is − with Shift. The number pad sends + and −.
+// `_` is − with Shift on US keyboards. The number pad sends + and −.
 const UI_ZOOM_KEYS: Record<string, UiZoomAction> = {
   '+': 'in',
-  '=': 'in',
   '-': 'out',
   _: 'out',
   '0': 'reset'
 }
 
 /** Which way Ctrl/Cmd +, − or 0 changes the UI size; `null` for any other key. */
-export const uiZoomActionOf = (event: KeyInfo): UiZoomAction | null =>
-  hasCommandKey(event) ? (UI_ZOOM_KEYS[event.key] ?? null) : null
+export const uiZoomActionOf = (event: KeyInfo): UiZoomAction | null => {
+  if (!hasCommandKey(event)) return null
+  // `=` is + without Shift on US keyboards; on a German one Shift+0 types it, which is no zoom.
+  if (event.key === '=') return event.shiftKey ? null : 'in'
+  return UI_ZOOM_KEYS[event.key] ?? null
+}

@@ -76,8 +76,15 @@ export const useUiZoomApply = () => {
   const { isAvailable, zoom, windowSize, step, reset } = useUiZoom()
   if (!isAvailable) return
 
+  // Only the newest answer counts: a slower, older one would set a size the window left already.
+  let latestMeasure = 0
   const measure = async () => {
-    windowSize.value = await windowService.logicalSize()
+    const ticket = ++latestMeasure
+    const size = await windowService.logicalSize()
+    if (ticket !== latestMeasure) return
+    // A minimised window reports 0×0 on Windows; it keeps its zoom for when it comes back.
+    if (size.width === 0 || size.height === 0) return
+    windowSize.value = size
   }
   const measureLater = useDebounceFn(() => measure().catch(handleError), RESIZE_SETTLE_MS)
 

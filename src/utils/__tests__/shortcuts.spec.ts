@@ -139,7 +139,8 @@ describe('uiZoomActionOf', () => {
     expect([
       uiZoomActionOf(key({ key: '+' })),
       uiZoomActionOf(key({ key: '0', ctrlKey: true, altKey: true })),
-      uiZoomActionOf(key({ key: '9', ctrlKey: true }))
-    ]).toEqual([null, null, null])
+      uiZoomActionOf(key({ key: '9', ctrlKey: true })),
+      uiZoomActionOf(key({ key: '=', ctrlKey: true, shiftKey: true }))
+    ]).toEqual([null, null, null, null])
   })
 })

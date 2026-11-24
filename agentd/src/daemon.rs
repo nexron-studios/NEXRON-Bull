@@ -32,6 +32,7 @@ use crate::profile_setup;
 use crate::removal;
 use crate::rewind;
 use crate::subagents;
+use crate::title_flow::TitleRequest;
 use crate::titles::TitleStore;
 use crate::transfer;
 use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
@@ -102,6 +103,13 @@ pub(crate) struct Session {
     pub(crate) configuring: Vec<PendingChange>,
 }
 
+impl Session {
+    /// A sent `/clear` waits for Claude to report the new session.
+    pub(crate) fn is_clearing(&self) -> bool {
+        self.clearing.is_some()
+    }
+}
+
 /// A control request the app sent through `control`, waiting for Claude's response.
 struct PendingControl {
     tab: String,
@@ -124,9 +132,8 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) carried: Mutex<HashMap<String, Vec<Queued>>>,
     /// Chat titles by session id, see `title_flow`.
     pub(crate) titles: TitleStore,
-    /// The newest title call of each tab.
-    title_calls: Mutex<HashMap<String, u64>>,
-    pub(crate) next_title_call: AtomicU64,
+    /// Tabs with a title call running, each with the newest message sent meanwhile.
+    title_waiting: Mutex<HashMap<String, Option<TitleRequest>>>,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -144,8 +151,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             moving: Mutex::new(HashSet::new()),
             carried: Mutex::new(HashMap::new()),
             titles: TitleStore::load(home().as_deref()),
-            title_calls: Mutex::new(HashMap::new()),
-            next_title_call: AtomicU64::new(1),
+            title_waiting: Mutex::new(HashMap::new()),
         });
         daemon.start_limit_clock();
         daemon
@@ -181,9 +187,6 @@ impl<W: Write + Send + 'static> Daemon<W> {
 
     fn handle(self: &Arc<Self>, Envelope { id, request }: Envelope) {
         let tab = tab_of(&request);
-        if let Request::Send { tab, content } = &request {
-            self.retitle(tab, content);
-        }
         let outcome = match request {
             Request::Hello => {
                 self.emit(&Event::Hello { id, version: env!("CARGO_PKG_VERSION"), os: std::env::consts::OS });
@@ -191,7 +194,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             Request::Start(params) => self.start(id, params),
             Request::Send { tab, content } if self.queue_if_waiting(&tab, &content) => Ok(()),
-            Request::Send { tab, content } => self.send_prompt(&tab, &content),
+            Request::Send { tab, content } => self.send_prompt(&tab, &content).inspect(|()| self.retitle(&tab, &content)),
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
                 self.with_session(&tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
@@ -611,8 +614,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.sessions().is_empty()
     }
 
-    pub(crate) fn title_calls(&self) -> MutexGuard<'_, HashMap<String, u64>> {
-        self.title_calls.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    pub(crate) fn title_waiting(&self) -> MutexGuard<'_, HashMap<String, Option<TitleRequest>>> {
+        self.title_waiting.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn controls(&self) -> MutexGuard<'_, HashMap<String, PendingControl>> {

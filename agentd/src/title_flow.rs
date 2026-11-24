@@ -2,7 +2,7 @@
 //! keeps the answer by session id and tells the app.
 
 use std::io::Write;
-use std::sync::atomic::Ordering;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -13,29 +13,60 @@ use crate::daemon::Daemon;
 use crate::protocol::Event;
 use crate::titles;
 
+/// One message to name: the session it went to, its account and its text.
+pub(crate) struct TitleRequest {
+    session_id: String,
+    profile: Option<PathBuf>,
+    text: String,
+}
+
 impl<W: Write + Send + 'static> Daemon<W> {
-    /// After a message to the tab's Claude. Two quick messages race; only the newer one's title
-    /// counts, so an answer that arrives late never overwrites a fresher one.
+    /// After a message reached the tab's Claude. At most one Haiku call runs per tab: messages
+    /// sent meanwhile wait, and only the newest of them is named once the call is done. So quick
+    /// messages cost one call more, not one each, and every title that arrives is the newest.
     pub(crate) fn retitle(self: &Arc<Self>, tab: &str, content: &[Value]) {
-        let Some(request) = titles::request_text(content) else { return };
-        let Some((session_id, profile)) =
-            self.with_session(tab, |session| (session.session_id.clone(), session.params.profile.clone()))
-        else {
+        let Some(text) = titles::request_text(content) else { return };
+        // Mid `/clear` the session id is still the old chat's; its title must not change.
+        let Some(Some((session_id, profile))) = self.with_session(tab, |session| {
+            (!session.is_clearing()).then(|| (session.session_id.clone(), session.params.profile.clone()))
+        }) else {
             return;
         };
-        let call = self.next_title_call.fetch_add(1, Ordering::Relaxed);
-        self.title_calls().insert(tab.to_string(), call);
+        let request = TitleRequest { session_id, profile, text };
+        {
+            let mut waiting = self.title_waiting();
+            if let Some(slot) = waiting.get_mut(tab) {
+                *slot = Some(request);
+                return;
+            }
+            waiting.insert(tab.to_string(), None);
+        }
         let daemon = Arc::clone(self);
         let tab = tab.to_string();
         thread::spawn(move || {
-            let previous = daemon.titles.get(&session_id);
-            let Some(title) = titles::generate(profile.as_deref(), previous.as_deref(), &request) else { return };
-            if daemon.title_calls().get(&tab) != Some(&call) || previous.as_deref() == Some(title.as_str()) {
-                return;
+            let mut request = request;
+            loop {
+                daemon.name(&tab, &request);
+                let mut waiting = daemon.title_waiting();
+                match waiting.get_mut(&tab).and_then(Option::take) {
+                    Some(next) => request = next,
+                    None => {
+                        waiting.remove(&tab);
+                        return;
+                    }
+                }
             }
-            daemon.titles.set(&session_id, &title, now_ms());
-            daemon.emit(&Event::Title { tab, session_id, title });
         });
+    }
+
+    fn name(&self, tab: &str, request: &TitleRequest) {
+        let previous = self.titles.get(&request.session_id);
+        let Some(title) = titles::generate(request.profile.as_deref(), previous.as_deref(), &request.text) else { return };
+        if previous.as_deref() == Some(title.as_str()) {
+            return;
+        }
+        self.titles.set(&request.session_id, &title, now_ms());
+        self.emit(&Event::Title { tab: tab.to_string(), session_id: request.session_id.clone(), title });
     }
 
     /// The title of a running tab, sent again to an app that attaches.

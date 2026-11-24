@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Mutex, MutexGuard};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -26,10 +26,11 @@ const MAX_REQUEST_CHARS: usize = 2000;
 const MODEL: &str = "haiku";
 /// Haiku answers in about two seconds; a hung call must not keep a thread forever.
 const TIMEOUT: Duration = Duration::from_secs(30);
-const POLL: Duration = Duration::from_millis(100);
 /// The call loads nothing of the user's setup: no settings (hooks, plugins), no MCP servers, no
 /// tools, no skills, no transcript. CLAUDE.md is not read under a replaced system prompt either,
-/// so a call costs about 700 tokens (measured 24.11.2026).
+/// so a call costs about 700 tokens (measured 24.11.2026). Without settings an account that signs
+/// in through `env` or `apiKeyHelper` there gets no title; Bull's accounts sign in with the
+/// subscription, and loading settings would run the user's hooks on every message.
 const LEAN_ARGS: [&str; 9] = [
     "--no-session-persistence",
     "--setting-sources",
@@ -106,11 +107,15 @@ fn read_titles(path: &Path) -> HashMap<String, Entry> {
     })
 }
 
+/// Through a temporary file and a rename: agentd killed mid-write would otherwise leave a cut-off
+/// file, and every title in it would be lost on the next start.
 fn write_titles(path: &Path, titles: &HashMap<String, Entry>) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(path, serde_json::to_vec(titles)?)
+    let partial = path.with_extension("json.partial");
+    std::fs::write(&partial, serde_json::to_vec(titles)?)?;
+    std::fs::rename(partial, path)
 }
 
 fn prune(titles: &mut HashMap<String, Entry>) {
@@ -173,6 +178,7 @@ pub fn generate(profile: Option<&Path>, previous: Option<&str>, request: &str) -
     clean(&output)
 }
 
+/// Claude's answer once it closed its output; killed if that takes longer than `TIMEOUT`.
 fn read_with_timeout(child: &mut Child) -> Option<String> {
     let mut stdout = child.stdout.take()?;
     let (send, receive) = mpsc::channel();
@@ -181,20 +187,13 @@ fn read_with_timeout(child: &mut Child) -> Option<String> {
         let _ = stdout.read_to_string(&mut text);
         let _ = send.send(text);
     });
-    let started = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => return receive.recv_timeout(POLL * 10).ok(),
-            Ok(Some(_)) | Err(_) => return None,
-            Ok(None) if started.elapsed() >= TIMEOUT => {
-                let _ = child.kill();
-                let _ = child.wait();
-                eprintln!("agentd: title call timed out");
-                return None;
-            }
-            Ok(None) => thread::sleep(POLL),
-        }
-    }
+    let Ok(text) = receive.recv_timeout(TIMEOUT) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        eprintln!("agentd: title call timed out");
+        return None;
+    };
+    child.wait().ok()?.success().then_some(text)
 }
 
 #[cfg(test)]

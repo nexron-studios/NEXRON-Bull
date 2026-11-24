@@ -17,7 +17,7 @@ import SettingsMachineKeyHelp from '@/components/settings/SettingsMachineKeyHelp
 import { Button } from '@/components/ui/button'
 import { useTerminalRequestStore } from '@/stores/terminalRequests'
 import type { MachineEntry, MachineProbe, ProbeReason } from '@/types/machine.type'
-import { forgetHostKeyCommandOf, probeActionOf } from '@/utils/machineAssistant'
+import { forgetHostKeyCommandOf, oldAgentdFileOf, probeActionOf } from '@/utils/machineAssistant'
 
 // The check of one machine: while ssh runs, then what it found in plain words and the one step
 // that moves on (install, fix the key, try again). The raw message waits under "details".
@@ -50,7 +50,7 @@ const terminals = useTerminalRequestStore()
 
 const action = computed(() => (probe ? probeActionOf(probe.reason) : null))
 const params = computed(() => ({ machine: entry.name, version: probe?.version ?? '' }))
-const oldAgentdFile = computed(() => (probe?.os === 'windows' ? 'agentd.old.exe' : 'agentd.old'))
+const oldAgentdFile = computed(() => oldAgentdFileOf(probe?.os ?? entry.os))
 
 const forgetKey = () =>
   terminals.request({

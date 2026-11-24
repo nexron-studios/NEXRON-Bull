@@ -6,6 +6,7 @@ import {
   machineEntryOf,
   machineFormOf,
   machineFormProblemOf,
+  oldAgentdFileOf,
   probeActionOf,
   unixAuthorizedKeysCommandOf
 } from '../machineAssistant'
@@ -16,6 +17,19 @@ const form = (overrides: Partial<Record<'host' | 'user' | 'port' | 'name', strin
   port: '',
   name: '',
   ...overrides
+})
+
+describe('oldAgentdFileOf', () => {
+  it('should name the Windows backup for Windows and for an unknown system', () => {
+    expect(oldAgentdFileOf('windows')).toBe('agentd.old.exe')
+    expect(oldAgentdFileOf(null)).toBe('agentd.old.exe')
+    expect(oldAgentdFileOf(undefined)).toBe('agentd.old.exe')
+  })
+
+  it('should name the backup without extension on a Mac and on Linux', () => {
+    expect(oldAgentdFileOf('macos')).toBe('agentd.old')
+    expect(oldAgentdFileOf('linux')).toBe('agentd.old')
+  })
 })
 
 describe('probeActionOf', () => {

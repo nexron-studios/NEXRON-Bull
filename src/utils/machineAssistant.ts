@@ -1,5 +1,24 @@
-import type { InstallStep, MachineEntry, ProbeReason } from '@/types/machine.type'
+import type { InstallStep, MachineEntry, MachineOs, ProbeReason } from '@/types/machine.type'
 import { installStepList } from '@/types/machine.type'
+
+/**
+ * The name the previous agentd keeps after an install. An unknown system counts as Windows, as
+ * in the app's machine list: every machine listed before systems were known was one.
+ */
+export const oldAgentdFileOf = (os: MachineOs | null | undefined): string => {
+  if (!os) return 'agentd.old.exe'
+  switch (os) {
+    case 'windows':
+      return 'agentd.old.exe'
+    case 'macos':
+    case 'linux':
+      return 'agentd.old'
+    default: {
+      const unhandled: never = os
+      throw new Error(`Unhandled machine system: ${unhandled}`)
+    }
+  }
+}
 
 /** What the assistant offers after a check: the step that moves the user on. */
 export const probeActionList = ['add', 'install', 'fix_key', 'forget_key', 'retry', 'none'] as const

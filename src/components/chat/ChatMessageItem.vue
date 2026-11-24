@@ -150,7 +150,7 @@ const shellOutputAt = (index: number) => {
         :input="block.input"
         :result="results.get(block.id) ?? null"
         :is-running
-        class="w-full max-w-[72ch]"
+        class="w-full"
       />
       <ChatToolResult
         v-else-if="block.type === 'tool_result'"

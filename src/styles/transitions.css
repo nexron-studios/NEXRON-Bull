@@ -156,32 +156,37 @@ html:is([data-route-transition='next'], [data-route-transition='prev']) {
   }
 }
 
-/* Tab switch (ChatPaneSwitch, Figma "16 Motion"): the old chat leaves in 120 ms, 8 px against the
-   direction; the new one comes from the side of the selected tab. Both overlap briefly, so the
-   leaving pane lies over the space instead of pushing the new one down. */
+/* Tab switch (ChatPaneSwitch, Figma "16 Motion"): a dissolve. The new chat stands fully opaque
+   underneath and only drifts in 8 px from the side of the selected tab; the old one lies on top,
+   painted on the page background, and fades out while drifting the other way. Fading both panes
+   at once let the backdrop show through halfway, which blinked on quick switches. The newest
+   leaving pane comes last in the DOM, so it covers older ones still fading. Under reduced motion
+   only the fade is left. */
 .tab-next-leave-active,
 .tab-prev-leave-active {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
+  background-color: var(--background);
   transition:
     opacity 120ms var(--ease-out-soft),
     transform 120ms var(--ease-out-soft);
 }
 .tab-next-enter-active,
 .tab-prev-enter-active {
-  transition:
-    opacity 150ms var(--ease-out-soft) 50ms,
-    transform 150ms var(--ease-out-soft) 50ms;
+  transition: transform var(--duration-fade) var(--ease-out-soft);
+}
+.tab-next-leave-to,
+.tab-prev-leave-to {
+  opacity: 0;
 }
 .tab-next-leave-to,
 .tab-prev-enter-from {
-  opacity: 0;
   transform: translateX(-8px);
 }
 .tab-next-enter-from,
 .tab-prev-leave-to {
-  opacity: 0;
   transform: translateX(8px);
 }
 

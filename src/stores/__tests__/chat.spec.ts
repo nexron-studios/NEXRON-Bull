@@ -47,6 +47,22 @@ const liveTab = (id: string, machine: string | null) => ({
 
 const emit = (event: AgentdEvent) => listeners.forEach((listener) => listener(event))
 
+describe('useChatStore: background work', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    listeners.length = 0
+  })
+
+  it('should forget the background tasks of a Claude that exited', () => {
+    const chat = useChatStore()
+    chat.tabs = [{ ...liveTab('t1', null), backgroundTasks: { ids: ['a7f'], at: 1 } }]
+
+    emit({ type: 'exited', tab: 't1', code: 0 })
+
+    expect(chat.tabs[0].backgroundTasks?.ids).toEqual([])
+  })
+})
+
 describe('useChatStore: lost connection to this computer', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -416,6 +432,22 @@ describe('useChatStore: switching the account', () => {
     await chat.switchAccount('t1', gmail)
 
     expect([chat.tabs[0].status, chat.tabs[0].statusBeforeMove]).toEqual(['starting', 'idle'])
+  })
+
+  it('should keep the turn it cut for the panel in the other account', async () => {
+    ask.mockResolvedValue({ type: 'moved', id: 1, session_id: 's1' })
+    const chat = useChatStore()
+    const prompt = {
+      uuid: 'p1',
+      role: 'user' as const,
+      at: null,
+      blocks: [{ type: 'text' as const, text: 'Build it' }]
+    }
+    chat.tabs = [{ ...stoppedTab(false), messages: [prompt] }]
+
+    await chat.switchAccount('t1', gmail)
+
+    expect(chat.tabs[0].cutTurn).toEqual({ promptUuid: 'p1', promptsAfter: 0 })
   })
 
   it('should ignore a second switch while the first one runs', async () => {

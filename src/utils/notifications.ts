@@ -1,5 +1,5 @@
 import { openQuestionOf } from '@/utils/answerCallouts'
-import { isBusyStatus, type ChatTabState, type TabStatus } from '@/utils/chatTab'
+import { isBusyStatus, shownStatusOf, type ChatTabState, type TabStatus } from '@/utils/chatTab'
 import { leftPercentOf } from '@/utils/percent'
 import { accountKeyOf, windowOf, type MachineQuota } from '@/utils/quota'
 
@@ -78,15 +78,16 @@ export const isAllOff = (settings: NotificationSettings): boolean =>
 /** The fields of a tab that decide whether something happened worth telling. */
 export interface TabSnapshot {
   id: string
+  /** As the user sees it: background agents or shells still running count as working */
   status: TabStatus
+  /** When the chat last finished (`withTurnClock`); a new value is a new "finished" */
+  finishedAt: number | null
   /** Request id of the open permission ask, if any */
   requestId: string | null
   toolName: string | null
   notice: string | null
   /** The notice is the app's "connection lost"; Claude keeps running on that machine. */
   isDisconnected: boolean
-  /** The running turn answers a subagent's report; its end tells the user nothing new */
-  isAgentReply: boolean
   /** The question the last answer ends on (`> [!question]`), until the user answers */
   openQuestion: string | null
 }
@@ -107,12 +108,12 @@ const PLAN_TOOL = 'ExitPlanMode'
 
 export const snapshotOf = (tab: ChatTabState, disconnectedNotice: string | null): TabSnapshot => ({
   id: tab.id,
-  status: tab.status,
+  status: shownStatusOf(tab),
+  finishedAt: tab.finishedAt,
   requestId: tab.permission?.requestId ?? null,
   toolName: tab.permission?.toolName ?? null,
   notice: tab.notice,
   isDisconnected: tab.notice !== null && tab.notice === disconnectedNotice,
-  isAgentReply: !!tab.turn?.isAgentReply,
   openQuestion: openQuestionOf(tab)
 })
 
@@ -124,10 +125,10 @@ export const isSameSnapshots = (before: TabSnapshot[], after: TabSnapshot[]): bo
     return (
       snapshot.id === other.id &&
       snapshot.status === other.status &&
+      snapshot.finishedAt === other.finishedAt &&
       snapshot.requestId === other.requestId &&
       snapshot.notice === other.notice &&
       snapshot.isDisconnected === other.isDisconnected &&
-      snapshot.isAgentReply === other.isAgentReply &&
       snapshot.openQuestion === other.openQuestion
     )
   })
@@ -146,11 +147,11 @@ const outcomeOf = (before: TabSnapshot, after: TabSnapshot): NotifyReason | null
   if (after.notice && after.notice !== before.notice && after.status !== 'ended') return 'failed'
   // Ending in the middle of a turn, or while starting, was not asked for.
   if (after.status === 'ended' && isBusyStatus(before.status)) return 'failed'
+  // The chat finished: the same moment it gets its finish number, so neither the reply to a
+  // subagent's report nor a turn that left background work running tells the user it is done.
   // An answer that ends on a question needs the user, not just their attention.
-  if (before.status === 'working' && after.status === 'idle') {
-    if (before.isAgentReply) return null
+  if (after.finishedAt !== null && after.finishedAt !== before.finishedAt)
     return after.openQuestion ? 'question' : 'finished'
-  }
   return null
 }
 

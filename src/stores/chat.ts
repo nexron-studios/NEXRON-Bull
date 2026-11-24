@@ -35,6 +35,7 @@ import {
   withoutPending,
   withPendingPrompt,
   withTurnClock,
+  withTurnCut,
   type ChatTabState,
   type PermissionAsk,
   type SavedTab
@@ -354,7 +355,13 @@ export const useChatStore = defineStore(
       const notices = event.type === 'claude' ? agentNoticesOf(event.event, now) : []
       // Most events carry none; skip the second pass over all tabs for them.
       if (notices.length) update(id, (tab) => withAgentNotices(tab, notices))
-      const tasks = event.type === 'claude' ? backgroundTaskIdsOf(event.event) : null
+      // An exited Claude took its background agents and shells along; a restart lists none of them.
+      const tasks =
+        event.type === 'claude'
+          ? backgroundTaskIdsOf(event.event)
+          : event.type === 'exited'
+            ? []
+            : null
       if (tasks) update(id, (tab) => withBackgroundTasks(tab, tasks, now))
       const live =
         event.type === 'claude'
@@ -670,7 +677,13 @@ export const useChatStore = defineStore(
         update(id, (t) => ({ ...t, statusBeforeMove: null }))
         return
       }
-      update(id, (t) => ({ ...t, profile: profile.dir, account: profile.label, status: 'ended' }))
+      // The turn shown before goes on in the other account: the panel keeps it.
+      update(id, (t) => ({
+        ...withTurnCut(t),
+        profile: profile.dir,
+        account: profile.label,
+        status: 'ended'
+      }))
       const moved = tabOf(id)
       if (moved) start(moved)
     }

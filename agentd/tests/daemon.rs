@@ -727,3 +727,21 @@ fn names_a_chat_after_each_message_and_tells_an_app_that_attaches() {
     agentd.send(json!({ "op": "stop", "tab": "t1" }));
     std::fs::remove_dir_all(&home).ok();
 }
+
+#[test]
+fn tells_an_app_that_attaches_which_background_tasks_still_run() {
+    let cwd = temp_dir("background-cwd");
+    let mut agentd = Agentd::spawn();
+    let start = json!({ "op": "start", "tab": "t70", "cwd": cwd, "profile": null, "resume": null, "model": null, "permission_mode": null });
+    agentd.send(start.clone());
+    agentd.expect(|e| e["type"] == "started" && e["tab"] == "t70");
+    agentd.send(json!({ "op": "send", "tab": "t70", "content": [{ "type": "text", "text": "background" }] }));
+    agentd.expect(|e| claude_event(e, "result").is_some());
+
+    agentd.send(start);
+    agentd.expect(|e| e["type"] == "started" && e["tab"] == "t70");
+    let replayed = agentd.expect(|e| claude_event(e, "system").is_some_and(|s| s["subtype"] == "background_tasks_changed"));
+
+    assert_eq!(replayed["event"]["tasks"][0]["task_id"], "b1");
+    agentd.send(json!({ "op": "stop", "tab": "t70" }));
+}

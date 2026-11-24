@@ -24,30 +24,38 @@ import type { MachineQuota } from '../quota'
 const snap = (fields: Partial<TabSnapshot> = {}): TabSnapshot => ({
   id: 't1',
   status: 'working',
+  finishedAt: null,
   requestId: null,
   toolName: null,
   notice: null,
   isDisconnected: false,
-  isAgentReply: false,
   openQuestion: null,
   ...fields
 })
+
+/** The turn ended and the chat got its finish time. */
+const FINISHED_AT = 1_000
 
 const LIVE: ReasonContext = { isReplay: false, isStoppedByUser: false }
 
 describe('reasonOf with a question at the end of the answer', () => {
   it('should call a finished turn that ends on a question a question', () => {
-    const after = snap({ status: 'idle', openQuestion: 'Soll der Ordner weg?' })
+    const after = snap({
+      status: 'idle',
+      finishedAt: FINISHED_AT,
+      openQuestion: 'Soll der Ordner weg?'
+    })
     expect(reasonOf(snap(), after, LIVE)).toBe('question')
   })
 
   it('should keep a finished turn without a question finished', () => {
-    expect(reasonOf(snap(), snap({ status: 'idle' }), LIVE)).toBe('finished')
+    const after = snap({ status: 'idle', finishedAt: FINISHED_AT })
+    expect(reasonOf(snap(), after, LIVE)).toBe('finished')
   })
 
   it('should stay quiet when the answer was to a subagent report', () => {
     const after = snap({ status: 'idle', openQuestion: 'Und?' })
-    expect(reasonOf(snap({ isAgentReply: true }), after, LIVE)).toBeNull()
+    expect(reasonOf(snap(), after, LIVE)).toBeNull()
   })
 })
 
@@ -83,18 +91,25 @@ describe('reasonOf', () => {
   })
 
   describe('end of a turn', () => {
-    it('should report a finished turn when a working tab becomes idle', () => {
-      expect(reasonOf(snap(), snap({ status: 'idle' }), LIVE)).toBe('finished')
+    it('should report a finished turn once the chat got a new finish time', () => {
+      const after = snap({ status: 'idle', finishedAt: FINISHED_AT })
+      expect(reasonOf(snap(), after, LIVE)).toBe('finished')
     })
 
-    it('should stay quiet when Claude only answered a subagent report', () => {
-      const before = snap({ isAgentReply: true })
-      expect(reasonOf(before, snap({ status: 'idle' }), LIVE)).toBe(null)
+    it('should stay quiet when the turn ended without a finish time (a subagent report)', () => {
+      expect(reasonOf(snap(), snap({ status: 'idle' }), LIVE)).toBe(null)
+    })
+
+    it('should report the finish of background work that ended after the turn', () => {
+      const before = snap({ status: 'working', finishedAt: null })
+      const after = snap({ status: 'idle', finishedAt: FINISHED_AT })
+      expect(reasonOf(before, after, LIVE)).toBe('finished')
     })
 
     it('should stay quiet when the user interrupted the turn', () => {
       const context = { ...LIVE, isStoppedByUser: true }
-      expect(reasonOf(snap(), snap({ status: 'idle' }), context)).toBeNull()
+      const after = snap({ status: 'idle', finishedAt: FINISHED_AT })
+      expect(reasonOf(snap(), after, context)).toBeNull()
     })
 
     it('should stay quiet when a session starts', () => {
@@ -159,13 +174,22 @@ describe('snapshotOf', () => {
     expect(snapshotOf(tab(), 'Connection lost')).toEqual({
       id: 't1',
       status: 'asking',
+      finishedAt: null,
       requestId: 'r1',
       toolName: 'Bash',
       notice: null,
       isDisconnected: false,
-      isAgentReply: false,
       openQuestion: null
     })
+  })
+
+  it('should show an idle tab whose background agents still run as working', () => {
+    const idle = { ...tab(), status: 'idle' as const, permission: null }
+    const working = { ...idle, backgroundTasks: { ids: ['a7f'], at: 1 } }
+    expect([snapshotOf(idle, '').status, snapshotOf(working, '').status]).toEqual([
+      'idle',
+      'working'
+    ])
   })
 
   it('should mark the connection-lost notice of the tab machine', () => {

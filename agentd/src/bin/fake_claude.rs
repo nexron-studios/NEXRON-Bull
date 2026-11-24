@@ -76,6 +76,13 @@ fn main() {
                     }
                     continue;
                 }
+                // A shell left running in the background, as Claude Code lists it after the start.
+                if text == "background" {
+                    say(json!({ "type": "system", "subtype": "background_tasks_changed",
+                        "tasks": [{ "task_id": "b1", "task_type": "local_bash" }] }));
+                    say(json!({ "type": "result", "subtype": "success", "result": "started" }));
+                    continue;
+                }
                 if text.contains("write") {
                     say(json!({ "type": "control_request", "request_id": "perm-1",
                         "request": { "subtype": "can_use_tool", "tool_name": "Write", "input": {} } }));

@@ -99,6 +99,10 @@ pub(crate) struct Session {
     pub(crate) is_draining: bool,
     /// What Claude listed last, sent again to an app that attaches later.
     commands: Option<Vec<SlashCommand>>,
+    /// Claude's last `background_tasks_changed`, sent again to an app that attaches later: Claude
+    /// sends it only on a change, and without it the app would show a chat whose shells or agents
+    /// still run as finished.
+    background_tasks: Option<Value>,
     /// Mode, model or effort changes Claude has not answered yet.
     pub(crate) configuring: Vec<PendingChange>,
 }
@@ -330,9 +334,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
             .get(&params.tab)
             .map(|session| {
                 let working = session.is_working || session.clearing.is_some();
-                (session.session_id.clone(), working, session.asks.clone(), session.params.profile.clone(), session.limit.clone(), session.commands.clone())
+                let replayed = Replayed { asks: session.asks.clone(), commands: session.commands.clone(), background_tasks: session.background_tasks.clone() };
+                (session.session_id.clone(), working, replayed, session.params.profile.clone(), session.limit.clone())
             });
-        if let Some((session_id, working, asks, profile, limit, commands)) = running {
+        if let Some((session_id, working, Replayed { asks, commands, background_tasks }, profile, limit)) = running {
             let (profile, account) = Self::account_of(profile);
             self.emit(&Event::Started { id, tab: params.tab.clone(), session_id: session_id.clone(), working, profile, account });
             if let Some(commands) = commands {
@@ -344,6 +349,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 if let Some(fields) = event.as_object_mut() {
                     fields.insert("replay".into(), Value::Bool(true));
                 }
+                self.emit(&Event::Claude { tab: params.tab.clone(), event });
+            }
+            if let Some(event) = background_tasks {
                 self.emit(&Event::Claude { tab: params.tab.clone(), event });
             }
             if limit != LimitState::None {
@@ -375,6 +383,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             in_flight: Vec::new(),
             is_draining: false,
             commands: None,
+            background_tasks: None,
             configuring: Vec::new(),
         };
         self.sessions().insert(tab.clone(), session);
@@ -711,6 +720,13 @@ fn tab_of(request: &Request) -> Option<String> {
     }
 }
 
+/// What a running session sends again to an app that attaches later.
+struct Replayed {
+    asks: Vec<Value>,
+    commands: Option<Vec<SlashCommand>>,
+    background_tasks: Option<Value>,
+}
+
 /// Keeps what an app attaching later needs: whether a turn runs and which asks are open.
 fn track_turn(session: &mut Session, event: &Value) {
     // The mode Claude reports (`status` on every change, `init` per turn), also one it switched to
@@ -729,6 +745,7 @@ fn track_turn(session: &mut Session, event: &Value) {
         Some("control_request") if event["request"]["subtype"] == "can_use_tool" => session.asks.push(event.clone()),
         // `/clear` starts a new session in the same process; later checks and replays need its id.
         // A subagent's events carry its parent call and say nothing about the tab's session.
+        Some("system") if event["subtype"] == "background_tasks_changed" => session.background_tasks = Some(event.clone()),
         Some("system") if event["subtype"] == "init" && event["parent_tool_use_id"].is_null() => {
             if let Some(id) = event["session_id"].as_str() {
                 if session.clearing.as_deref().is_some_and(|old| old != id) {

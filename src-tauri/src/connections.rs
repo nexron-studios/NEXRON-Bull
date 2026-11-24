@@ -12,11 +12,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent_host::AGENTD_EVENT;
 use crate::local_agentd;
-use crate::machines::{self, MachineEntry};
+use crate::machine_setup;
+use crate::machines::{self, MachineEntry, MachineStore};
 
 /// How long ssh tries to reach a host. Without it Windows gives up on an unreachable one after
 /// ~21 s (measured against `nexron-server` offline), and every view asking it waits that long;
@@ -58,6 +59,8 @@ pub struct Connections {
     next_id: AtomicU64,
     /// Machines agentd is being installed on; nothing connects there meanwhile.
     installing: Arc<Mutex<HashSet<String>>>,
+    /// Machines of unknown system already asked for it this run, see `learn_system`.
+    systems_asked: Arc<Mutex<HashSet<String>>>,
 }
 
 /// Lets the machine connect again once dropped.
@@ -79,6 +82,7 @@ impl Connections {
             connections: Arc::new(Mutex::new(HashMap::new())),
             next_id: AtomicU64::new(0),
             installing: Arc::new(Mutex::new(HashSet::new())),
+            systems_asked: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -132,7 +136,10 @@ impl Connections {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         if let Some(stdout) = child.stdout.take() {
             let (app, connections, machine) = (self.app.clone(), Arc::clone(&self.connections), machine.clone());
-            thread::spawn(move || pump(&app, &connections, &machine, id, stdout));
+            let systems_asked = Arc::clone(&self.systems_asked);
+            thread::spawn(move || {
+                pump(&app, &connections, &machine, id, stdout, || learn_system(&app, &systems_asked, &machine));
+            });
         }
         Ok(Connection { id, child, stdin })
     }
@@ -158,7 +165,15 @@ fn local_command() -> Result<Command, ConnectionError> {
 
 /// Forwards agentd's lines until the connection ends, then tells the window so the tabs of
 /// that machine stop waiting.
-fn pump(app: &AppHandle, connections: &Mutex<HashMap<Machine, Connection>>, machine: &Machine, id: u64, stdout: impl io::Read) {
+/// `before_telling` runs once the connection is gone, before the window hears of it and connects again.
+fn pump(
+    app: &AppHandle,
+    connections: &Mutex<HashMap<Machine, Connection>>,
+    machine: &Machine,
+    id: u64,
+    stdout: impl io::Read,
+    before_telling: impl FnOnce(),
+) {
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         // A closed window has nobody left to tell.
         let _ = app.emit(AGENTD_EVENT, line);
@@ -171,10 +186,30 @@ fn pump(app: &AppHandle, connections: &Mutex<HashMap<Machine, Connection>>, mach
         let _ = connection.child.wait();
     }
     drop(connections);
+    before_telling();
     // The id tells the window which requests died with this connection: one sent meanwhile may
     // already be on its replacement.
     let lost = serde_json::json!({ "type": "disconnected", "machine": machine, "connection": id }).to_string();
     let _ = app.emit(AGENTD_EVENT, lost);
+}
+
+/// A machine listed while `uname` did not get through has no system yet and is spoken to as
+/// Windows. When such a connection ends, `uname` is asked once per run, so the next connection
+/// speaks the machine's own shell. An offline machine learns it at its next check instead.
+fn learn_system(app: &AppHandle, systems_asked: &Mutex<HashSet<String>>, machine: &Machine) {
+    let Some(entry) = machine.as_deref().and_then(|name| machines::resolve(name).ok()) else {
+        return;
+    };
+    if !should_ask_system(&entry, &mut lock(systems_asked)) {
+        return;
+    }
+    if let Ok(Some(platform)) = machine_setup::platform(&entry, false) {
+        machines::remember_os(&app.state::<MachineStore>(), &entry, platform.os);
+    }
+}
+
+fn should_ask_system(entry: &MachineEntry, asked: &mut HashSet<String>) -> bool {
+    entry.os.is_none() && asked.insert(entry.name.clone())
 }
 
 fn end(connection: Option<Connection>) {
@@ -214,4 +249,23 @@ pub(crate) fn hide_console(_command: &mut Command) {}
 
 pub(crate) fn home_folder() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::machine_os::MachineOs;
+
+    fn entry(name: &str, os: Option<MachineOs>) -> MachineEntry {
+        MachineEntry { name: name.into(), host: name.into(), user: None, port: None, os }
+    }
+
+    #[test]
+    fn asks_a_machine_of_unknown_system_once_per_run() {
+        let mut asked = HashSet::new();
+        assert!(should_ask_system(&entry("box", None), &mut asked));
+        assert!(!should_ask_system(&entry("box", None), &mut asked));
+        assert!(!should_ask_system(&entry("mac", Some(MachineOs::Macos)), &mut asked));
+        assert_eq!(asked, HashSet::from(["box".to_string()]));
+    }
 }

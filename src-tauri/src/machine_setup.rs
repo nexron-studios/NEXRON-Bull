@@ -69,6 +69,9 @@ pub(crate) struct Asked {
     pub(crate) stdout: String,
     pub(crate) code: Option<i32>,
     pub(crate) stderr: String,
+    /// Stopped at the deadline, neither answered nor ended. The exit code then is the kill's
+    /// (1 on Windows), not the remote command's.
+    pub(crate) is_timed_out: bool,
 }
 
 pub(crate) fn ssh(entry: &MachineEntry, should_accept_new_key: bool, remote: &str) -> Command {
@@ -84,7 +87,12 @@ pub(crate) fn ssh(entry: &MachineEntry, should_accept_new_key: bool, remote: &st
 /// Runs `command`, writes `line` to it and waits for a stdout line of type `wanted`, its end, or
 /// the timeout. An answer ends the call at once: over a PowerShell login shell the end of input
 /// does not always reach the program.
-pub(crate) fn ask(mut command: Command, line: &str, wanted: &str) -> io::Result<Asked> {
+pub(crate) fn ask(command: Command, line: &str, wanted: &str) -> io::Result<Asked> {
+    ask_within(command, line, wanted, ASK_TIMEOUT)
+}
+
+/// `ask` with its own deadline, for calls that take longer than a check, such as a download.
+pub(crate) fn ask_within(mut command: Command, line: &str, wanted: &str, timeout: Duration) -> io::Result<Asked> {
     command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     connections::hide_console(&mut command);
     let mut child = command.spawn()?;
@@ -111,7 +119,7 @@ pub(crate) fn ask(mut command: Command, line: &str, wanted: &str) -> io::Result<
             }
         });
     }
-    let (answer, stdout, has_ended) = read_until(&lines, wanted);
+    let (answer, stdout, has_ended) = read_until(&lines, wanted, timeout);
     if !has_ended {
         // Answered or out of time: it should not run on.
         let _ = child.kill();
@@ -119,13 +127,14 @@ pub(crate) fn ask(mut command: Command, line: &str, wanted: &str) -> io::Result<
     drop(stdin);
     let code = child.wait()?.code();
     let stderr = stderr.and_then(|reader| reader.join().ok()).unwrap_or_default();
-    Ok(Asked { answer, stdout, code, stderr })
+    let is_timed_out = !has_ended && answer.is_none();
+    Ok(Asked { answer, stdout, code, stderr, is_timed_out })
 }
 
 /// The wanted answer (an empty `wanted` reads to the end), the lines before it, and whether
 /// stdout ended on its own.
-fn read_until(lines: &mpsc::Receiver<String>, wanted: &str) -> (Option<Value>, String, bool) {
-    let deadline = Instant::now() + ASK_TIMEOUT;
+fn read_until(lines: &mpsc::Receiver<String>, wanted: &str, timeout: Duration) -> (Option<Value>, String, bool) {
+    let deadline = Instant::now() + timeout;
     let mut stdout = String::new();
     loop {
         let line = match lines.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
@@ -263,7 +272,7 @@ pub fn test_machine(store: State<'_, MachineStore>, entry: MachineEntry) -> Resu
     let entry = machines::validated(entry)?;
     let probe = probe(&entry, true);
     if let Some(os) = probe.os {
-        store.record_os(&entry, os)?;
+        machines::remember_os(&store, &entry, os);
     }
     Ok(probe)
 }
@@ -273,7 +282,7 @@ mod tests {
     use super::*;
 
     fn asked(code: i32, stderr: &str) -> Asked {
-        Asked { answer: None, stdout: String::new(), code: Some(code), stderr: stderr.into() }
+        Asked { answer: None, stdout: String::new(), code: Some(code), stderr: stderr.into(), is_timed_out: false }
     }
 
     #[test]

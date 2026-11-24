@@ -224,6 +224,14 @@ fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> Probe + Sync) ->
         .collect()
 }
 
+/// `record_os` for a check or install that already succeeded: a list that cannot be written must
+/// not turn their result into an error. The next check finds the system again.
+pub fn remember_os(store: &MachineStore, checked: &MachineEntry, os: MachineOs) {
+    if let Err(err) = store.record_os(checked, os) {
+        eprintln!("warning: cannot remember the system of {}: {err}", checked.name);
+    }
+}
+
 /// The machine of that name, or for a name Bull does not list (a tab from before the list) the
 /// name itself as an ssh host, as it always was.
 pub fn resolve(name: &str) -> Result<MachineEntry, MachinesError> {

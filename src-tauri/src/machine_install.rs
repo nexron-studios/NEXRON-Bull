@@ -6,6 +6,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -13,7 +14,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::connections::{self, Connections};
 use crate::local_agentd;
 use crate::machine_os::{MachineOs, Platform};
-use crate::machine_setup::{self, Asked, Probe, ProbeReason, SSH_FAILED, ask, detail_of, ssh, ssh_failure};
+use crate::machine_setup::{self, Asked, Probe, ProbeReason, SSH_FAILED, ask, ask_within, detail_of, ssh, ssh_failure};
 use crate::machines::{self, MachineEntry, MachineStore};
 
 /// Window event with the step an install is at.
@@ -36,6 +37,9 @@ const STAGED_PATH: &str = ".nexron-chat/agentd.new.exe";
 const DOWNLOAD_FAILED: i32 = 3;
 /// pgrep's answer when no process matches.
 const NO_PROCESS: i32 = 1;
+/// A download or copy of agentd (a few MB) over a slow link or relay takes far longer than a
+/// check may.
+const TRANSFER_TIMEOUT: Duration = Duration::from_secs(180);
 
 const RUNNING_LINE: &str = r#"{"op":"running","id":1}"#;
 
@@ -165,7 +169,7 @@ fn running_tabs(entry: &MachineEntry, os: MachineOs) -> Option<usize> {
 /// `fetch` puts the new exe at `STAGED_PATH`; `url` names the download it makes, if it is one.
 fn put_on_windows(entry: &MachineEntry, fetch: Command, url: Option<&String>) -> Result<(), InstallError> {
     run_checked(ssh(entry, true, FOLDER_COMMAND))?;
-    run_checked(fetch).map_err(|err| match (url, err) {
+    run_checked_within(fetch, TRANSFER_TIMEOUT).map_err(|err| match (url, err) {
         (Some(url), InstallError::CopyFailed { detail }) => InstallError::DownloadFailed { url: url.clone(), detail },
         (_, other) => other,
     })?;
@@ -180,7 +184,14 @@ fn put_on_windows(entry: &MachineEntry, fetch: Command, url: Option<&String>) ->
 }
 
 fn put_on_unix(entry: &MachineEntry, url: &str) -> Result<(), InstallError> {
-    let asked = ask(ssh(entry, true, &unix_install_command(url)), "", "").map_err(unreachable)?;
+    let asked = ask_within(ssh(entry, true, &unix_install_command(url)), "", "", TRANSFER_TIMEOUT).map_err(unreachable)?;
+    unix_install_outcome(&asked, url)
+}
+
+fn unix_install_outcome(asked: &Asked, url: &str) -> Result<(), InstallError> {
+    if asked.is_timed_out {
+        return Err(InstallError::DownloadFailed { url: url.to_string(), detail: timed_out_detail() });
+    }
     let detail = detail_of(&asked.stderr).unwrap_or_default();
     match asked.code {
         Some(0) => Ok(()),
@@ -188,6 +199,10 @@ fn put_on_unix(entry: &MachineEntry, url: &str) -> Result<(), InstallError> {
         Some(DOWNLOAD_FAILED) => Err(InstallError::DownloadFailed { url: url.to_string(), detail }),
         _ => Err(InstallError::CopyFailed { detail }),
     }
+}
+
+fn timed_out_detail() -> String {
+    format!("no end after {} s", TRANSFER_TIMEOUT.as_secs())
 }
 
 /// Downloads to a temporary name and renames it over the old agentd, which a running server keeps
@@ -207,7 +222,18 @@ fn scp(entry: &MachineEntry, bundled: &Path) -> Command {
 }
 
 fn run_checked(command: Command) -> Result<(), InstallError> {
-    let asked = ask(command, "", "").map_err(|err| InstallError::CopyFailed { detail: err.to_string() })?;
+    checked(ask(command, "", ""))
+}
+
+fn run_checked_within(command: Command, timeout: Duration) -> Result<(), InstallError> {
+    checked(ask_within(command, "", "", timeout))
+}
+
+fn checked(asked: io::Result<Asked>) -> Result<(), InstallError> {
+    let asked = asked.map_err(|err| InstallError::CopyFailed { detail: err.to_string() })?;
+    if asked.is_timed_out {
+        return Err(InstallError::CopyFailed { detail: timed_out_detail() });
+    }
     if asked.code == Some(0) {
         return Ok(());
     }
@@ -237,7 +263,7 @@ pub fn install_agentd(
         let _ = app.emit(INSTALL_EVENT, InstallProgress { machine: &entry.name, step });
     })?;
     if let Some(os) = probe.os {
-        store.record_os(&entry, os).map_err(|err| InstallError::CopyFailed { detail: err.to_string() })?;
+        machines::remember_os(&store, &entry, os);
     }
     Ok(probe)
 }
@@ -251,7 +277,7 @@ mod tests {
     }
 
     fn processes(code: i32, stdout: &str) -> Asked {
-        Asked { answer: None, stdout: stdout.into(), code: Some(code), stderr: String::new() }
+        Asked { answer: None, stdout: stdout.into(), code: Some(code), stderr: String::new(), is_timed_out: false }
     }
 
     #[test]
@@ -292,6 +318,21 @@ mod tests {
         assert!(is_running_in(MachineOs::Linux, &processes(127, "")));
         assert!(is_running_in(MachineOs::Windows, &processes(0, "agentd.exe  4242 Console\n")));
         assert!(!is_running_in(MachineOs::Windows, &processes(0, "INFORMATION: No tasks are running\n")));
+    }
+
+    #[test]
+    fn a_download_that_runs_out_of_time_is_a_failed_download() {
+        let url = "https://example.org/agentd-x";
+        // Killed at the deadline: Windows reports the kill's exit code 1, not the script's.
+        let killed = Asked { is_timed_out: true, ..processes(1, "") };
+        let failure = unix_install_outcome(&killed, url).unwrap_err();
+        assert!(
+            matches!(&failure, InstallError::DownloadFailed { url: failed, detail } if failed == url && detail == "no end after 180 s"),
+            "{failure:?}"
+        );
+        assert!(matches!(unix_install_outcome(&processes(3, ""), url), Err(InstallError::DownloadFailed { .. })));
+        assert!(matches!(unix_install_outcome(&processes(1, ""), url), Err(InstallError::CopyFailed { .. })));
+        assert!(unix_install_outcome(&processes(0, ""), url).is_ok());
     }
 
     #[test]

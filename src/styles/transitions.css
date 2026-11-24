@@ -378,3 +378,10 @@ html[data-search-morph] [data-search-field] {
     animation: search-flash var(--duration-search-flash) var(--ease-out-soft) !important;
   }
 }
+
+/* Rows of a live panel list (<TransitionGroup move-class>): the newest comes in on top and the
+   others slide down to make room instead of jumping, on transform only. Reduced motion keeps only
+   opacity transitions, so they settle at once there. */
+.panel-row-move {
+  transition: transform var(--duration-spring-smooth) var(--ease-spring-smooth);
+}

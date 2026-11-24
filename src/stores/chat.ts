@@ -42,8 +42,15 @@ import {
 } from '@/utils/chatTab'
 import { apiRetryOf } from '@/utils/apiRetry'
 import { buildContent, type PendingImage } from '@/utils/content'
-import { finishRanksOf, isSameRanks, withSeen, withUnseen } from '@/utils/finishOrder'
+import {
+  finishRanksOf,
+  finishSortedOf,
+  isSameRanks,
+  withSeen,
+  withUnseen
+} from '@/utils/finishOrder'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
+import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
 import { draftWithUnsent, pendingMessageOf, type SentDraft } from '@/utils/pendingPrompts'
@@ -61,6 +68,8 @@ const HISTORY_PAGE = 40
 const RECONNECT_FIRST_MS = 250
 const RECONNECT_MAX_MS = 30_000
 const DENIED_MESSAGE = 'The user denied this tool use.'
+/** How image references read in the app's language, for drafts that come back to the composer. */
+const imageRefFormat = () => imageRefFormatOf(i18n.global.t('images.reference', IMAGE_REF_SLOTS))
 /** What Claude reads when the user turned a call down and said why, as in the terminal. */
 const deniedWithReason = (reason: string) =>
   `The user denied this tool use and said what to do instead: ${reason}`
@@ -153,7 +162,7 @@ export const useChatStore = defineStore(
       if (!back.length) return
       const draft = useDraftStore().draftOf(id)
       const unsent = back.flatMap((prompt) => sentDrafts.get(prompt.uuid) ?? [])
-      Object.assign(draft, draftWithUnsent(draft, unsent))
+      Object.assign(draft, draftWithUnsent(draft, unsent, imageRefFormat()))
       back.forEach((prompt) => sentDrafts.delete(prompt.uuid))
       useShellRunsStore().putBack(
         id,
@@ -234,7 +243,7 @@ export const useChatStore = defineStore(
       const held = useHeldPromptsStore().takeAll(id)
       if (!held.length) return
       const draft = useDraftStore().draftOf(id)
-      Object.assign(draft, draftWithUnsent(draft, held))
+      Object.assign(draft, draftWithUnsent(draft, held, imageRefFormat()))
     }
 
     // Claude finished: what was typed meanwhile goes out now, one right after the other; Claude
@@ -583,7 +592,7 @@ export const useChatStore = defineStore(
           .flatMap((block) => (block.type === 'text' ? [block.text] : []))
           .join('')
         const draft = useDraftStore().draftOf(id)
-        Object.assign(draft, draftWithUnsent(draft, [{ text, images: [] }]))
+        Object.assign(draft, draftWithUnsent(draft, [{ text, images: [] }], imageRefFormat()))
       }
       giveBack(id)
     }
@@ -768,7 +777,11 @@ export const useChatStore = defineStore(
     }
 
     /** The turn that ended at `at` finished while the user looked elsewhere. */
-    const markUnseen = (id: string, at: number) => update(id, (tab) => withUnseen(tab, at))
+    const markUnseen = (id: string, at: number) => {
+      update(id, (tab) => withUnseen(tab, at))
+      // Only when a number appears: a drag afterwards stands until the next chat finishes.
+      if (tabOf(id)?.unseenAt === at) tabs.value = finishSortedOf(tabs.value)
+    }
 
     /** The user looked at the chat: it leaves the finish order. */
     const markSeen = (id: string) => {

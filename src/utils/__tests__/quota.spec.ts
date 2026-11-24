@@ -3,7 +3,7 @@ import {
   accountKeyOf,
   accountToneOf,
   freePercentOf,
-  loginKeyOf,
+  loginQuotasOf,
   mergeQuotas,
   offeredAnswersOf,
   meterLevelOf,
@@ -54,6 +54,38 @@ describe('offeredAnswersOf', () => {
   })
 })
 
+describe('loginQuotasOf', () => {
+  it('should show two profiles on one email as one account that names both', () => {
+    const logins = loginQuotasOf([
+      { machine: null, accounts: [account('default', 'a@x'), account('mackone', 'a@x')] },
+      { machine: 'server', accounts: [account('default', 'a@x'), account('home', 'b@x')] }
+    ])
+    expect(logins.map((login) => [login.machine, login.names, login.members])).toEqual([
+      [
+        null,
+        'default · mackone',
+        [
+          { machine: null, label: 'default' },
+          { machine: null, label: 'mackone' },
+          { machine: 'server', label: 'default' }
+        ]
+      ],
+      ['server', 'home', [{ machine: 'server', label: 'home' }]]
+    ])
+  })
+
+  it('should keep profiles without email apart per machine', () => {
+    const logins = loginQuotasOf([
+      { machine: null, accounts: [account('default', null)] },
+      { machine: 'server', accounts: [account('default', null)] }
+    ])
+    expect(logins.map((login) => [login.machine, login.names])).toEqual([
+      [null, 'default'],
+      ['server', 'default']
+    ])
+  })
+})
+
 describe('mergeQuotas', () => {
   it('should fold profiles and machines logged into one email, this computer first', () => {
     const merged = mergeQuotas([
@@ -72,20 +104,6 @@ describe('mergeQuotas', () => {
       { machine: 'server', accounts: [account('default', 'a@x')] }
     ])
     expect(merged.map((q) => [q.machine, q.label])).toEqual([['server', 'default']])
-  })
-
-  it('should keep two profiles on one email apart when folding by login', () => {
-    const merged = mergeQuotas(
-      [
-        { machine: null, accounts: [account('default', 'a@x'), account('mackone', 'a@x')] },
-        { machine: 'server', accounts: [account('default', 'a@x')] }
-      ],
-      loginKeyOf
-    )
-    expect(merged.map((q) => [q.machine, q.label])).toEqual([
-      [null, 'default'],
-      [null, 'mackone']
-    ])
   })
 
   it('should keep accounts without email apart per machine', () => {
@@ -181,15 +199,23 @@ describe('planLabelOf', () => {
   it('should capitalise the plan name', () => {
     expect([planLabelOf('max'), planLabelOf(null)]).toEqual(['Max', null])
   })
+
+  it('should show a plan Bull does not know by its own name', () => {
+    expect(planLabelOf('team')).toBe('Team')
+  })
 })
 
 describe('planToneOf', () => {
-  it('should give Pro and Max their own tone, whatever the case', () => {
-    expect([planToneOf('Pro'), planToneOf('max')]).toEqual(['pro', 'max'])
+  it('should give Pro, Max and Ultra their own tone, whatever the case', () => {
+    expect([planToneOf('Pro'), planToneOf('max'), planToneOf('Ultra')]).toEqual([
+      'pro',
+      'max',
+      'ultra'
+    ])
   })
 
   it('should keep a plan without its own colour neutral', () => {
-    expect(planToneOf('Free')).toBe('neutral')
+    expect([planToneOf('Free'), planToneOf('neutral')]).toEqual(['neutral', 'neutral'])
   })
 })
 

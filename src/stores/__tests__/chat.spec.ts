@@ -501,3 +501,30 @@ describe('useChatStore: switching the account', () => {
     )
   })
 })
+
+describe('useChatStore: tabs in finish order', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    listeners.length = 0
+  })
+
+  const finishedTab = (id: string, finishedAt: number) => ({
+    ...liveTab(id, null),
+    finishedAt
+  })
+
+  it('should move a chat that finishes unseen to the front, after newer ones keep a drag', () => {
+    const chat = useChatStore()
+    chat.tabs = [finishedTab('a', 1), finishedTab('b', 2), finishedTab('c', 3)]
+
+    chat.markUnseen('b', 2)
+    chat.markUnseen('c', 3)
+    const afterFinishing = chat.tabs.map((tab) => tab.id)
+    chat.reorder(['a', 'c', 'b'])
+
+    expect([afterFinishing, chat.tabs.map((tab) => tab.id)]).toEqual([
+      ['c', 'b', 'a'],
+      ['a', 'c', 'b']
+    ])
+  })
+})

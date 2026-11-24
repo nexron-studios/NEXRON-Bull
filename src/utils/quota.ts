@@ -50,31 +50,24 @@ export const offeredAnswersOf = (
     accounts: accounts.filter((account) => isOffered(machine, account.profile))
   }))
 
-type QuotaKeyOf = (account: AccountQuotaProps, machine: string | null) => string
-
 const profileKeyOf = (account: AccountQuotaProps, machine: string | null): string =>
   `${machine ?? ''}\u0000${account.profile}`
 
 /** Two profiles (or two machines) logged into the same email share one quota. */
-export const emailKeyOf: QuotaKeyOf = (account, machine) =>
+const loginKeyOf = (account: AccountQuotaProps, machine: string | null): string =>
   account.email ?? profileKeyOf(account, machine)
 
-/** Same login under the same profile name on two machines is one row; other profiles stay apart. */
-export const loginKeyOf: QuotaKeyOf = (account, machine) =>
-  account.email ? `${account.email}\u0000${account.label}` : profileKeyOf(account, machine)
-
 /**
- * One entry per key across machines, by default one per Claude account (`emailKeyOf`). The first
- * with numbers wins, this computer first.
+ * One entry per Claude account across machines. Two profiles (or two machines) logged into the
+ * same email share one quota; the first with numbers wins, this computer first.
  */
 export const mergeQuotas = (
-  answers: { machine: string | null; accounts: AccountQuotaProps[] }[],
-  keyOf: QuotaKeyOf = emailKeyOf
+  answers: { machine: string | null; accounts: AccountQuotaProps[] }[]
 ): MachineQuota[] => {
   const byKey = new Map<string, MachineQuota>()
   for (const { machine, accounts } of answers) {
     for (const account of accounts) {
-      const key = keyOf(account, machine)
+      const key = loginKeyOf(account, machine)
       const known = byKey.get(key)
       if (known && (hasNumbers(known) || !hasNumbers(account))) continue
       byKey.set(key, { ...account, machine })
@@ -82,6 +75,39 @@ export const mergeQuotas = (
   }
   return [...byKey.values()]
 }
+
+/** A profile on one machine, as a chat names its account. */
+export interface QuotaMember {
+  machine: string | null
+  label: string
+}
+
+/** One Claude account with every profile logged into it, on any machine. */
+export interface LoginQuota extends MachineQuota {
+  members: QuotaMember[]
+  /** The members' profile names, each once: `default · mackone` */
+  names: string
+}
+
+const NAME_SEPARATOR = ' · '
+
+/**
+ * `mergeQuotas`, plus the profiles each account stands for. Two profiles on one login are one
+ * account with one quota, so they share a line that names both instead of two identical lines.
+ */
+export const loginQuotasOf = (
+  answers: { machine: string | null; accounts: AccountQuotaProps[] }[]
+): LoginQuota[] =>
+  mergeQuotas(answers).map((quota) => {
+    const key = loginKeyOf(quota, quota.machine)
+    const members = answers.flatMap(({ machine, accounts }) =>
+      accounts
+        .filter((account) => loginKeyOf(account, machine) === key)
+        .map((account) => ({ machine, label: account.label }))
+    )
+    const names = [...new Set(members.map((member) => member.label))].join(NAME_SEPARATOR)
+    return { ...quota, members, names }
+  })
 
 /** The quota of the profile a tab runs on; `null` profile is the default `~/.claude`. */
 export const quotaOfProfile = (
@@ -144,14 +170,17 @@ export const problemKeyOf = (problem: QuotaProblem, source?: QuotaSource): strin
 export const planLabelOf = (plan: string | null): string | null =>
   plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : null
 
-/** Pill tones of the plans (`--plan-*` in tokens.css); a plan without its own, like free, is neutral. */
-export const planToneList = ['pro', 'max', 'neutral'] as const
+/**
+ * Pill tones of the plans (`--plan-*` in tokens.css). A plan without its own, like free or one
+ * newer than Bull, is neutral and still shows its name.
+ */
+export const planToneList = ['pro', 'max', 'ultra', 'neutral'] as const
 export type PlanTone = (typeof planToneList)[number]
 
-export const planToneOf = (plan: string): PlanTone => {
-  const tone = plan.toLowerCase()
-  return tone === 'pro' || tone === 'max' ? tone : 'neutral'
-}
+const TIERED_PLANS: readonly PlanTone[] = ['pro', 'max', 'ultra']
+
+export const planToneOf = (plan: string): PlanTone =>
+  TIERED_PLANS.find((tone) => tone === plan.toLowerCase()) ?? 'neutral'
 
 /** Dot colours of the accounts (`--account-*` in tokens.css); more accounts share them in turn. */
 export const accountToneList = ['a', 'b', 'c', 'd'] as const

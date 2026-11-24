@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMarkup } from '@/composables/useMarkup'
 
-// Under the desktop preview while marking (Figma "20b"): what Claude should change, and the way
-// into the composer, in the same dialog as the image. Nothing is sent from here.
-const { isApplying } = defineProps<{ isApplying: boolean }>()
+// Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
+// composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
+// Nothing is sent from here.
+const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
 const emit = defineEmits<{ discard: []; apply: [] }>()
 
 const { t } = useI18n()
@@ -32,8 +33,8 @@ const markup = useMarkup()
       class="max-h-28 min-h-13 resize-none text-small"
     />
     <p id="markup-comment-hint" class="sr-only">{{ t('images.comment_hint') }}</p>
-    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+      <div v-if="isMarking" class="mr-auto flex items-center gap-2">
         <Checkbox
           id="markup-keep-original"
           v-model="markup.isKeepingOriginal.value"

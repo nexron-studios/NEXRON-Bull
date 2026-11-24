@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import 'vue-sonner/style.css'
+import NchCopyHint from '@/components/common/NchCopyHint.vue'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useColorSchemeApply } from '@/composables/useColorScheme'
+import { useCopyOnSelect } from '@/composables/useCopyOnSelect'
+import { useUiZoomApply } from '@/composables/useUiZoom'
 
 useColorSchemeApply()
+useUiZoomApply()
+useCopyOnSelect()
 </script>
 
 <template>
@@ -15,5 +20,6 @@ useColorSchemeApply()
       <RouterView />
     </div>
     <Toaster />
+    <NchCopyHint />
   </TooltipProvider>
 </template>

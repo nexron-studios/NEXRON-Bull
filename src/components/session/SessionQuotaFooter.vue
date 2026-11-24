@@ -21,16 +21,16 @@ import {
   windowOf
 } from '@/utils/quota'
 
-// Bottom of the sidebar (Figma "10 · Fassung 5"): per profile a line with its name, below it the
-// 5 hours and the week side by side, each with its reset underneath. Two profiles on one email
-// keep their own lines (same numbers), so every profile a chat can start on is visible.
+// Bottom of the sidebar (Figma "10 · Fassung 5"): per account a line with its name, below it the
+// 5 hours and the week side by side, each with its reset underneath. Two profiles on one email are
+// one account with one quota: one line naming both ("default · mackone"), not two identical lines.
 // Switching happens per chat, so there is no account switch here.
 
 const { t } = useI18n()
 const format = useUsageFormat()
 const now = useMinuteClock()
 const resetTextOf = useResetText()
-const { offeredProfiles, isPending } = useQuota()
+const { accounts, isPending } = useQuota()
 const chat = useChatStore()
 
 const meterOf = (used: number | null, reset: string | null, label: string, name: string) => ({
@@ -44,15 +44,17 @@ const meterOf = (used: number | null, reset: string | null, label: string, name:
 
 // An account without numbers (rate limited, logged out) keeps its line; the tooltip says why.
 const rows = computed(() =>
-  offeredProfiles.value.map((account) => {
+  accounts.value.map((account) => {
     const fiveHour = windowOf(account, 'five_hour')
     const week = windowOf(account, 'seven_day')
     const at = now.value.getTime()
     return {
       key: `${account.machine ?? ''}:${account.profile}`,
-      label: account.label,
+      label: account.names,
       accountKey: accountKeyOf(account),
-      waiting: waitingTabsOf(chat.tabs, account.machine ?? null, account.label),
+      waiting: account.members.flatMap((member) =>
+        waitingTabsOf(chat.tabs, member.machine, member.label)
+      ),
       details: fiveHour
         ? null
         : account.problem && t(problemKeyOf(account.problem, account.source)),
@@ -61,13 +63,13 @@ const rows = computed(() =>
           fiveHour?.used_percent ?? null,
           fiveHour && resetTextOf(fiveHour.resets_at, at),
           t('sidebar.quota_five_hour'),
-          t('sidebar.quota_line', { account: account.label })
+          t('sidebar.quota_line', { account: account.names })
         ),
         meterOf(
           week?.used_percent ?? null,
           week && resetTextOf(week.resets_at, at),
           t('sidebar.quota_week'),
-          t('sidebar.quota_week_line', { account: account.label })
+          t('sidebar.quota_week_line', { account: account.names })
         )
       ]
     }

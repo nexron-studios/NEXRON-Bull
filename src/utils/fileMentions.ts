@@ -1,3 +1,5 @@
+import type { Highlight } from '@/utils/textPieces'
+
 /** A file or folder the `@` menu offers. */
 export interface MentionEntry {
   path: string
@@ -27,25 +29,13 @@ export const mentionEntriesOf = (files: readonly string[]): MentionEntry[] => {
 /** How a picked entry stands in the text: Claude Code reads `@path`, a space ends it. */
 export const mentionTextOf = (path: string): string => `@${path} `
 
-export interface TextPiece {
-  text: string
-  isMention: boolean
-}
-
 const MENTION = /(^|\s)(@\S+)/g
 
-/** The text cut into plain runs and the `@path` mentions among `known`, for the highlight. */
-export const mentionPiecesOf = (text: string, known: ReadonlySet<string>): TextPiece[] => {
-  const pieces: TextPiece[] = []
-  let from = 0
-  for (const match of text.matchAll(MENTION)) {
+/** Where the `@path` mentions among `known` stand, for the highlight. */
+export const mentionRangesOf = (text: string, known: ReadonlySet<string>): Highlight[] =>
+  [...text.matchAll(MENTION)].flatMap((match) => {
     const mention = match[2] ?? ''
-    if (!known.has(mention.slice(1))) continue
+    if (!known.has(mention.slice(1))) return []
     const start = (match.index ?? 0) + (match[1] ?? '').length
-    if (start > from) pieces.push({ text: text.slice(from, start), isMention: false })
-    pieces.push({ text: mention, isMention: true })
-    from = start + mention.length
-  }
-  if (from < text.length) pieces.push({ text: text.slice(from), isMention: false })
-  return pieces
-}
+    return [{ start, end: start + mention.length, kind: 'mention' as const }]
+  })

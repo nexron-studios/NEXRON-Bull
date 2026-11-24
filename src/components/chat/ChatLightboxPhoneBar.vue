@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight, Copy, PenLine } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatMarkupPhoneComment from '@/components/chat/ChatMarkupPhoneComment.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Button } from '@/components/ui/button'
 
-// Under the image on the black phone viewer (Figma "M19"): paging at the thumb, then copy and mark.
-const { index, total, canMark } = defineProps<{ index: number; total: number; canMark: boolean }>()
-const emit = defineEmits<{ step: [delta: number]; copy: []; mark: [] }>()
+// Under the image on the black phone viewer (Figma "M19"): paging at the thumb, the comment for
+// Claude, then copy and mark. Marking swaps this for the sheet with the drawing tools.
+const { index, total, canMark, isApplying } = defineProps<{
+  index: number
+  total: number
+  canMark: boolean
+  isApplying: boolean
+}>()
+const emit = defineEmits<{ step: [delta: number]; copy: []; mark: []; apply: [] }>()
 
 const { t } = useI18n()
 
@@ -37,6 +44,9 @@ const ON_STAGE =
         <ChevronRight class="size-5" aria-hidden="true" />
       </NchIconButton>
     </nav>
+    <div v-if="canMark" class="px-4 pb-2">
+      <ChatMarkupPhoneComment :is-applying @apply="emit('apply')" />
+    </div>
     <div class="flex gap-2 px-4 pb-3">
       <Button
         variant="outline"

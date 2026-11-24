@@ -6,7 +6,8 @@ import { tabDirectionOf, type TabDirection } from '@/utils/motion'
 
 // The desktop chat area: one pane per tab. Switching dissolves the old chat into the new one,
 // which drifts in from the side of the selected tab (Figma "16 Motion"). Under reduced motion the
-// global block strips the drift and leaves the dissolve.
+// drift is off (transitions.css) and the dissolve stays. `isolate` keeps the leaving pane's
+// z-index inside this area.
 const { tab, tabs } = defineProps<{ tab: ChatTabState; tabs: ChatTabState[] }>()
 
 const direction = ref<TabDirection>('next')
@@ -26,7 +27,7 @@ watch(
 </script>
 
 <template>
-  <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-route-content>
+  <div class="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden" data-route-content>
     <Transition :name="`tab-${direction}`">
       <ChatPane :key="tab.id" :tab />
     </Transition>

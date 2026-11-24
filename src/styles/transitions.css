@@ -189,6 +189,14 @@ html:is([data-route-transition='next'], [data-route-transition='prev']) {
 .tab-prev-leave-to {
   transform: translateX(8px);
 }
+@media (prefers-reduced-motion: reduce) {
+  .tab-next-leave-to,
+  .tab-prev-leave-to,
+  .tab-next-enter-from,
+  .tab-prev-enter-from {
+    transform: none;
+  }
+}
 
 /* A chat item that arrives while Claude works rises 8 px on the smooth spring and fades in on an
    ease curve, while the list glides after it (useChatFollow). No fill mode, so nothing keeps a

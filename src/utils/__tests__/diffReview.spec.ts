@@ -1,50 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import type { FileDiffProps } from '@/types/agentd.type'
 import {
-  chatHunksOf,
   displayPathOf,
   foldRows,
   lineSpanOf,
-  linesOf,
   messageOfComments,
   reviewOf,
-  type ReviewComment,
-  type ReviewLine
+  type ReviewComment
 } from '../diffReview'
+import { hunksOfPatch, rowsOfHunks, type DiffLineRow } from '../diffRows'
 
 const context = (count: number, from = 1) =>
   Array.from({ length: count }, (_, at) => ` line ${from + at}`)
 
-const onlyLines = (hunks: Parameters<typeof linesOf>[0]) =>
-  linesOf(hunks).filter((row): row is ReviewLine => row.kind === 'line')
-
-describe('linesOf', () => {
-  it('should number removed lines in the old file and added ones in the new file', () => {
-    const lines = onlyLines([{ old_start: 10, new_start: 12, lines: [' a', '-b', '+c', ' d'] }])
-
-    expect(lines.map(({ sign, old, new: next }) => [sign, old, next])).toEqual([
-      [' ', 10, 12],
-      ['-', 11, null],
-      ['+', null, 13],
-      [' ', 12, 14]
-    ])
-  })
-
-  it('should put a gap between two hunks and count indices across them', () => {
-    const rows = linesOf([
-      { old_start: 1, new_start: 1, lines: ['-a'] },
-      { old_start: 9, new_start: 8, lines: ['+b'] }
-    ])
-
-    expect(rows.map((row) => (row.kind === 'line' ? row.index : 'gap'))).toEqual([0, 'gap', 1])
-  })
-
-  it('should leave lines without numbers when the chat recorded none', () => {
-    const [line] = onlyLines([{ old_start: null, new_start: null, lines: ['+x'] }])
-
-    expect([line?.old, line?.new]).toEqual([null, null])
-  })
-})
+const rowsOf = (patch: Parameters<typeof hunksOfPatch>[0]) => rowsOfHunks(hunksOfPatch(patch))
+const onlyLines = (patch: Parameters<typeof hunksOfPatch>[0]) =>
+  rowsOf(patch).filter((row): row is DiffLineRow => row.kind === 'line')
 
 describe('foldRows', () => {
   const hunk = {
@@ -54,7 +25,7 @@ describe('foldRows', () => {
   }
 
   it('should fold long unchanged stretches but keep three lines next to the change', () => {
-    const rows = foldRows(linesOf([hunk]), new Set())
+    const rows = foldRows(rowsOf([hunk]), new Set())
 
     expect(
       rows.map((row) => (row.kind === 'fold' ? `fold ${row.lines.length}` : row.kind))
@@ -69,7 +40,7 @@ describe('foldRows', () => {
   })
 
   it('should show a fold that was opened', () => {
-    const rows = foldRows(linesOf([hunk]), new Set([0]))
+    const rows = foldRows(rowsOf([hunk]), new Set([0]))
 
     expect(rows.filter((row) => row.kind === 'fold')).toHaveLength(1)
     expect(rows[0]).toMatchObject({ kind: 'line', index: 0 })
@@ -78,7 +49,7 @@ describe('foldRows', () => {
   it('should not fold a stretch that is barely longer than its context', () => {
     const short = { old_start: 1, new_start: 1, lines: [...context(5), '+x'] }
 
-    expect(foldRows(linesOf([short]), new Set()).some((row) => row.kind === 'fold')).toBe(false)
+    expect(foldRows(rowsOf([short]), new Set()).some((row) => row.kind === 'fold')).toBe(false)
   })
 })
 
@@ -138,22 +109,8 @@ describe('displayPathOf', () => {
   })
 })
 
-describe('chatHunksOf', () => {
-  it('should number a Write without patch as the whole new file', () => {
-    expect(chatHunksOf('Write', [{ sign: '+', text: 'a' }], undefined)).toEqual([
-      { old_start: 0, new_start: 1, lines: ['+a'] }
-    ])
-  })
-
-  it('should prefer the patch Claude Code sent', () => {
-    const patch = [{ old_start: 3, new_start: 3, lines: ['-a', '+b'] }]
-
-    expect(chatHunksOf('Edit', [{ sign: '-', text: 'a' }], patch)).toBe(patch)
-  })
-})
-
 describe('reviewOf', () => {
-  const chat = [{ old_start: 1, new_start: 1, lines: ['+chat'] }]
+  const chat = [{ old_start: 1, new_start: 1, lines: [{ sign: '+' as const, text: 'chat' }] }]
   const diff = (status: FileDiffProps['status'], isBinary = false): { diff: FileDiffProps } => ({
     diff: {
       status,
@@ -167,7 +124,7 @@ describe('reviewOf', () => {
     expect(reviewOf(diff('modified'), false, chat)).toMatchObject({
       source: 'git',
       status: 'modified',
-      hunks: diff('modified').diff.hunks
+      hunks: [{ old_start: 1, new_start: 1, lines: [{ sign: '+', text: 'git' }] }]
     })
   })
 

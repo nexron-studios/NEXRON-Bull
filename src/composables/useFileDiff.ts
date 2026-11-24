@@ -1,7 +1,8 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { agentdService, type Machine } from '@/api/services/agentd.service'
-import { reviewOf, type ReviewHunk } from '@/utils/diffReview'
+import { reviewOf } from '@/utils/diffReview'
+import type { DiffHunk } from '@/utils/diffRows'
 
 /** A diff of a big file runs git twice on the machine; an offline one never answers. */
 const FILE_DIFF_TIMEOUT_MS = 15 * 1000
@@ -14,7 +15,7 @@ const FILE_DIFF_TIMEOUT_MS = 15 * 1000
  */
 export const useFileDiff = (
   target: MaybeRefOrGetter<{ machine: Machine; cwd: string; path: string } | null>,
-  chatHunks: MaybeRefOrGetter<ReviewHunk[]>
+  chatHunks: MaybeRefOrGetter<DiffHunk[]>
 ) => {
   const query = useQuery({
     queryKey: computed(() => {

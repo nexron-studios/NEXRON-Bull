@@ -1,7 +1,7 @@
 import type { ChatMessage } from '@/types/agentd.type'
-import { chatHunksOf, type ReviewHunk } from '@/utils/diffReview'
+import { countsOf, hunksOfChange, withoutNumbers, type DiffHunk } from '@/utils/diffRows'
 import { timeOf } from '@/utils/tabInsights'
-import { diffCountsOf, diffOf, inputRowsOf, patchRowsOf } from '@/utils/toolInput'
+import { diffOf } from '@/utils/toolInput'
 import { resultsByToolId } from '@/utils/toolPairs'
 
 /** A file Claude changed in this chat, with every change to it summed up. */
@@ -17,8 +17,11 @@ export interface ChangedFile {
   removed: number
   /** The card a click shows: the latest change's own, or the Agent call of the subagent that made it */
   cardId: string
-  /** Every change as recorded in the chat, oldest first: the review's fallback outside git */
-  hunks: ReviewHunk[]
+  /**
+   * Every change as recorded in the chat, oldest first: the review's fallback outside git. Only the
+   * latest keeps its line numbers; a later change may have moved the lines of an earlier one.
+   */
+  hunks: DiffHunk[]
 }
 
 /** Messages that change files, and where a click on such a change goes. */
@@ -32,7 +35,8 @@ const PATH_SEPARATOR = /[\\/]/
 /** A drive letter or a UNC share: a Windows path, where case does not count. */
 const WINDOWS_PATH = /^([a-z]:\/|\/\/)/i
 
-const keyOf = (path: string): string => {
+/** One file however its path was spelled; Windows paths ignore case, POSIX ones do not. */
+export const fileKeyOf = (path: string): string => {
   const slashed = path.replaceAll('\\', '/')
   return WINDOWS_PATH.test(slashed) ? slashed.toLowerCase() : slashed
 }
@@ -49,7 +53,7 @@ interface FileChange {
   removed: number
   cardId: string
   at: number | null
-  hunks: ReviewHunk[]
+  hunks: DiffHunk[]
 }
 
 /** The Edit, MultiEdit and Write calls of one source that went through, with their counts. */
@@ -62,16 +66,8 @@ const changesOf = ({ messages, cardId }: ChangeSource): FileChange[] => {
       const lines = diffOf(block.name, block.input)
       const result = results.get(block.id)
       if (typeof path !== 'string' || !lines || !result || result.is_error) return []
-      const rows = result.patch?.length ? patchRowsOf(result.patch) : inputRowsOf(lines)
-      return [
-        {
-          path,
-          ...diffCountsOf(rows),
-          cardId: cardId ?? block.id,
-          at: timeOf(message),
-          hunks: chatHunksOf(block.name, lines, result.patch)
-        }
-      ]
+      const hunks = hunksOfChange(block.name, lines, result.patch)
+      return [{ path, ...countsOf(hunks), cardId: cardId ?? block.id, at: timeOf(message), hunks }]
     })
   )
 }
@@ -86,7 +82,7 @@ export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
   const changes = sources.flatMap(changesOf).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
   const files = new Map<string, ChangedFile>()
   for (const change of changes) {
-    const key = keyOf(change.path)
+    const key = fileKeyOf(change.path)
     const before = files.get(key)
     // Deleted and set again, so the map's order follows the latest change.
     files.delete(key)
@@ -97,7 +93,7 @@ export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
       added: (before?.added ?? 0) + change.added,
       removed: (before?.removed ?? 0) + change.removed,
       cardId: change.cardId,
-      hunks: [...(before?.hunks ?? []), ...change.hunks]
+      hunks: [...withoutNumbers(before?.hunks ?? []), ...change.hunks]
     })
   }
   return [...files.values()].reverse()

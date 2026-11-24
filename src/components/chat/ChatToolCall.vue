@@ -4,7 +4,8 @@ import { Check, ChevronRight, CircleDashed, LoaderCircle, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import ChatDiffView from '@/components/chat/ChatDiffView.vue'
 import ChatShellOutput from '@/components/chat/ChatShellOutput.vue'
-import { diffCountsOf, diffOf, inputRowsOf, patchRowsOf } from '@/utils/toolInput'
+import { countsOf, hunksOfChange, rowsOfHunks } from '@/utils/diffRows'
+import { diffOf } from '@/utils/toolInput'
 import { TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
 import { toolInfoOf } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
@@ -45,11 +46,11 @@ const info = computed(() => toolInfoOf(name))
 const summary = computed(() => summarizeToolInput(input))
 const inputDiff = computed(() => diffOf(name, input))
 // Line numbers and context only come with Claude Code's patch; the input alone has neither.
-const diffRows = computed(() => {
-  if (result?.patch?.length) return patchRowsOf(result.patch)
-  return inputDiff.value ? inputRowsOf(inputDiff.value) : null
-})
-const counts = computed(() => (diffRows.value ? diffCountsOf(diffRows.value) : null))
+const diffHunks = computed(() =>
+  inputDiff.value ? hunksOfChange(name, inputDiff.value, result?.patch) : null
+)
+const diffRows = computed(() => (diffHunks.value ? rowsOfHunks(diffHunks.value) : null))
+const counts = computed(() => (diffHunks.value ? countsOf(diffHunks.value) : null))
 const isShell = computed(() => isShellTool(name))
 const isOpen = ref(false)
 const handleToggle = (event: Event) => {

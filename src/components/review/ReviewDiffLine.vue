@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { ReviewLine } from '@/utils/diffReview'
+import { DIFF_MARK_CLASS, DIFF_ROW_CLASS, type DiffLineRow } from '@/utils/diffRows'
 
 // One line of the review: old and new number, mark, text. The number column is the handle for
 // choosing lines with the pointer (click, Shift+click, drag); the text stays selectable to copy.
@@ -12,18 +12,12 @@ const {
   isCursor = false
 } = defineProps<{
   id: string
-  line: ReviewLine
+  line: DiffLineRow
   isChosen?: boolean
   isCursor?: boolean
 }>()
 const emit = defineEmits<{ press: [event: PointerEvent]; sweep: [event: PointerEvent] }>()
 
-const ROW_CLASS = {
-  '+': 'bg-good/10 text-foreground',
-  '-': 'bg-critical/10 text-foreground',
-  ' ': 'text-subtle'
-} as const
-const MARK_CLASS = { '+': 'text-good', '-': 'text-critical', ' ': '' } as const
 /** Read before the line, since the tint alone says nothing to a screen reader */
 const SIGN_KEY = {
   '+': 'review.line_added',
@@ -39,7 +33,7 @@ const { t } = useI18n()
     :id
     class="flex"
     :class="[
-      ROW_CLASS[line.sign],
+      DIFF_ROW_CLASS[line.sign],
       { 'bg-brand/15!': isChosen, 'ring-1 ring-ring ring-inset': isCursor }
     ]"
   >
@@ -55,7 +49,7 @@ const { t } = useI18n()
     <span class="sr-only">{{ t(SIGN_KEY[line.sign], { line: line.new ?? line.old ?? '' }) }}</span>
     <span
       class="w-4 shrink-0 text-center select-none"
-      :class="MARK_CLASS[line.sign]"
+      :class="DIFF_MARK_CLASS[line.sign]"
       aria-hidden="true"
       >{{ line.sign.trim() }}</span
     >

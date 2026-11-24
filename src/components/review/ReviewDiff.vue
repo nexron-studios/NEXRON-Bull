@@ -10,19 +10,17 @@ import { useLineSelection } from '@/composables/useLineSelection'
 import {
   foldRows,
   isCommentable,
-  linesOf,
   type LineRange,
   type ReviewComment,
-  type ReviewHunk,
-  type ReviewLine,
   type ReviewRow
 } from '@/utils/diffReview'
+import { rowsOfHunks, type DiffHunk, type DiffLineRow } from '@/utils/diffRows'
 
 // A file's diff to comment on (Figma "30" look, both line numbers): choose one line or a range
 // with the pointer on the numbers or with the arrow keys, Enter writes a comment below it. Long
 // unchanged stretches are folded until opened.
 const { hunks, comments, label, referenceOf } = defineProps<{
-  hunks: ReviewHunk[]
+  hunks: DiffHunk[]
   /** This file's pending comments, shown below the lines they name */
   comments: ReviewComment[]
   label: string
@@ -39,7 +37,7 @@ const baseId = useId()
 const hintId = useId()
 const { t } = useI18n()
 
-const allLines = computed(() => linesOf(hunks))
+const allLines = computed(() => rowsOfHunks(hunks))
 const rows = computed(() => foldRows(allLines.value, expanded.value))
 const choosable = computed(() =>
   rows.value.flatMap((row) => (row.kind === 'line' && isCommentable(row) ? [row.index] : []))
@@ -56,7 +54,7 @@ const announcement = computed(() => {
   const reference = rangeReference.value
   if (!reference) return ''
   const line = allLines.value.find(
-    (row): row is ReviewLine => row.kind === 'line' && row.index === selection.cursor.value
+    (row): row is DiffLineRow => row.kind === 'line' && row.index === selection.cursor.value
   )
   return t('review.chosen', { reference, text: line?.text.trim() ?? '' })
 })

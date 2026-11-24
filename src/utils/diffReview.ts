@@ -1,88 +1,28 @@
-import type { FileDiffProps, FileStatus, PatchHunk } from '@/types/agentd.type'
-import type { DiffLine } from '@/utils/toolInput'
+import type { FileDiffProps, FileStatus } from '@/types/agentd.type'
+import { hunksOfPatch, type DiffHunk, type DiffLineRow, type DiffRow } from '@/utils/diffRows'
 
 /**
  * The diff review (right panel › changed files): a file's hunks as numbered lines, long unchanged
  * stretches folded, and line comments formatted for the composer.
  */
 
-/** Like Claude Code's `structuredPatch`; a start is `null` when the chat recorded no line numbers. */
-export interface ReviewHunk {
-  old_start: number | null
-  new_start: number | null
-  lines: string[]
-}
-
-export interface ReviewLine {
-  kind: 'line'
-  /** Position among all lines of the file's diff; selections and comments count in it */
-  index: number
-  sign: '+' | '-' | ' '
-  old: number | null
-  new: number | null
-  text: string
-}
-
 export type ReviewRow =
-  | ReviewLine
+  | DiffRow
   /** Unchanged lines hidden until opened; `id` is the index of the first one */
-  | { kind: 'fold'; id: number; lines: ReviewLine[] }
-  /** Lines between two hunks that never came */
-  | { kind: 'gap' }
+  | { kind: 'fold'; id: number; lines: DiffLineRow[] }
 
 /** Unchanged lines kept visible on each side of a change, as git does */
 export const CONTEXT_LINES = 3
 /** A shorter stretch is cheaper to show than to open */
 export const MIN_FOLDED_LINES = 4
 
-const SIGNS: Record<string, ReviewLine['sign']> = { '+': '+', '-': '-', ' ': ' ' }
-
-/** The changes a chat recorded for one Edit, MultiEdit or Write call. */
-export const chatHunksOf = (
-  tool: string,
-  lines: DiffLine[],
-  patch: PatchHunk[] | undefined
-): ReviewHunk[] => {
-  if (patch?.length) return patch
-  if (!lines.length) return []
-  const text = lines.map(({ sign, text }) => `${sign}${text}`)
-  // A Write without patch created the file: its lines are the whole file.
-  if (tool === 'Write') return [{ old_start: 0, new_start: 1, lines: text }]
-  return [{ old_start: null, new_start: null, lines: text }]
-}
-
-/** Every line of the hunks, numbered in the old and the new file, a gap between two hunks. */
-export const linesOf = (hunks: ReviewHunk[]): (ReviewLine | { kind: 'gap' })[] => {
-  let index = 0
-  return hunks.flatMap((hunk, at) => {
-    let old = hunk.old_start
-    let next = hunk.new_start
-    const lines = hunk.lines.map((raw): ReviewLine => {
-      const sign = SIGNS[raw.charAt(0)] ?? ' '
-      const line: ReviewLine = {
-        kind: 'line',
-        index: index++,
-        sign,
-        old: sign === '+' || old === null ? null : old++,
-        new: sign === '-' || next === null ? null : next++,
-        text: raw.slice(1)
-      }
-      return line
-    })
-    return at ? [{ kind: 'gap' as const }, ...lines] : lines
-  })
-}
-
 /**
  * Folds every unchanged stretch that is longer than its context: `CONTEXT_LINES` stay next to a
  * change, the rest is one fold unless `expanded` holds its id.
  */
-export const foldRows = (
-  rows: (ReviewLine | { kind: 'gap' })[],
-  expanded: ReadonlySet<number>
-): ReviewRow[] => {
+export const foldRows = (rows: DiffRow[], expanded: ReadonlySet<number>): ReviewRow[] => {
   const out: ReviewRow[] = []
-  let run: ReviewLine[] = []
+  let run: DiffLineRow[] = []
   const flush = (isChangeAfter: boolean) => {
     const keepBefore = out.at(-1)?.kind === 'line' ? CONTEXT_LINES : 0
     const keepAfter = isChangeAfter ? CONTEXT_LINES : 0
@@ -108,13 +48,8 @@ export const foldRows = (
   return out
 }
 
-export const countsOf = (lines: ReviewLine[]) => ({
-  added: lines.filter((line) => line.sign === '+').length,
-  removed: lines.filter((line) => line.sign === '-').length
-})
-
 /** A line can only be named in a comment when the file has a number for it. */
-export const isCommentable = (line: ReviewLine) => line.new !== null || line.old !== null
+export const isCommentable = (line: DiffLineRow) => line.new !== null || line.old !== null
 
 export interface LineRange {
   start: number
@@ -137,7 +72,7 @@ const spanOf = (numbers: number[]) => {
  * (`isOld`), since those lines are no longer there. `null` when none has a number.
  */
 export const lineSpanOf = (
-  lines: ReviewLine[],
+  lines: DiffLineRow[],
   range: LineRange
 ): { span: string; isOld: boolean } | null => {
   const chosen = lines.filter((line) => line.index >= range.start && line.index <= range.end)
@@ -196,7 +131,7 @@ export interface Review {
   source: ReviewSource
   /** Git's view of the file; `null` when the lines come from the chat */
   status: FileStatus | null
-  hunks: ReviewHunk[]
+  hunks: DiffHunk[]
   isTruncated: boolean
 }
 
@@ -204,7 +139,7 @@ export interface Review {
 export const reviewOf = (
   answer: { diff: FileDiffProps | null } | undefined,
   isError: boolean,
-  chatHunks: ReviewHunk[]
+  chatHunks: DiffHunk[]
 ): Review => {
   const fromChat = (source: ReviewSource): Review => ({
     source,
@@ -230,7 +165,7 @@ export const reviewOf = (
       return {
         source: 'git',
         status: diff.status,
-        hunks: diff.hunks,
+        hunks: hunksOfPatch(diff.hunks),
         isTruncated: diff.is_truncated
       }
     default: {

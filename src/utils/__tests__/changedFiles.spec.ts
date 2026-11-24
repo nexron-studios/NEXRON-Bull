@@ -45,8 +45,23 @@ describe('changedFilesOf', () => {
     ])
 
     expect(file?.hunks).toEqual([
-      { old_start: null, new_start: null, lines: ['-a', '+b', '+c'] },
-      { old_start: 7, new_start: 7, lines: ['-a', '+b'] }
+      {
+        old_start: null,
+        new_start: null,
+        lines: [
+          { sign: '-', text: 'a' },
+          { sign: '+', text: 'b' },
+          { sign: '+', text: 'c' }
+        ]
+      },
+      {
+        old_start: 7,
+        new_start: 7,
+        lines: [
+          { sign: '-', text: 'a' },
+          { sign: '+', text: 'b' }
+        ]
+      }
     ])
   })
 

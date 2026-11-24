@@ -10,14 +10,8 @@ import { useFileDiff } from '@/composables/useFileDiff'
 import { useDiffReviewStore } from '@/stores/diffReview'
 import type { ChangedFile } from '@/utils/changedFiles'
 import type { ChatTabState } from '@/utils/chatTab'
-import {
-  countsOf,
-  displayPathOf,
-  lineSpanOf,
-  linesOf,
-  type LineRange,
-  type ReviewLine
-} from '@/utils/diffReview'
+import { displayPathOf, lineSpanOf, type LineRange } from '@/utils/diffReview'
+import { countsOf, rowsOfHunks, type DiffLineRow } from '@/utils/diffRows'
 
 // One file in the review: its header and its lines to comment on. Mounted per file, so every
 // opening asks the machine again for the file as it is now.
@@ -35,9 +29,9 @@ const { review } = useFileDiff(
 
 const path = computed(() => displayPathOf(file.path, tab.cwd))
 const lines = computed(() =>
-  linesOf(review.value.hunks).filter((row): row is ReviewLine => row.kind === 'line')
+  rowsOfHunks(review.value.hunks).filter((row): row is DiffLineRow => row.kind === 'line')
 )
-const counts = computed(() => countsOf(lines.value))
+const counts = computed(() => countsOf(review.value.hunks))
 const comments = computed(() =>
   store.commentsOf(tab.id).filter((comment) => comment.fileKey === file.key)
 )

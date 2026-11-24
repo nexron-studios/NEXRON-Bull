@@ -9,7 +9,7 @@ import {
   type TerminalSpawnPayload
 } from '@/api/services/terminal.service'
 import i18n from '@/i18n'
-import { copyText } from '@/lib/clipboard'
+import { copyText, writeClipboard } from '@/lib/clipboard'
 import { handleError } from '@/lib/error'
 import { createReadyGate } from '@/lib/terminalReady'
 import { answerDeviceAttributes, hasScreenText } from '@/lib/terminalScreen'
@@ -19,7 +19,9 @@ import {
   REVEAL_AFTER_REMOTE_MS,
   type TerminalStatus
 } from '@/lib/terminalStatus'
+import { useCopyHintStore } from '@/stores/copyHint'
 import type { TerminalRequest } from '@/stores/terminalRequests'
+import { copyableTextOf, isMainMouseRelease } from '@/utils/copySelection'
 import { isNewTerminalShortcut, isTerminalDrawerShortcut } from '@/utils/shortcuts'
 import { COLOR_SCHEME_ATTRIBUTE } from '@/lib/colorSchemeDom'
 import {
@@ -304,6 +306,15 @@ export const createTerminalSession = (options: TerminalSessionOptions): Terminal
   answerDeviceAttributes(term, send)
   term.onResize(({ cols, rows }) => {
     if (ptyId !== null) void terminalService.resize(ptyId, cols, rows).catch(handleError)
+  })
+  // A mouse selection is copied on release, like everywhere else in the app (useCopyOnSelect).
+  host.addEventListener('pointerup', (event) => {
+    if (!isMainMouseRelease(event) || !term.hasSelection()) return
+    const text = copyableTextOf(term.getSelection())
+    if (!text) return
+    void writeClipboard(text).then(
+      (isCopied) => isCopied && useCopyHintStore().show(event.clientX, event.clientY)
+    )
   })
   // Ctrl+C copies a selection (and only then interrupts), Ctrl+V pastes through the browser.
   term.attachCustomKeyEventHandler((event) => {

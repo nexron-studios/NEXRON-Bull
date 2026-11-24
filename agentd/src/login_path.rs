@@ -17,13 +17,13 @@ const SYSTEM_INSTALL_DIRS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
 
 #[cfg(unix)]
 mod ask {
-    use std::io::Read;
+    use std::io::BufReader;
     use std::process::{Command, Stdio};
     use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
 
-    use super::MARKER;
+    use super::{MARKER, read_answer};
 
     const FALLBACK_SHELL: &str = "/bin/sh";
     /// A profile that waits or hangs must not keep the server from starting: `connect` gives it
@@ -58,13 +58,11 @@ mod ask {
             .stderr(Stdio::null())
             .spawn()
             .ok()?;
-        let mut stdout = child.stdout.take()?;
+        let stdout = child.stdout.take()?;
         let (sender, received) = mpsc::channel();
         thread::spawn(move || {
-            let mut text = String::new();
-            // What arrived before a read error is still worth looking at.
-            let _ = stdout.read_to_string(&mut text);
-            let _ = sender.send(text);
+            // Nobody waits any more once the answer came too late.
+            let _ = sender.send(read_answer(BufReader::new(stdout)));
         });
         let answer = received.recv_timeout(ASK_TIMEOUT).ok();
         // Done or stuck, it has nothing more to say; an already ended shell refuses the kill.
@@ -82,6 +80,23 @@ pub fn adopt() {
     let current = std::env::var("PATH").unwrap_or_default();
     let home = crate::paths::home().map(|home| home.to_string_lossy().into_owned());
     std::env::set_var("PATH", merged(output.as_deref().and_then(path_in), &current, home.as_deref()));
+}
+
+/// What the shell printed up to the closing marker. Not up to the end: a process a profile starts
+/// in the background may keep stdout open long after the shell answered.
+fn read_answer(reader: impl std::io::BufRead) -> String {
+    let mut text = String::new();
+    let mut markers = 0;
+    // What arrived before a read error is still worth looking at.
+    for line in reader.lines().map_while(Result::ok) {
+        markers += usize::from(line == MARKER);
+        text.push_str(&line);
+        text.push('\n');
+        if markers == 2 {
+            break;
+        }
+    }
+    text
 }
 
 /// The line between the two markers.
@@ -120,6 +135,12 @@ mod tests {
         assert_eq!(path_in(&noisy), Some("/opt/homebrew/bin:/usr/bin"));
         assert_eq!(path_in(&format!("{MARKER}\n/usr/bin\n")), None);
         assert_eq!(path_in("no markers\n"), None);
+    }
+
+    #[test]
+    fn stops_reading_at_the_closing_marker() {
+        let answer = format!("hi\n{MARKER}\n/usr/bin\n{MARKER}\nfrom a background job\n");
+        assert_eq!(read_answer(answer.as_bytes()), format!("hi\n{MARKER}\n/usr/bin\n{MARKER}\n"));
     }
 
     #[test]

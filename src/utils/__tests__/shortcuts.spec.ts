@@ -6,7 +6,8 @@ import {
   isNewTerminalShortcut,
   isSidebarShortcut,
   isTerminalDrawerShortcut,
-  moveStepOf
+  moveStepOf,
+  uiZoomActionOf
 } from '../shortcuts'
 
 const key = (fields: Partial<KeyboardEvent> & { key: string }) => ({
@@ -120,5 +121,25 @@ describe('terminal shortcuts', () => {
       isTerminalDrawerShortcut(backquote({ ctrlKey: true, repeat: true })),
       isTerminalDrawerShortcut(backquote({ ctrlKey: true, code: 'Digit1' }))
     ]).toEqual([false, false, false, false])
+  })
+})
+
+describe('uiZoomActionOf', () => {
+  it('should read Ctrl/Cmd with +, =, −, _ and 0', () => {
+    expect([
+      uiZoomActionOf(key({ key: '+', ctrlKey: true })),
+      uiZoomActionOf(key({ key: '=', metaKey: true })),
+      uiZoomActionOf(key({ key: '-', ctrlKey: true })),
+      uiZoomActionOf(key({ key: '_', metaKey: true, shiftKey: true })),
+      uiZoomActionOf(key({ key: '0', metaKey: true }))
+    ]).toEqual(['in', 'in', 'out', 'out', 'reset'])
+  })
+
+  it('should leave plain keys, AltGr and other chords alone', () => {
+    expect([
+      uiZoomActionOf(key({ key: '+' })),
+      uiZoomActionOf(key({ key: '0', ctrlKey: true, altKey: true })),
+      uiZoomActionOf(key({ key: '9', ctrlKey: true }))
+    ]).toEqual([null, null, null])
   })
 })

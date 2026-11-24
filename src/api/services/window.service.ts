@@ -1,4 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
+import type { UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+
+export interface LogicalWindowSize {
+  width: number
+  height: number
+}
 
 export const windowService = {
   /**
@@ -7,5 +15,29 @@ export const windowService = {
    */
   setIcon: (png: Uint8Array): Promise<void> =>
     // A plain array: a typed array would cross as an object with numbered keys.
-    invoke('set_window_icon', { png: Array.from(png) })
+    invoke('set_window_icon', { png: Array.from(png) }),
+
+  /** Zooms the whole page like a browser does: px, rem and media queries alike. */
+  setZoom: (zoom: number): Promise<void> => getCurrentWebview().setZoom(zoom),
+
+  /**
+   * The window's inner size in logical pixels, the system's scaling taken out. Unlike
+   * `innerWidth` it does not change with the page zoom.
+   */
+  logicalSize: async (): Promise<LogicalWindowSize> => {
+    const window = getCurrentWindow()
+    const [size, scale] = await Promise.all([window.innerSize(), window.scaleFactor()])
+    const { width, height } = size.toLogical(scale)
+    return { width, height }
+  },
+
+  /** Calls `listener` when the window is resized or moves to a screen with other scaling. */
+  onSizeChange: async (listener: () => void): Promise<UnlistenFn> => {
+    const window = getCurrentWindow()
+    const unlisten = await Promise.all([
+      window.onResized(listener),
+      window.onScaleChanged(listener)
+    ])
+    return () => unlisten.forEach((stop) => stop())
+  }
 }

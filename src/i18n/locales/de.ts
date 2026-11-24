@@ -1039,9 +1039,14 @@ export default {
     },
     appearance: {
       description:
-        'Hell oder dunkel, und die Farbe, in der Bull akzentuiert. Die Bulle und die Claude-Marke färben sich sofort mit, auch im Browser-Tab und in der Taskleiste. Startmenü und Desktop-Verknüpfung behalten das blaue Icon.',
+        'Hell oder dunkel, wie groß Bull alles zeigt, und die Farbe, in der Bull akzentuiert. Die Bulle und die Claude-Marke färben sich sofort mit, auch im Browser-Tab und in der Taskleiste. Startmenü und Desktop-Verknüpfung behalten das blaue Icon.',
       theme: 'Design',
       themes: { auto: 'System', light: 'Hell', dark: 'Dunkel' },
+      zoom: 'Größe',
+      zoom_auto: 'Automatisch',
+      zoom_note_auto:
+        'Passt sich der Fenstergröße an, gerade {zoom}. {larger} und {smaller} ändern die Größe, {reset} stellt Automatisch wieder her.',
+      zoom_note: '{larger} und {smaller} ändern die Größe, {reset} stellt Automatisch wieder her.',
       scheme: 'Farbschema',
       presets: {
         'night-desk': 'Night Desk',

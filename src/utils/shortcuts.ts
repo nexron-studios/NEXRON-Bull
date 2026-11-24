@@ -85,3 +85,24 @@ export const historyStepOf = (event: KeyInfo): 'undo' | 'redo' | null => {
   if (key === 'y' && !event.shiftKey) return 'redo'
   return null
 }
+
+/** Ctrl/Cmd with +, − and 0 make Bull larger, smaller and back to automatic, as in a browser. */
+export const UI_ZOOM_IN_CHORD: KeyChord = { modifier: 'command', keys: ['+'] }
+export const UI_ZOOM_OUT_CHORD: KeyChord = { modifier: 'command', keys: ['-'] }
+export const UI_ZOOM_RESET_CHORD: KeyChord = { modifier: 'command', keys: ['0'] }
+
+export const uiZoomActionList = ['in', 'out', 'reset'] as const
+export type UiZoomAction = (typeof uiZoomActionList)[number]
+
+// `=` is + without Shift on US keyboards; `_` is − with Shift. The number pad sends + and −.
+const UI_ZOOM_KEYS: Record<string, UiZoomAction> = {
+  '+': 'in',
+  '=': 'in',
+  '-': 'out',
+  _: 'out',
+  '0': 'reset'
+}
+
+/** Which way Ctrl/Cmd +, − or 0 changes the UI size; `null` for any other key. */
+export const uiZoomActionOf = (event: KeyInfo): UiZoomAction | null =>
+  hasCommandKey(event) ? (UI_ZOOM_KEYS[event.key] ?? null) : null

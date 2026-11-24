@@ -48,7 +48,7 @@ watch(
 
 <template>
   <form
-    class="flex h-10 shrink-0 items-center gap-1 border-b border-border pr-2 pl-3"
+    class="flex h-10 shrink-0 items-center gap-1 border-b border-border pr-2 pl-3 pointer-coarse:h-14"
     :aria-label="t('preview.toolbar')"
     @submit.prevent="submit"
   >
@@ -63,7 +63,7 @@ watch(
       :placeholder="t('preview.url_placeholder')"
       :aria-invalid="isInvalid || undefined"
       :aria-describedby="isInvalid ? errorId : undefined"
-      class="h-7 flex-1 font-mono md:text-meta"
+      class="h-7 flex-1 font-mono md:text-meta pointer-coarse:h-11"
       :class="{ 'motion-shake': isInvalid }"
       @input="isInvalid = false"
     />
@@ -73,6 +73,7 @@ watch(
     <NchIconButton
       :label="t('preview.reload')"
       size="icon-sm"
+      class="pointer-coarse:size-11"
       :disabled="!canOpen"
       @click="emit('reload')"
     >
@@ -81,6 +82,7 @@ watch(
     <NchIconButton
       :label="t('preview.open_external')"
       size="icon-sm"
+      class="pointer-coarse:size-11"
       :disabled="!canOpen"
       @click="emit('openExternal')"
     >
@@ -90,6 +92,7 @@ watch(
       v-if="canClose"
       :label="t('preview.close')"
       size="icon-sm"
+      class="pointer-coarse:size-11"
       @click="emit('close')"
     >
       <X class="size-4" aria-hidden="true" />

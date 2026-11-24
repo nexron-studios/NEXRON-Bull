@@ -8,6 +8,7 @@ import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
 import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import SessionChatName from '@/components/session/SessionChatName.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
+import SessionRowBadges from '@/components/session/SessionRowBadges.vue'
 import SessionRowLive from '@/components/session/SessionRowLive.vue'
 import { useActivityLabel } from '@/composables/useActivityLabel'
 import { useAgeFormat } from '@/composables/useAgeFormat'
@@ -84,9 +85,10 @@ const activity = computed(() => {
       >
         <!-- Seen: icon and title at 72 % like Figma. The muted parts keep their colour, at 72 %
              they would drop to 3:1. -->
+        <!-- Narrow: level with the title line, like the age, not centred on two or three lines. -->
         <span
           class="flex size-4 shrink-0 items-center justify-center"
-          :class="{ 'opacity-72': isSeen }"
+          :class="[isWide ? 'self-center' : 'mt-0.5 self-start', { 'opacity-72': isSeen }]"
         >
           <ChatStatusIcon
             :status="row.status"
@@ -154,11 +156,16 @@ const activity = computed(() => {
                 <span :key="row.account" class="inline-block">{{ row.account }}</span>
               </Transition>
             </span>
+            <!-- Right end of the meta line, under the age: a finished row with an agent still
+                 running gets no third line that holds nothing but the badge. -->
+            <SessionRowBadges :key="row.tab.id" :tab-id="row.tab.id" class="ml-auto" />
           </span>
           <span v-if="isEmpty" class="truncate text-meta text-muted-foreground">
             {{ t('sidebar.empty_chat') }}
           </span>
-          <SessionRowLive v-else :key="row.tab.id" :tab-id="row.tab.id" :activity />
+          <span v-else-if="activity" class="truncate font-mono text-meta text-muted-foreground">
+            {{ activity }}
+          </span>
         </span>
         <span
           v-if="age"

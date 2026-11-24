@@ -14,7 +14,7 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
   `npm run build`, `npm run format:check`.
 - `npm run app:build`: on macOS it then unregisters every Bull copy outside an Applications
   folder from LaunchServices (`scripts/forget-stale-bundles.mjs`). The DMG step leaves its
-  temporary mount registered, and macOS took the notification icon from that vanished copy.
+  temporary mount registered, so macOS could resolve Bull's bundle id to a vanished copy.
 
 ## Layout
 

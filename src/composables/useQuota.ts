@@ -4,7 +4,7 @@ import { agentdService, type Machine } from '@/api/services/agentd.service'
 import { usePerMachineQueries } from '@/composables/usePerMachineQueries'
 import type { AccountQuotaProps } from '@/types/agentd.type'
 import { useAccountSettingsStore } from '@/stores/accountSettings'
-import { mergeQuotas, offeredAnswersOf, type MachineQuota } from '@/utils/quota'
+import { loginQuotasOf, offeredAnswersOf, type MachineQuota } from '@/utils/quota'
 
 /** agentd asks Anthropic at most this often per account (`agentd/src/quota.rs`). */
 export const QUOTA_POLL_MS = 90 * 1000
@@ -24,8 +24,8 @@ const fetchQuota = async (machine: Machine, force: boolean): Promise<AccountQuot
 /**
  * Plan quota of every Claude account on this computer and the SSH machines, polled every 90 s
  * while a view uses it. `accounts` has one entry per account Bull offers (shared logins folded,
- * removed ones left out), `profiles` one per profile and machine, for a tab's own account
- * (`quotaOfProfile`). With `isEnabled` false it only reads what another view fetched.
+ * removed ones left out, each with the profiles it stands for), `profiles` one per profile and
+ * machine, for a tab's own account (`quotaOfProfile`). With `isEnabled` false it only reads what another view fetched.
  */
 export const useQuota = (isEnabled: MaybeRefOrGetter<boolean> = true) => {
   const queryClient = useQueryClient()
@@ -45,9 +45,8 @@ export const useQuota = (isEnabled: MaybeRefOrGetter<boolean> = true) => {
   const profiles = computed<MachineQuota[]>(() =>
     byMachine.value.flatMap(({ machine, accounts }) => accounts.map((a) => ({ ...a, machine })))
   )
-  const accounts = computed(() =>
-    mergeQuotas(offeredAnswersOf(byMachine.value, accountSettings.isOfferedOn))
-  )
+  const offered = computed(() => offeredAnswersOf(byMachine.value, accountSettings.isOfferedOn))
+  const accounts = computed(() => loginQuotasOf(offered.value))
 
   /**
    * Asks Anthropic again now (agentd allows it every 15 s), on every machine. A machine that does
@@ -64,5 +63,13 @@ export const useQuota = (isEnabled: MaybeRefOrGetter<boolean> = true) => {
       )
     )
 
-  return { accounts, profiles, isPending, isError, isFetching, failedMachines, refresh }
+  return {
+    accounts,
+    profiles,
+    isPending,
+    isError,
+    isFetching,
+    failedMachines,
+    refresh
+  }
 }

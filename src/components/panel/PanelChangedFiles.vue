@@ -4,7 +4,7 @@ import { FileDiff } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchSectionEmpty from '@/components/common/NchSectionEmpty.vue'
 import PanelChangedFileRow from '@/components/panel/PanelChangedFileRow.vue'
-import PanelFoldButton from '@/components/panel/PanelFoldButton.vue'
+import PanelFoldedList from '@/components/panel/PanelFoldedList.vue'
 import PanelGhostList from '@/components/panel/PanelGhostList.vue'
 import PanelSection from '@/components/panel/PanelSection.vue'
 import { useChatReveal } from '@/composables/useChatReveal'
@@ -64,8 +64,21 @@ const toggle = () => {
         <span class="text-critical" aria-hidden="true">−{{ totals.removed }}</span>
       </span>
     </template>
-    <div v-if="changedFiles.length" class="flex flex-col gap-1">
-      <ul :id="listId" class="flex flex-col" :aria-label="t('panel.changed_files_list')">
+    <PanelFoldedList
+      v-if="changedFiles.length"
+      :is-expanded="fold.isExpanded.value"
+      :is-foldable="fold.isFoldable.value"
+      :hidden-count="fold.hiddenCount.value"
+      :controls="listId"
+      @toggle="toggle"
+    >
+      <TransitionGroup
+        :id="listId"
+        tag="ul"
+        move-class="panel-row-move"
+        class="flex flex-col"
+        :aria-label="t('panel.changed_files_list')"
+      >
         <PanelChangedFileRow
           v-for="file in fold.shown.value"
           :key="file.key"
@@ -74,15 +87,8 @@ const toggle = () => {
           :style="{ '--stagger-index': staggerIndexOf(file.key) ?? undefined }"
           @open="show(file.cardId)"
         />
-      </ul>
-      <PanelFoldButton
-        v-if="fold.isFoldable.value"
-        :is-expanded="fold.isExpanded.value"
-        :hidden-count="fold.hiddenCount.value"
-        :controls="listId"
-        @toggle="toggle"
-      />
-    </div>
+      </TransitionGroup>
+    </PanelFoldedList>
     <template v-else>
       <PanelGhostList />
       <NchSectionEmpty

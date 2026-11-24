@@ -17,7 +17,7 @@ const { t } = useI18n()
 <template>
   <button
     type="button"
-    class="motion-press flex w-fit items-center gap-0.5 rounded-sm text-meta text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+    class="motion-press flex w-fit items-center gap-0.5 rounded-sm text-meta text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
     :aria-expanded="isExpanded"
     :aria-controls="controls"
     @click="emit('toggle')"

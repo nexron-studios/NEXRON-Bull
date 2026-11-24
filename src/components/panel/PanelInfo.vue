@@ -28,9 +28,12 @@ const { hasMoreAbove } = useScrollEdges(scroller)
 
 <template>
   <div class="relative flex min-h-0 min-w-0 flex-1 flex-col border-l border-border">
+    <!-- `relative`: the rows' `sr-only` labels are absolutely positioned. Without a positioned
+         scroller they belong to the box around it, escape its scrolling and, with long subagent
+         lists, made the whole window scroll away from its header (24.11.2026). -->
     <aside
       ref="scroller"
-      class="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+      class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
       :aria-label="t('panel.label')"
     >
       <div

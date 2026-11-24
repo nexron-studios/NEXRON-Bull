@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { ArrowDown } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatMarkupPhoneComment from '@/components/chat/ChatMarkupPhoneComment.vue'
 import ChatMarkupTools from '@/components/chat/ChatMarkupTools.vue'
-import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { useMarkup } from '@/composables/useMarkup'
 
 // Bottom of the phone markup screen (Figma "M20"): tools, then colours and sizes, then the comment
@@ -23,26 +21,7 @@ const markup = useMarkup()
     <div class="flex flex-wrap items-center justify-between gap-y-3">
       <ChatMarkupTools is-large />
     </div>
-    <form class="relative" @submit.prevent="emit('apply')">
-      <label for="markup-comment-phone" class="sr-only">{{ t('images.comment_title') }}</label>
-      <Input
-        id="markup-comment-phone"
-        v-model="markup.comment.value"
-        :placeholder="t('images.comment_placeholder')"
-        aria-describedby="markup-apply-hint"
-        enterkeyhint="done"
-        class="h-13 rounded-2xl border-stage-foreground/15 bg-stage-foreground/5 pr-14 pl-4 text-base text-stage-foreground placeholder:text-stage-foreground/50"
-      />
-      <NchIconButton
-        type="submit"
-        :label="t('images.apply')"
-        :disabled="!markup.isDirty.value"
-        :aria-busy="isApplying"
-        class="absolute top-1/2 right-1.5 size-10 -translate-y-1/2 rounded-full bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover hover:text-brand-foreground"
-      >
-        <ArrowDown class="size-5" aria-hidden="true" />
-      </NchIconButton>
-    </form>
+    <ChatMarkupPhoneComment :is-applying described-by="markup-apply-hint" @apply="emit('apply')" />
     <div class="flex items-center gap-2 px-1">
       <Checkbox
         id="markup-keep-original-phone"

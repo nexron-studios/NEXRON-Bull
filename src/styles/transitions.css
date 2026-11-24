@@ -156,33 +156,28 @@ html:is([data-route-transition='next'], [data-route-transition='prev']) {
   }
 }
 
-/* Tab switch (ChatPaneSwitch, Figma "16 Motion"): the old chat leaves in 120 ms, 8 px against the
-   direction; the new one comes from the side of the selected tab. Both overlap briefly, so the
-   leaving pane lies over the space instead of pushing the new one down. */
-.tab-next-leave-active,
-.tab-prev-leave-active {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition:
-    opacity 120ms var(--ease-out-soft),
-    transform 120ms var(--ease-out-soft);
+/* Tab switch (ChatPaneSwitch, Figma "16 Motion"): what both tabs share (session bar, backdrop,
+   composer) stands still, the old messages are gone at once, and only the new ones fade in, 8 px
+   from the side of the selected tab. A dissolve of the whole pane read as lag: the old chat stayed
+   on screen after the click. Plays once per mount, since every tab gets its own pane. Under
+   reduced motion the messages appear at once. */
+.tab-in-next [data-tab-content] {
+  animation: tab-in-next var(--duration-fade) var(--ease-out-soft);
 }
-.tab-next-enter-active,
-.tab-prev-enter-active {
-  transition:
-    opacity 150ms var(--ease-out-soft) 50ms,
-    transform 150ms var(--ease-out-soft) 50ms;
+.tab-in-prev [data-tab-content] {
+  animation: tab-in-prev var(--duration-fade) var(--ease-out-soft);
 }
-.tab-next-leave-to,
-.tab-prev-enter-from {
-  opacity: 0;
-  transform: translateX(-8px);
+@keyframes tab-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
 }
-.tab-next-enter-from,
-.tab-prev-leave-to {
-  opacity: 0;
-  transform: translateX(8px);
+@keyframes tab-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
 }
 
 /* A chat item that arrives while Claude works rises 8 px on the smooth spring and fades in on an
@@ -271,14 +266,12 @@ html[data-sidebar-snap] [data-snap-chat] {
 }
 /* The session bar's buttons sit at its right edge, the open search field below them: pinned top
    left, the new ones would wait outside the growing chat until it reached them. They travel there
-   on the same spring instead. The pane leaving a tab switch keeps its copies unnamed, since a name
-   may exist only once, and while the magnifier morphs the field belongs to that morph. */
-html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap])
-  [data-snap-bar-tools]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *) {
+   on the same spring instead. While the magnifier morphs, the field belongs to that morph. */
+html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]) [data-snap-bar-tools] {
   view-transition-name: session-bar-tools;
 }
 html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]):not([data-search-morph])
-  [data-search-field]:not(:is(.tab-next-leave-active, .tab-prev-leave-active) *) {
+  [data-search-field] {
   view-transition-name: chat-search-field;
 }
 ::view-transition-group(session-bar-tools),
@@ -415,4 +408,11 @@ html[data-search-morph] [data-search-field] {
   .search-flash::after {
     animation: search-flash var(--duration-search-flash) var(--ease-out-soft) !important;
   }
+}
+
+/* Rows of a live panel list (<TransitionGroup move-class>): the newest comes in on top and the
+   others slide down to make room instead of jumping, on transform only. Reduced motion keeps only
+   opacity transitions, so they settle at once there. */
+.panel-row-move {
+  transition: transform var(--duration-spring-smooth) var(--ease-spring-smooth);
 }

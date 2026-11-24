@@ -10,8 +10,6 @@ export interface MarkupResult {
    * an attachment, which then stays as it is.
    */
   images: PendingImage[]
-  /** Name of the previewed image, for the comment line */
-  name: string
   /** Trimmed; empty when nothing was written */
   comment: string
 }

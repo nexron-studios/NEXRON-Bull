@@ -47,6 +47,22 @@ const liveTab = (id: string, machine: string | null) => ({
 
 const emit = (event: AgentdEvent) => listeners.forEach((listener) => listener(event))
 
+describe('useChatStore: background work', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    listeners.length = 0
+  })
+
+  it('should forget the background tasks of a Claude that exited', () => {
+    const chat = useChatStore()
+    chat.tabs = [{ ...liveTab('t1', null), backgroundTasks: { ids: ['a7f'], at: 1 } }]
+
+    emit({ type: 'exited', tab: 't1', code: 0 })
+
+    expect(chat.tabs[0].backgroundTasks?.ids).toEqual([])
+  })
+})
+
 describe('useChatStore: lost connection to this computer', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -418,6 +434,35 @@ describe('useChatStore: switching the account', () => {
     expect([chat.tabs[0].status, chat.tabs[0].statusBeforeMove]).toEqual(['starting', 'idle'])
   })
 
+  describe('the turn shown in the panel', () => {
+    const prompt = {
+      uuid: 'p1',
+      role: 'user' as const,
+      at: null,
+      blocks: [{ type: 'text' as const, text: 'Build it' }]
+    }
+
+    it('should keep a turn the move interrupted for the other account', async () => {
+      ask.mockResolvedValue({ type: 'moved', id: 1, session_id: 's1' })
+      const chat = useChatStore()
+      chat.tabs = [{ ...stoppedTab(false), status: 'working' as const, messages: [prompt] }]
+
+      await chat.switchAccount('t1', gmail)
+
+      expect(chat.tabs[0].cutTurn).toEqual({ promptUuid: 'p1', promptsAfter: 0 })
+    })
+
+    it('should not hold a finished turn: the next prompt is something new', async () => {
+      ask.mockResolvedValue({ type: 'moved', id: 1, session_id: 's1' })
+      const chat = useChatStore()
+      chat.tabs = [{ ...stoppedTab(false), status: 'idle' as const, messages: [prompt] }]
+
+      await chat.switchAccount('t1', gmail)
+
+      expect(chat.tabs[0].cutTurn).toBe(null)
+    })
+  })
+
   it('should ignore a second switch while the first one runs', async () => {
     const chat = useChatStore()
     chat.tabs = [{ ...stoppedTab(false), statusBeforeMove: 'idle' as const }]
@@ -454,5 +499,32 @@ describe('useChatStore: switching the account', () => {
       },
       null
     )
+  })
+})
+
+describe('useChatStore: tabs in finish order', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    listeners.length = 0
+  })
+
+  const finishedTab = (id: string, finishedAt: number) => ({
+    ...liveTab(id, null),
+    finishedAt
+  })
+
+  it('should move a chat that finishes unseen to the front, after newer ones keep a drag', () => {
+    const chat = useChatStore()
+    chat.tabs = [finishedTab('a', 1), finishedTab('b', 2), finishedTab('c', 3)]
+
+    chat.markUnseen('b', 2)
+    chat.markUnseen('c', 3)
+    const afterFinishing = chat.tabs.map((tab) => tab.id)
+    chat.reorder(['a', 'c', 'b'])
+
+    expect([afterFinishing, chat.tabs.map((tab) => tab.id)]).toEqual([
+      ['c', 'b', 'a'],
+      ['a', 'c', 'b']
+    ])
   })
 })

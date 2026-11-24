@@ -44,8 +44,10 @@ import { useIsNarrow, useIsPhone } from '@/composables/useViewport'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { useChatStore } from '@/stores/chat'
 import { usePreviewStore } from '@/stores/preview'
+import { useSessionActionsStore } from '@/stores/sessionActions'
 import { foregroundShellOf } from '@/utils/activity'
 import { useTerminalStore } from '@/stores/terminals'
+import { targetOfTab } from '@/utils/sessionActions'
 import {
   INFO_PANEL_CHORD,
   isNewSessionShortcut,
@@ -138,10 +140,12 @@ const handleOpened = () => {
   if (!isNarrow.value && layout.value === 'full') showPanel()
   if (!isChatRoute.value) void router.push({ name: 'chat' })
 }
-// On a phone no open chat means the list; closing a chat goes back there, not to another tab.
-const closeOnPhone = (id: string) => {
-  chat.close(id)
-  activeId.value = null
+// The tab's close button always asks before the chat is removed; on a phone it then goes back to
+// the list.
+const sessionActions = useSessionActionsStore()
+const removeTab = (id: string) => {
+  const tab = chat.tabs.find((open) => open.id === id)
+  if (tab) sessionActions.requestRemove(targetOfTab(tab))
 }
 // Also when that tab was already the shown one behind another page.
 const showTerminal = (id: string) => {
@@ -259,7 +263,7 @@ watch(
           :tab="activeTab"
           class="absolute inset-0 bg-background"
           @back="activeId = null"
-          @close="closeOnPhone(activeTab.id)"
+          @close="removeTab(activeTab.id)"
         />
       </Transition>
       <Transition
@@ -334,7 +338,7 @@ watch(
           :here
           @select="openChat"
           @select-terminal="showTerminal"
-          @close="chat.close"
+          @close="removeTab"
           @new="openNew"
           @reorder="chat.reorder"
           @move="chat.moveTab"

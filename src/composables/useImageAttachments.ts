@@ -30,6 +30,16 @@ const REJECT_KEYS: Record<RejectReason, string> = {
 }
 
 /**
+ * Told when attachments were removed, moved or replaced (not when added), so text that refers to
+ * them by position can follow. `successors` maps a replaced image to the one in its place.
+ */
+type RearrangeHandler = (
+  before: PendingImage[],
+  after: PendingImage[],
+  successors: Record<string, string>
+) => void
+
+/**
  * Images waiting to go out with the next message, from paste, drop or file picker. The state can
  * live outside the component, so the attachments and the reads still running outlast it (the
  * composer keeps both per tab).
@@ -37,7 +47,8 @@ const REJECT_KEYS: Record<RejectReason, string> = {
 export const useImageAttachments = (
   images: Ref<PendingImage[]> = ref([]),
   // Reads still running hold their slots, so two overlapping drops cannot overshoot the limit.
-  readingCount: Ref<number> = ref(0)
+  readingCount: Ref<number> = ref(0),
+  onRearrange: RearrangeHandler = () => {}
 ) => {
   const { t, locale } = useI18n()
 
@@ -61,46 +72,56 @@ export const useImageAttachments = (
     }
   }
 
-  const addFiles = async (files: Iterable<File>) => {
+  const rearrange = (next: PendingImage[], successors: Record<string, string> = {}) => {
+    const before = images.value
+    images.value = next
+    onRearrange(before, next, successors)
+  }
+
+  /** Reads the files and attaches what fits; gives back the images that arrived. */
+  const addFiles = async (files: Iterable<File>): Promise<PendingImage[]> => {
     const { accepted, rejected } = sortIncoming(
       [...files],
       MAX_IMAGES_PER_MESSAGE - images.value.length - readingCount.value
     )
     reportRejected(rejected)
-    if (!accepted.length) return
+    if (!accepted.length) return []
 
     readingCount.value += accepted.length
     const results = await Promise.allSettled(accepted.map(({ file }) => readAsDataUrl(file)))
     readingCount.value -= accepted.length
 
     const { done, failed } = splitSettled(accepted, results)
-    images.value = [
-      ...images.value,
-      ...done.map(({ item: { file, mediaType }, value: src }) => ({
-        id: crypto.randomUUID(),
-        name: nameOf(file.name),
-        mediaType,
-        data: src.slice(src.indexOf(',') + 1),
-        src,
-        bytes: file.size
-      }))
-    ]
-    if (!failed.length) return
-    console.warn('attachments.read_failed', { count: failed.length })
-    toast.error(
-      t('chat.image_read_failed', { names: namesOf(failed.map(({ file }) => file.name)) })
-    )
+    const added = done.map(({ item: { file, mediaType }, value: src }) => ({
+      id: crypto.randomUUID(),
+      name: nameOf(file.name),
+      mediaType,
+      data: src.slice(src.indexOf(',') + 1),
+      src,
+      bytes: file.size
+    }))
+    images.value = [...images.value, ...added]
+    if (failed.length) {
+      console.warn('attachments.read_failed', { count: failed.length })
+      toast.error(
+        t('chat.image_read_failed', { names: namesOf(failed.map(({ file }) => file.name)) })
+      )
+    }
+    return added
   }
 
   const remove = (id: string) => {
-    images.value = images.value.filter((image) => image.id !== id)
+    rearrange(images.value.filter((image) => image.id !== id))
   }
 
   /** One place earlier or later; Claude receives the images in this order. */
   const move = (id: string, step: -1 | 1) => {
     const from = images.value.findIndex((image) => image.id === id)
-    images.value = moveItem(images.value, from, from + step)
+    rearrange(moveItem(images.value, from, from + step))
   }
+
+  /** A new order from dragging the chips. */
+  const reorder = (next: PendingImage[]) => rearrange(next)
 
   const clear = () => {
     images.value = []
@@ -117,9 +138,24 @@ export const useImageAttachments = (
       toast.error(t('images.marked_limit', { max: MAX_IMAGES_PER_MESSAGE }))
       return false
     }
-    images.value = placeMarked(images.value, sourceId, incoming)
+    // What referred to the source now means the marked copy, also when the original stays.
+    const [marked] = incoming
+    rearrange(
+      placeMarked(images.value, sourceId, incoming),
+      sourceId && marked ? { [sourceId]: marked.id } : {}
+    )
     return true
   }
 
-  return { images, readingCount, isReading, addFiles, remove, move, clear, placeMarkedImages }
+  return {
+    images,
+    readingCount,
+    isReading,
+    addFiles,
+    remove,
+    move,
+    reorder,
+    clear,
+    placeMarkedImages
+  }
 }

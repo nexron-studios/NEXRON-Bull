@@ -1,7 +1,11 @@
 import type { ChatMessage } from '@/types/agentd.type'
-import { turnMessagesOf, type ChatTabState } from '@/utils/chatTab'
+import {
+  isOpeningPrompt,
+  openingPromptsAfter,
+  turnMessagesOf,
+  type ChatTabState
+} from '@/utils/chatTab'
 import { askReasonOf, type NotifyReason } from '@/utils/notifications'
-import { isPromptEcho } from '@/utils/pendingPrompts'
 import {
   AGENT_TOOL_NAMES,
   timeOf,
@@ -81,6 +85,8 @@ export interface BackgroundShell {
 
 /** What the turn derivations read of a tab. */
 type TurnSource = Pick<ChatTabState, 'messages' | 'turn' | 'status' | 'pending'>
+/** What the per-prompt panel lists read: the turn, and the one a limit or move cut off. */
+type PromptTurnSource = TurnSource & Pick<ChatTabState, 'cutTurn'>
 
 const toolCallsOf = (messages: ChatMessage[]) =>
   messages.flatMap((message) =>
@@ -107,9 +113,7 @@ export const shownTurnOf = (
 ): { messages: ChatMessage[]; startedAt: number | null } => {
   if (tab.turn) return { messages: turnMessagesOf(tab), startedAt: tab.turn.startedAt }
   if (isStartingTurn(tab)) return { messages: [], startedAt: null }
-  const start = tab.messages.findLastIndex(
-    (message) => isPromptEcho(message) && !message.is_mid_turn
-  )
+  const start = tab.messages.findLastIndex(isOpeningPrompt)
   const prompt = tab.messages[start]
   return {
     messages: tab.messages.slice(start + 1),
@@ -123,9 +127,25 @@ export const shownTurnOf = (
  * while Claude replies to a report nobody typed.
  */
 export const promptTurnOf = (
-  tab: TurnSource
+  tab: PromptTurnSource
 ): { messages: ChatMessage[]; startedAt: number | null } =>
-  shownTurnOf(tab.turn?.isAgentReply ? { ...tab, turn: null } : tab)
+  continuedTurnOf(tab) ?? shownTurnOf(tab.turn?.isAgentReply ? { ...tab, turn: null } : tab)
+
+/**
+ * The turn a limit or an account move cut off, while the one prompt after the cut continues it:
+ * from its prompt to now, the continuation included. `null` without a cut, or once a further
+ * prompt started something new.
+ */
+const continuedTurnOf = (
+  tab: PromptTurnSource
+): { messages: ChatMessage[]; startedAt: number | null } | null => {
+  const cut = tab.cutTurn
+  if (!cut) return null
+  const start = tab.messages.findIndex((message) => message.uuid === cut.promptUuid)
+  const prompt = tab.messages[start]
+  if (!prompt || openingPromptsAfter(tab, start) > cut.promptsAfter + 1) return null
+  return { messages: tab.messages.slice(start + 1), startedAt: timeOf(prompt) }
+}
 
 /**
  * The tool calls of a turn, without the task tools (they feed the steps list, not a tool card).

@@ -107,6 +107,32 @@ const delta = (text: string) => ({
 })
 
 describe('applyEvent', () => {
+  it('should take the title Haiku gave the session', () => {
+    const running = { ...tab(), sessionId: 's1', title: 'mach mal die tabs' }
+
+    const next = applyEvent(running, {
+      type: 'title',
+      tab: 't1',
+      session_id: 's1',
+      title: 'Tab-Wechsel'
+    })
+
+    expect(next.title).toBe('Tab-Wechsel')
+  })
+
+  it('should keep its title when the named session was replaced by /clear', () => {
+    const cleared = { ...tab(), sessionId: 's2', title: '' }
+
+    const next = applyEvent(cleared, {
+      type: 'title',
+      tab: 't1',
+      session_id: 's1',
+      title: 'Tab-Wechsel'
+    })
+
+    expect(next.title).toBe('')
+  })
+
   it('should become idle with the session id once Claude started', () => {
     const next = applyEvent(tab(), {
       type: 'started',

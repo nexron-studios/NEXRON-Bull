@@ -32,6 +32,7 @@ use crate::profile_setup;
 use crate::removal;
 use crate::rewind;
 use crate::subagents;
+use crate::titles::TitleStore;
 use crate::transfer;
 use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
 
@@ -121,6 +122,11 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) moving: Mutex<HashSet<String>>,
     /// The waiting messages of a moving tab, from its old Claude's exit until the new one starts.
     pub(crate) carried: Mutex<HashMap<String, Vec<Queued>>>,
+    /// Chat titles by session id, see `title_flow`.
+    pub(crate) titles: TitleStore,
+    /// The newest title call of each tab.
+    title_calls: Mutex<HashMap<String, u64>>,
+    pub(crate) next_title_call: AtomicU64,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -137,6 +143,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
             policy: Mutex::new(policy),
             moving: Mutex::new(HashSet::new()),
             carried: Mutex::new(HashMap::new()),
+            titles: TitleStore::load(home().as_deref()),
+            title_calls: Mutex::new(HashMap::new()),
+            next_title_call: AtomicU64::new(1),
         });
         daemon.start_limit_clock();
         daemon
@@ -172,6 +181,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
 
     fn handle(self: &Arc<Self>, Envelope { id, request }: Envelope) {
         let tab = tab_of(&request);
+        if let Request::Send { tab, content } = &request {
+            self.retitle(tab, content);
+        }
         let outcome = match request {
             Request::Hello => {
                 self.emit(&Event::Hello { id, version: env!("CARGO_PKG_VERSION"), os: std::env::consts::OS });
@@ -204,7 +216,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 home.map(|home| self.emit(&Event::Profiles { id, profiles: catalog::profiles(&home) }))
             }
             Request::Recent { limit } => home().ok_or(DaemonError::NoHome).map(|home| {
-                let sessions = catalog::recent_sessions(&catalog::profiles(&home), limit);
+                let mut sessions = catalog::recent_sessions(&catalog::profiles(&home), limit);
+                for session in &mut sessions {
+                    if let Some(title) = self.titles.get(&session.session_id) {
+                        session.title = title;
+                    }
+                }
                 self.emit(&Event::Recent { id, sessions });
             }),
             Request::MoveSession { from, to, session_id, is_fresh } => self.move_session(id, from, to, session_id, is_fresh),
@@ -314,10 +331,11 @@ impl<W: Write + Send + 'static> Daemon<W> {
             });
         if let Some((session_id, working, asks, profile, limit, commands)) = running {
             let (profile, account) = Self::account_of(profile);
-            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id, working, profile, account });
+            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id: session_id.clone(), working, profile, account });
             if let Some(commands) = commands {
                 self.emit(&Event::Commands { tab: params.tab.clone(), commands });
             }
+            self.replay_title(&params.tab, &session_id);
             // Marked, so the app can tell an approval it already knew from a new one.
             for mut event in asks {
                 if let Some(fields) = event.as_object_mut() {
@@ -591,6 +609,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
     /// No Claude left; a background server may exit once no app is connected either.
     pub fn is_idle(&self) -> bool {
         self.sessions().is_empty()
+    }
+
+    pub(crate) fn title_calls(&self) -> MutexGuard<'_, HashMap<String, u64>> {
+        self.title_calls.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn controls(&self) -> MutexGuard<'_, HashMap<String, PendingControl>> {

@@ -265,6 +265,9 @@ pub enum Event {
     /// The slash commands and skills of the tab's Claude, from `initialize` or a later change;
     /// sent again to an app that attaches.
     Commands { tab: String, commands: Vec<SlashCommand> },
+    /// What the chat is about now, from Haiku after a message (see `titles`); sent again to an
+    /// app that attaches. The session id keeps a late title from landing after `/clear`.
+    Title { tab: String, session_id: String, title: String },
     Files { id: Option<u64>, files: Vec<String>, is_truncated: bool },
     /// `code` is `None` when the command was stopped at the timeout.
     ShellResult { id: Option<u64>, stdout: String, stderr: String, code: Option<i32>, duration_ms: u64, is_timed_out: bool },

@@ -467,6 +467,9 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
       }
     case 'message':
       return withMessage(tab, event.message)
+    // A title asked for before `/clear` names the old session; the new one starts untitled.
+    case 'title':
+      return event.session_id === tab.sessionId ? { ...tab, title: event.title } : tab
     case 'claude':
       return withClaude(tab, event.event)
     case 'exited':

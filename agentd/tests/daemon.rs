@@ -703,3 +703,27 @@ fn a_moved_chat_keeps_the_mode_model_and_effort_it_was_switched_to() {
         assert!(args.contains(flag), "{flag} missing in {args}");
     }
 }
+
+#[test]
+fn names_a_chat_after_each_message_and_tells_an_app_that_attaches() {
+    let home = temp_dir("titles-home");
+    let cwd = temp_dir("titles-cwd");
+    let mut agentd = Agentd::spawn_in_home(&home);
+    let start = json!({ "op": "start", "tab": "t1", "cwd": cwd, "profile": null, "resume": null, "model": null, "permission_mode": null });
+    agentd.send(start.clone());
+    let session_id = agentd.expect(|e| e["type"] == "started")["session_id"].clone();
+
+    agentd.send(json!({ "op": "send", "tab": "t1", "content": [{ "type": "text", "text": "please name me" }] }));
+    let first = agentd.expect(|e| e["type"] == "title");
+    agentd.send(json!({ "op": "send", "tab": "t1", "content": [{ "type": "text", "text": "name me again" }] }));
+    let second = agentd.expect(|e| e["type"] == "title");
+    agentd.send(start);
+    agentd.expect(|e| e["type"] == "started");
+    let replayed = agentd.expect(|e| e["type"] == "title");
+
+    assert_eq!((&first["tab"], &first["session_id"], &first["title"]), (&json!("t1"), &session_id, &json!("Titled after (none)")));
+    assert_eq!(second["title"], "Titled after Titled after (none)");
+    assert_eq!(replayed["title"], "Titled after Titled after (none)");
+    agentd.send(json!({ "op": "stop", "tab": "t1" }));
+    std::fs::remove_dir_all(&home).ok();
+}

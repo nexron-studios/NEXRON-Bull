@@ -80,6 +80,8 @@ export interface TabSnapshot {
   id: string
   /** As the user sees it: background agents or shells still running count as working */
   status: TabStatus
+  /** Claude's own turn is over (idle or ended), whatever still runs in the background */
+  isTurnOver: boolean
   /** When the chat last finished (`withTurnClock`); a new value is a new "finished" */
   finishedAt: number | null
   /** Request id of the open permission ask, if any */
@@ -109,6 +111,7 @@ const PLAN_TOOL = 'ExitPlanMode'
 export const snapshotOf = (tab: ChatTabState, disconnectedNotice: string | null): TabSnapshot => ({
   id: tab.id,
   status: shownStatusOf(tab),
+  isTurnOver: tab.status === 'idle' || tab.status === 'ended',
   finishedAt: tab.finishedAt,
   requestId: tab.permission?.requestId ?? null,
   toolName: tab.permission?.toolName ?? null,
@@ -125,6 +128,7 @@ export const isSameSnapshots = (before: TabSnapshot[], after: TabSnapshot[]): bo
     return (
       snapshot.id === other.id &&
       snapshot.status === other.status &&
+      snapshot.isTurnOver === other.isTurnOver &&
       snapshot.finishedAt === other.finishedAt &&
       snapshot.requestId === other.requestId &&
       snapshot.notice === other.notice &&

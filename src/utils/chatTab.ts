@@ -99,8 +99,9 @@ export interface ChatTabState {
   isFinishHeld: boolean
   /**
    * The turn a limit or an account move cut off, in this run of the app. The prompt after the cut
-   * (agentd's "go on", or the user's) continues it, so the panel keeps listing its work and
-   * subagents instead of starting over (Jonas, 24.11.2026). `null` without a cut.
+   * (agentd's "go on", or the user's) continues it, so the panel keeps listing its subagents and
+   * "Offen" instead of starting over (Jonas, 24.11.2026). "Aktivität" shows what runs now and
+   * follows the continuation. `null` without a cut.
    */
   cutTurn: CutTurn | null
   /**

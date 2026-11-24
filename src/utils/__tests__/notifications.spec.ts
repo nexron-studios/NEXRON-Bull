@@ -24,6 +24,7 @@ import type { MachineQuota } from '../quota'
 const snap = (fields: Partial<TabSnapshot> = {}): TabSnapshot => ({
   id: 't1',
   status: 'working',
+  isTurnOver: false,
   finishedAt: null,
   requestId: null,
   toolName: null,
@@ -174,6 +175,7 @@ describe('snapshotOf', () => {
     expect(snapshotOf(tab(), 'Connection lost')).toEqual({
       id: 't1',
       status: 'asking',
+      isTurnOver: false,
       finishedAt: null,
       requestId: 'r1',
       toolName: 'Bash',

@@ -222,7 +222,9 @@ interface Resume {
 /**
  * The newest resume of each subagent, by agent id. A `SendMessage` to a subagent that is no longer
  * running starts it again in the background; its answer names the agent, and the stream then
- * reports the run under the `SendMessage` call (`task_started`, `task_notification`).
+ * reports the run under the `SendMessage` call (`task_started`, `task_notification`). The
+ * subagent's own events keep the id of its Agent call (checked with Claude Code 2.1.3xx), so its
+ * live actions stay where they were.
  */
 const resumesOf = (
   messages: ChatMessage[],

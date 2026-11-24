@@ -434,20 +434,33 @@ describe('useChatStore: switching the account', () => {
     expect([chat.tabs[0].status, chat.tabs[0].statusBeforeMove]).toEqual(['starting', 'idle'])
   })
 
-  it('should keep the turn it cut for the panel in the other account', async () => {
-    ask.mockResolvedValue({ type: 'moved', id: 1, session_id: 's1' })
-    const chat = useChatStore()
+  describe('the turn shown in the panel', () => {
     const prompt = {
       uuid: 'p1',
       role: 'user' as const,
       at: null,
       blocks: [{ type: 'text' as const, text: 'Build it' }]
     }
-    chat.tabs = [{ ...stoppedTab(false), messages: [prompt] }]
 
-    await chat.switchAccount('t1', gmail)
+    it('should keep a turn the move interrupted for the other account', async () => {
+      ask.mockResolvedValue({ type: 'moved', id: 1, session_id: 's1' })
+      const chat = useChatStore()
+      chat.tabs = [{ ...stoppedTab(false), status: 'working' as const, messages: [prompt] }]
 
-    expect(chat.tabs[0].cutTurn).toEqual({ promptUuid: 'p1', promptsAfter: 0 })
+      await chat.switchAccount('t1', gmail)
+
+      expect(chat.tabs[0].cutTurn).toEqual({ promptUuid: 'p1', promptsAfter: 0 })
+    })
+
+    it('should not hold a finished turn: the next prompt is something new', async () => {
+      ask.mockResolvedValue({ type: 'moved', id: 1, session_id: 's1' })
+      const chat = useChatStore()
+      chat.tabs = [{ ...stoppedTab(false), status: 'idle' as const, messages: [prompt] }]
+
+      await chat.switchAccount('t1', gmail)
+
+      expect(chat.tabs[0].cutTurn).toBe(null)
+    })
   })
 
   it('should ignore a second switch while the first one runs', async () => {

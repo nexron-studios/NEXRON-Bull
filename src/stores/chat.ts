@@ -657,6 +657,7 @@ export const useChatStore = defineStore(
     const switchAccount = async (id: string, profile: ProfileProps) => {
       const tab = tabOf(id)
       if (!tab?.sessionId || tab.profile === profile.dir || tab.statusBeforeMove) return
+      const wasBusy = isBusyStatus(tab.status)
       // Until Claude runs in the other account, lists show the chat as it will be (`listedTabOf`):
       // the stop interrupts a turn or an approval, so a busy chat is finished from here on.
       update(id, (t) => ({ ...t, statusBeforeMove: isBusyStatus(t.status) ? 'idle' : t.status }))
@@ -677,9 +678,10 @@ export const useChatStore = defineStore(
         update(id, (t) => ({ ...t, statusBeforeMove: null }))
         return
       }
-      // The turn shown before goes on in the other account: the panel keeps it.
+      // A turn the move interrupted goes on in the other account: the panel keeps it. A finished
+      // one does not; the next prompt is something new.
       update(id, (t) => ({
-        ...withTurnCut(t),
+        ...(wasBusy ? withTurnCut(t) : t),
         profile: profile.dir,
         account: profile.label,
         status: 'ended'

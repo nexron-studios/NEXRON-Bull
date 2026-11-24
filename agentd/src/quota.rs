@@ -27,6 +27,12 @@ use crate::claude::hide_console;
 use crate::tokenscope::{self, ScopedAccount, TokenScope, TokenScopeError};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+/// Names the plan as claude.ai does (`plan_display_label`: "Ultra plan"). The login only knows the
+/// billing family: an Ultra account says `max` there, and its `rateLimitTier` is the one of login day.
+const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";
+const PLAN_LABEL_SUFFIX: &str = " plan";
+/// A plan changes rarely; the label is asked once an hour per profile, not every quota round.
+const PLAN_LABEL_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const OAUTH_BETA: &str = "oauth-2025-04-20";
 const CREDENTIALS_FILE: &str = ".credentials.json";
 /// `default_claude_max_5x`, `default_claude_ai`: the plan is the word after the prefix.
@@ -95,7 +101,7 @@ pub struct AccountQuota {
     pub profile: PathBuf,
     pub label: String,
     pub email: Option<String>,
-    /// `pro`, `max`, … from the login; `None` for an API key login
+    /// `pro`, `max`, `ultra`, … as claude.ai names it; `None` for an API key login
     pub plan: Option<String>,
     pub windows: Vec<QuotaWindow>,
     /// When `windows` were fetched (ms since epoch); 0 if never
@@ -117,6 +123,8 @@ struct Entry {
 pub struct QuotaCache {
     entries: Mutex<HashMap<PathBuf, Entry>>,
     tokenscope: TokenScope,
+    /// Per profile: when the plan label was last asked, and the last label Anthropic gave.
+    plan_labels: Mutex<HashMap<PathBuf, (Instant, Option<String>)>>,
     /// One round at a time; a second caller waits and then reads the fresh cache.
     fetching: Mutex<()>,
 }
@@ -192,7 +200,9 @@ impl QuotaCache {
             profile: profile.dir.clone(),
             label: profile.label.clone(),
             email: profile.email.clone(),
-            plan: account.plan.clone().or_else(|| read_credential(&profile.dir).and_then(|credential| credential.plan)),
+            plan: read_credential(&profile.dir)
+                .and_then(|credential| self.plan_label(profile, &credential).or(credential.plan))
+                .or_else(|| account.plan.clone()),
             windows: account.windows.clone(),
             fetched_ms: account.fetched_ms,
             problem: account.problem,
@@ -228,7 +238,7 @@ impl QuotaCache {
         });
         let mut blocked_until = None;
         match read_credential(&profile.dir).ok_or(QuotaProblem::NoLogin).and_then(|credential| {
-            quota.plan = credential.plan.clone();
+            quota.plan = self.plan_label(profile, &credential).or_else(|| credential.plan.clone());
             fetch(&credential)
         }) {
             Ok(windows) => {
@@ -247,6 +257,23 @@ impl QuotaCache {
         quota.source = QuotaSource::Anthropic;
         self.entries().insert(profile.dir.clone(), Entry { asked: Some(now), blocked_until, quota: quota.clone() });
         quota
+    }
+
+    /// The plan as claude.ai names it, lower case like `subscriptionType` (`ultra`). A failed
+    /// request keeps the last label until the next attempt an hour later.
+    fn plan_label(&self, profile: &Profile, credential: &Credential) -> Option<String> {
+        let known = self.plan_labels.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get(&profile.dir).cloned();
+        if let Some((asked, label)) = &known {
+            if asked.elapsed() < PLAN_LABEL_INTERVAL {
+                return label.clone();
+            }
+        }
+        let label = fetch_plan_label(credential).or_else(|| known.and_then(|(_, label)| label));
+        self.plan_labels
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(profile.dir.clone(), (Instant::now(), label.clone()));
+        label
     }
 
     fn entries(&self) -> MutexGuard<'_, HashMap<PathBuf, Entry>> {
@@ -301,6 +328,24 @@ fn fetch(credential: &Credential) -> Result<Vec<QuotaWindow>, QuotaProblem> {
         429 => Err(QuotaProblem::RateLimited),
         _ => Err(QuotaProblem::BadAnswer),
     }
+}
+
+fn fetch_plan_label(credential: &Credential) -> Option<String> {
+    if credential.is_logged_out || credential.expires_at_ms.is_some_and(|expires| expires <= now_ms()) {
+        return None;
+    }
+    match curl_get(PROFILE_URL, &credential.token).ok()? {
+        (200, body) => plan_label_of(&body),
+        _ => None,
+    }
+}
+
+/// `"plan_display_label": "Ultra plan"` → `ultra`.
+fn plan_label_of(body: &str) -> Option<String> {
+    let payload: Value = serde_json::from_str(body).ok()?;
+    let label = payload.get("organization")?.get("plan_display_label")?.as_str()?.trim().to_lowercase();
+    let plan = label.strip_suffix(PLAN_LABEL_SUFFIX).unwrap_or(&label).trim();
+    (!plan.is_empty()).then(|| plan.to_string())
 }
 
 fn windows_of(body: &str) -> Result<Vec<QuotaWindow>, QuotaProblem> {
@@ -363,8 +408,8 @@ fn credential_of(raw: &str) -> Option<Credential> {
     })
 }
 
-/// The CLI's `subscriptionType` (`pro`, `max`). A CLI older than a tier writes none for it, but
-/// `rateLimitTier` still names it (`default_claude_ultra` → `ultra`), so a new plan shows by name.
+/// The fallback while the plan label is out of reach: the CLI's `subscriptionType` (`pro`, `max`),
+/// or, where a CLI writes none, the word in `rateLimitTier` (`default_claude_ultra` → `ultra`).
 fn plan_of(oauth: &Value) -> Option<String> {
     let named = oauth.get("subscriptionType").and_then(Value::as_str).filter(|plan| !plan.is_empty());
     if let Some(plan) = named {
@@ -435,6 +480,16 @@ mod tests {
             ],
             [Some("ultra".to_string()), Some("max".to_string()), None, None]
         );
+    }
+
+    #[test]
+    fn names_the_plan_as_claude_ai_does() {
+        let label_of = |label: &str| plan_label_of(&format!(r#"{{"organization":{{"plan_display_label":{label}}}}}"#));
+        assert_eq!(
+            [label_of(r#""Ultra plan""#), label_of(r#""Max""#), label_of(r#""""#), label_of("null")],
+            [Some("ultra".to_string()), Some("max".to_string()), None, None]
+        );
+        assert_eq!(plan_label_of(r#"{"organization":{}}"#), None);
     }
 
     #[test]
@@ -577,7 +632,9 @@ mod tests {
     fn tokenscope_keeps_a_rate_limit_cooldown_and_the_own_plan() {
         let home = std::env::temp_dir().join(format!("agentd-quota-cooldown-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
-        std::fs::write(home.join(CREDENTIALS_FILE), r#"{"claudeAiOauth":{"accessToken":"t","subscriptionType":"pro"}}"#).unwrap();
+        // Expired, so the plan label is not asked at Anthropic from a test.
+        let credential = r#"{"claudeAiOauth":{"accessToken":"t","expiresAt":1,"subscriptionType":"pro"}}"#;
+        std::fs::write(home.join(CREDENTIALS_FILE), credential).unwrap();
         let profiles = [Profile { label: "work".into(), dir: home.clone(), email: Some("work@example.com".into()) }];
         let cache = QuotaCache::default();
         let until = Instant::now() + RATE_LIMIT_COOLDOWN;

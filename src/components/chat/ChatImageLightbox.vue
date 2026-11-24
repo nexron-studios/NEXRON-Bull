@@ -120,7 +120,7 @@ watch(isOpen, (open) => {
     <DialogContent
       :show-close-button="false"
       class="inset-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col rounded-none text-stage-foreground ring-0 sm:max-w-none"
-      :class="isPhone ? 'gap-0 bg-stage p-0 pt-safe px-safe' : 'gap-3.5 bg-stage/85 px-10 py-6'"
+      :class="isPhone ? 'gap-0 bg-stage p-0 pt-safe px-safe' : 'gap-3.5 bg-stage/75 px-10 py-6'"
       @keydown="handleKeydown"
       @open-auto-focus="focusStage"
     >

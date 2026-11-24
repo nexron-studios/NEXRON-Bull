@@ -27,6 +27,8 @@
  *              nothing else: silver, a muted gold and rose gold, a tier row anyone reads; the gold
  *              stays dull so it never reads as the warning amber (21.11.2026), the rose gold stays
  *              pale so it never reads as Clawd's orange (24.11.2026)
+ *   scrim      what dims and blurs the app behind a dialog, sheet or the image viewer, nothing else;
+ *              darker on dark, where the page is dark already (24.11.2026)
  *   shadow-edge  the shadow a bar casts over content that scrolls past it (NchScrollEdge), nothing
  *              else; stronger on dark, where little is left to darken
  * Nothing outside this file introduces a hue.
@@ -87,6 +89,7 @@
   --color-plan-max: var(--plan-max);
   --color-plan-ultra: var(--plan-ultra);
   --color-shadow-edge: var(--shadow-edge);
+  --color-scrim: var(--scrim);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -171,6 +174,8 @@
   --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.12);
   /* Where a bar casts its edge (NchScrollEdge): the start of a short gradient to transparent. */
   --shadow-edge: rgb(0 0 0 / 0.1);
+  /* Behind a dialog (with an 8 px blur), so the open question stands out from the app. */
+  --scrim: rgb(0 0 0 / 0.4);
 
   /* The brand blue in both themes: quiet at rest, full on hover and drag. */
   --scrollbar-thumb: color-mix(in srgb, var(--brand) 45%, transparent);
@@ -223,6 +228,7 @@
   --plan-ultra: #eeb0a0;
   --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.35);
   --shadow-edge: rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.6);
 }
 
 /* Syntax colours, only inside code blocks. Muted on purpose: code is content, and status

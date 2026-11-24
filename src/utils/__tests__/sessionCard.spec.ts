@@ -48,15 +48,12 @@ describe('cardPromptsOf', () => {
     expect(result).toEqual({ first: 'fix the login', last: 'and the logout', count: 3 })
   })
 
-  it('should leave first and count out while older messages are not loaded', () => {
-    const messages = [prompt('p7', 'later prompt')]
-    expect([
-      cardPromptsOf(tab({ messages, hasMore: true })),
-      cardPromptsOf(tab({ messages, history: 'none' }))
-    ]).toEqual([
-      { first: null, last: 'later prompt', count: null },
-      { first: null, last: 'later prompt', count: null }
-    ])
+  it.each([
+    ['older pages are not loaded', { hasMore: true }],
+    ['the transcript was never read', { history: 'none' as const }]
+  ])('should leave first and count out while %s', (_, fields) => {
+    const result = cardPromptsOf(tab({ messages: [prompt('p7', 'later prompt')], ...fields }))
+    expect(result).toEqual({ first: null, last: 'later prompt', count: null })
   })
 
   it('should not count tool results as prompts', () => {
@@ -76,12 +73,12 @@ describe('startPromptOf', () => {
     expect(startPromptOf('Login bug', prompts)).toBe('fix the login')
   })
 
-  it('should leave it out when the title was cut from it or it is also the last prompt', () => {
-    expect([
-      startPromptOf('fix the', { first: 'fix the login', last: 'thanks', count: 2 }),
-      startPromptOf('Login bug', { first: 'go', last: 'go', count: 1 }),
-      startPromptOf('Login bug', { first: null, last: 'go', count: null })
-    ]).toEqual([null, null, null])
+  it.each([
+    ['the title was cut from it', 'fix the', { first: 'fix the login', last: 'thanks', count: 2 }],
+    ['it is also the last prompt', 'Login bug', { first: 'go', last: 'go', count: 1 }],
+    ['it is not known', 'Login bug', { first: null, last: 'go', count: null }]
+  ])('should leave it out when %s', (_, title, prompts) => {
+    expect(startPromptOf(title, prompts)).toBe(null)
   })
 })
 
@@ -114,22 +111,26 @@ describe('cardStepOf', () => {
     expect(cardStepOf(asking)).toMatchObject({ kind: 'activity', isApproval: true })
   })
 
-  it("should show this turn's answer while Claude works on, not an older one", () => {
-    const older = [prompt('p1', 'go'), answer('a1', 'Old answer'), prompt('p2', 'more')]
+  it("should not show an earlier turn's answer while Claude works", () => {
     const working = tab({
       status: 'working',
-      messages: older,
+      messages: [prompt('p1', 'go'), answer('a1', 'Old answer'), prompt('p2', 'more')],
       turn: { startedAt: 0, afterUuid: 'p2' }
     })
-    const replied = tab({
+    expect(cardStepOf(working)).toEqual({
+      kind: 'activity',
+      activity: { kind: 'state', state: 'working' },
+      isApproval: false
+    })
+  })
+
+  it("should show the first line of this turn's answer while Claude works on", () => {
+    const working = tab({
       status: 'working',
-      messages: [...older, answer('a2', '**Found** it\nsecond line')],
+      messages: [prompt('p2', 'more'), answer('a2', '**Found** it\nsecond line')],
       turn: { startedAt: 0, afterUuid: 'p2' }
     })
-    expect([cardStepOf(working), cardStepOf(replied)]).toEqual([
-      { kind: 'activity', activity: { kind: 'state', state: 'working' }, isApproval: false },
-      { kind: 'reply', text: 'Found it' }
-    ])
+    expect(cardStepOf(working)).toEqual({ kind: 'reply', text: 'Found it' })
   })
 
   it('should show the last answer of a finished chat', () => {
@@ -139,14 +140,17 @@ describe('cardStepOf', () => {
 })
 
 describe('cardStatusOf', () => {
-  it('should tell a finished question from work, approval and start', () => {
-    const asking = '> [!question] Braucht dich\n> Soll der Ordner weg?'
-    expect([
-      cardStatusOf(tab({ status: 'idle', messages: [answer('a1', asking)] })),
-      cardStatusOf(tab({ status: 'working' })),
-      cardStatusOf(tab({ status: 'asking' })),
-      cardStatusOf(tab({ status: 'starting' })),
-      cardStatusOf(tab({ status: 'idle' }))
-    ]).toEqual(['question', 'working', 'asking', 'starting', 'working'])
+  it('should call a finished answer that ends on a question a question', () => {
+    const asking = answer('a1', '> [!question] Braucht dich\n> Soll der Ordner weg?')
+    expect(cardStatusOf(tab({ status: 'idle', messages: [asking] }))).toBe('question')
+  })
+
+  it.each([
+    ['working', 'working'],
+    ['asking', 'asking'],
+    ['starting', 'starting'],
+    ['idle', 'working']
+  ] as const)('should show a %s tab as %s', (status, expected) => {
+    expect(cardStatusOf(tab({ status }))).toBe(expected)
   })
 })

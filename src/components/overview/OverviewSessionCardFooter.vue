@@ -35,7 +35,8 @@ const clear = () => actions.act('clear', target.value)
       <span class="truncate">{{ folderNameOf(tab.cwd) }}</span>
       <span v-if="machine" class="truncate font-normal text-muted-foreground">· {{ machine }}</span>
     </span>
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <!-- Its own clicks stay here: a disabled button lets the click through to the card. -->
+    <div class="ml-auto flex shrink-0 items-center gap-2" @click.stop>
       <NchIconButton
         :label="t('session_actions.menu.clear')"
         variant="outline"

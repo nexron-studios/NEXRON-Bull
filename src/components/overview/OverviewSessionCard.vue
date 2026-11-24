@@ -19,9 +19,23 @@ const emit = defineEmits<{ open: [] }>()
 
 const { t } = useI18n()
 
+// The store replaces the tab on every streamed token but keeps these; the prompts are read again
+// only when one of them changes, not per token.
+const messages = computed(() => tab.messages)
+const pending = computed(() => tab.pending)
+const history = computed(() => tab.history)
+const hasMore = computed(() => tab.hasMore)
+
 const status = computed(() => cardStatusOf(tab))
 const title = computed(() => tab.title || t('chat.new_chat'))
-const prompts = computed(() => cardPromptsOf(tab))
+const prompts = computed(() =>
+  cardPromptsOf({
+    messages: messages.value,
+    pending: pending.value,
+    history: history.value,
+    hasMore: hasMore.value
+  })
+)
 const startPrompt = computed(() => startPromptOf(tab.title, prompts.value))
 
 // A click anywhere on the card opens the chat, like a finished row; its own buttons handle their
@@ -47,7 +61,7 @@ const openCard = (event: MouseEvent) => {
 
     <h3 class="mt-4 truncate text-title font-semibold tracking-tight">{{ title }}</h3>
     <OverviewSessionCardMeta class="mt-1" :tab :now :prompt-count="prompts.count" />
-    <OverviewSessionCardContext :tab-id="tab.id" />
+    <OverviewSessionCardContext :tab-id="tab.id" :model="tab.model" />
     <p class="mt-1 h-5 truncate text-small text-muted-foreground">
       <template v-if="startPrompt">
         <span class="font-medium text-subtle">{{ t('overview.card.started_with') }}</span>

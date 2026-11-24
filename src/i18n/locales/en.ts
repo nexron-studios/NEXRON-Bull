@@ -985,7 +985,7 @@ export default {
             'agentd on {machine} does not say whether chats still run there. So none of them ends, it stays as it is. Try again in a moment.',
           copy_failed: 'Copying did not work. Does agentd still run there for another Bull?',
           download_failed:
-            '{machine} could not download agentd. Bull fetches it there from the GitHub release of this Bull version. Is the machine online, and does the release with agentd exist yet? Address: {url}',
+            '{machine} could not download agentd. Bull fetches it there from the GitHub release of this Bull version. Is the machine online, and is the release with agentd published yet? A draft serves nothing. Address: {url}',
           invalid: 'Bull cannot connect with these details.'
         },
         old_kept: 'The previous version stays there as {file}.',

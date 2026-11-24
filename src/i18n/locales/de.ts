@@ -1002,7 +1002,7 @@ export default {
           copy_failed:
             'Das Kopieren hat nicht geklappt. Läuft agentd dort noch aus einem anderen Bull?',
           download_failed:
-            '{machine} konnte agentd nicht laden. Bull lädt es dort aus dem GitHub-Release dieser Bull-Version. Ist der Rechner im Internet, und gibt es das Release mit agentd schon? Adresse: {url}',
+            '{machine} konnte agentd nicht laden. Bull lädt es dort aus dem GitHub-Release dieser Bull-Version. Ist der Rechner im Internet, und ist das Release mit agentd schon veröffentlicht? Ein Entwurf liefert noch nichts aus. Adresse: {url}',
           invalid: 'Mit diesen Angaben kann Bull sich nicht verbinden.'
         },
         old_kept: 'Die vorige Fassung liegt dort als {file} daneben.',

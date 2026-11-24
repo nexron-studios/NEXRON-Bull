@@ -143,7 +143,7 @@ jobs:
           xattr -dr com.apple.quarantine /Applications/Bull.app
           ```
 
-          The `agentd-<target>` files are what Bull installs on a Mac or Linux machine it connects to; you do not need to download them.
+          The `agentd-<target>` files are what Bull installs on a Mac or Linux machine it connects to; you do not need to download them. Bull fetches them from this release, which works only once it is published: GitHub serves no files of a draft.
           EOF
           printf '%s\n\n%s\n' "$body" "$(cat macos.md)" > notes.md
           gh release edit "$TAG" --notes-file notes.md

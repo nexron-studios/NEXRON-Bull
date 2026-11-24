@@ -63,6 +63,15 @@ describe('useMachineAssistant', () => {
     expect(invalidate).toHaveBeenLastCalledWith({ queryKey: ['agentd'] })
   })
 
+  it('should reload the list once a check found the system there', async () => {
+    const queryClient = client.current as QueryClient
+    const { check } = useMachineAssistant()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    await check(SERVER)
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenNthCalledWith(2, { queryKey: ['machines'] })
+  })
+
   it('should leave the accounts alone while the machine does not answer', async () => {
     const queryClient = client.current as QueryClient
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')

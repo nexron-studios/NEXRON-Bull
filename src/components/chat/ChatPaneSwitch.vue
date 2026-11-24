@@ -4,15 +4,14 @@ import ChatPane from '@/components/chat/ChatPane.vue'
 import type { ChatTabState } from '@/utils/chatTab'
 import { tabDirectionOf, type TabDirection } from '@/utils/motion'
 
-// The desktop chat area: one pane per tab. Switching dissolves the old chat into the new one,
-// which drifts in from the side of the selected tab (Figma "16 Motion"). Under reduced motion the
-// drift is off (transitions.css) and the dissolve stays. `isolate` keeps the leaving pane's
-// z-index inside this area.
+// The desktop chat area: one pane per tab. A switch swaps the pane at once; only the new messages
+// fade in from the side of the selected tab (transitions.css, Figma "16 Motion"), so the click
+// answers immediately and nothing the tabs share moves.
 const { tab, tabs } = defineProps<{ tab: ChatTabState; tabs: ChatTabState[] }>()
 
 const direction = ref<TabDirection>('next')
 
-// Before the render that swaps the panes, so the leaving one already gets the new direction.
+// Before the render that mounts the new pane, so it already carries the new direction.
 watch(
   () => tab.id,
   (next, previous) => {
@@ -27,9 +26,7 @@ watch(
 </script>
 
 <template>
-  <div class="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden" data-route-content>
-    <Transition :name="`tab-${direction}`">
-      <ChatPane :key="tab.id" :tab />
-    </Transition>
+  <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-route-content>
+    <ChatPane :key="tab.id" :tab :class="`tab-in-${direction}`" />
   </div>
 </template>

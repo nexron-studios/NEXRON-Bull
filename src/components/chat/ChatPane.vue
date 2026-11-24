@@ -240,8 +240,10 @@ watch(
     <!-- The backdrop starts below the session bar: the bar is chrome, not part of the chat. -->
     <div class="relative isolate flex min-h-0 flex-1 flex-col">
       <ChatBackdrop />
-      <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto">
+      <div ref="scroller" class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <!-- data-tab-content: the part that fades in on a tab switch (transitions.css). -->
         <div
+          data-tab-content
           class="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-5"
           :class="isCompact ? 'px-4 py-4' : 'px-6 py-6'"
         >

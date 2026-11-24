@@ -25,6 +25,7 @@ import { prependLine } from '@/utils/attachments'
 import { quoteOf } from '@/utils/callouts'
 import type { ChatTabState } from '@/utils/chatTab'
 import { imageTypeList, type PendingImage } from '@/utils/content'
+import { withPlainImageRefs } from '@/utils/imageRefs'
 import { withPastes } from '@/utils/pastedText'
 import { draftWithUnsent } from '@/utils/pendingPrompts'
 import { folderNameOf } from '@/utils/sessionList'
@@ -127,7 +128,11 @@ const submitText = (text: string) => {
   const slash = parseSlashInput(text)
   const isBare = !images.value.length && !pastes.value.length
   if (slash && isBare && slashCommands.run(tab.id, slash.name, slash.args)) return clearDraft()
-  emit('send', withPastes(text, pastes.value), images.value)
+  emit(
+    'send',
+    withPlainImageRefs(withPastes(text, pastes.value), references.format.value),
+    images.value
+  )
   clearDraft()
 }
 

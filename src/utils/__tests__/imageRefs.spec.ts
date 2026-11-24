@@ -7,7 +7,8 @@ import {
   insertImageRefs,
   remapImageRefs,
   sentImageRefHighlightsOf,
-  validImageRefsOf
+  validImageRefsOf,
+  withPlainImageRefs
 } from '../imageRefs'
 
 const FORMAT = imageRefFormatOf(`[Bild ${IMAGE_REF_SLOTS.n} (${IMAGE_REF_SLOTS.name})]`)
@@ -152,5 +153,12 @@ describe('sentImageRefHighlightsOf', () => {
     expect(
       sentImageRefHighlightsOf('[Bild 1 (a)] [Bild 3 (c)]', ['data:1', 'data:2'], FORMAT)
     ).toEqual([{ start: 0, end: 12, kind: 'image', n: 1, name: 'a', src: 'data:1' }])
+  })
+})
+
+describe('withPlainImageRefs', () => {
+  it('should give references plain spaces and hyphens back and leave other text alone', () => {
+    const text = `see ${FORMAT.render(1, shot.name)}\u00a0now`
+    expect(withPlainImageRefs(text, FORMAT)).toBe('see [Bild 1 (Bild 15-01-01.png)]\u00a0now')
   })
 })

@@ -25,15 +25,23 @@ const DELETE_KEYS: Partial<Record<string, DeleteDirection>> = {
 export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[]>) => {
   const format = useImageRefFormat()
   const refs = computed(() => validImageRefsOf(draft.value, images.value, format.value))
+  // Only a reference as the app wrote it gets a chip: one typed with plain spaces could wrap
+  // inside, and the chip over it would break apart.
   const highlights = computed<Highlight[]>(() =>
-    refs.value.map(({ start, end, n, name, image }) => ({
-      start,
-      end,
-      kind: 'image',
-      n,
-      name,
-      src: image.src
-    }))
+    refs.value.flatMap(({ start, end, n, name, image }) =>
+      draft.value.slice(start, end) === format.value.render(n, image.name)
+        ? [
+            {
+              start,
+              end,
+              kind: 'image' as const,
+              n,
+              name,
+              src: image.src
+            }
+          ]
+        : []
+    )
   )
 
   /** The attachments changed from `before` to `after`; `successors` maps a replaced image on. */

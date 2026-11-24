@@ -88,7 +88,7 @@ describe('useImageReferences', () => {
   })
 
   it('should highlight only references that name an attachment', () => {
-    const { references } = setup('[Bild 1 (shot.png)] [Bild 2 (gone.png)]', [shot])
+    const { references } = setup(unbroken('[Bild 1 (shot.png)] [Bild 2 (gone.png)]'), [shot])
     expect(references.highlights.value).toEqual([
       {
         start: 0,
@@ -99,6 +99,11 @@ describe('useImageReferences', () => {
         src: 'data:image/png;base64,QUJD'
       }
     ])
+  })
+
+  it('should give no chip to a reference typed with plain spaces, as it could wrap inside', () => {
+    const { references } = setup('[Bild 1 (shot.png)]', [shot])
+    expect(references.highlights.value).toEqual([])
   })
 
   it('should select the whole reference on Backspace so it goes as one unit', () => {

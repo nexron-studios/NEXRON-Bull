@@ -45,7 +45,7 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
  */
 const NO_BREAK_SPACE = '\u00a0'
 const NO_BREAK_HYPHEN = '\u2011'
-const unbreakable = (text: string) =>
+export const unbreakable = (text: string) =>
   text.replaceAll(' ', NO_BREAK_SPACE).replaceAll('-', NO_BREAK_HYPHEN)
 
 // Brackets would end the token early, so a name keeps its meaning with round ones instead.
@@ -70,6 +70,15 @@ export const imageRefFormatOf = (template: string): ImageRefFormat => {
     pattern: new RegExp(source, 'g')
   }
 }
+
+/**
+ * The text as Claude and the clipboard get it: references with plain spaces and hyphens again, so
+ * a file name reads as it is on disk.
+ */
+export const withPlainImageRefs = (text: string, format: ImageRefFormat) =>
+  text.replace(format.pattern, (ref) =>
+    ref.replaceAll(NO_BREAK_SPACE, ' ').replaceAll(NO_BREAK_HYPHEN, '-')
+  )
 
 /** Every text that reads like a reference, whether or not an image stands behind it. */
 export const imageRefsOf = (text: string, format: ImageRefFormat): ImageRef[] =>

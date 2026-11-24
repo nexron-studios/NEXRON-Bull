@@ -50,6 +50,12 @@ const hasHighlight = computed(() => pieces.value.some((piece) => piece.mark))
 const hasChip = computed(() => pieces.value.some((piece) => piece.mark?.kind === 'image'))
 
 const reportCaret = () => emit('caret', field.value?.selectionStart ?? text.value.length)
+// Not v-model: it holds the text back while a dead key or an IME composes, and with a chip the
+// mirror is the only visible text, so the composing letters would not show.
+const handleInput = (event: Event) => {
+  text.value = (event.target as HTMLTextAreaElement).value
+  reportCaret()
+}
 const handleFocus = () => {
   hasCaret.value = true
   reportCaret()
@@ -97,7 +103,7 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
     <textarea
       id="composer"
       ref="field"
-      v-model="text"
+      :value="text"
       :placeholder
       role="combobox"
       aria-autocomplete="list"
@@ -106,10 +112,14 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
       :aria-activedescendant="activeOptionId ?? undefined"
       rows="1"
       class="col-start-1 row-start-1 field-sizing-content max-h-60 min-h-11 w-full resize-none overflow-y-scroll bg-transparent px-4 pt-3 pb-1 text-body outline-none placeholder:text-muted-foreground"
-      :class="[isShell && 'font-mono', hasChip && 'text-transparent caret-foreground']"
+      :class="[
+        isShell && 'font-mono',
+        hasChip &&
+          'text-transparent caret-foreground selection:bg-brand/30 selection:text-transparent'
+      ]"
       @keydown="emit('keydown', $event)"
       @paste="emit('paste', $event)"
-      @input="reportCaret"
+      @input="handleInput"
       @click="reportCaret"
       @keyup="reportCaret"
       @focus="handleFocus"

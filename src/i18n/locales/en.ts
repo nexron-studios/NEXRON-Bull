@@ -1247,6 +1247,11 @@ export default {
         note_asking: 'The open approval is denied.',
         note_working: 'The running step is interrupted.'
       },
+      remove: {
+        title: 'Remove “{title}”?',
+        body: 'Bull closes the tab and removes the session from the list. The transcript stays on disk; “New session” › “Continue” brings it back.',
+        confirm: 'Remove'
+      },
       stop_and_remove: {
         title: 'Claude is still working',
         body: 'A step is running in “{title}”. Bull stops Claude, closes the tab and removes the session from the list. The transcript stays on disk.',

@@ -1268,6 +1268,11 @@ export default {
         note_asking: 'Die offene Freigabe wird dabei abgelehnt.',
         note_working: 'Der laufende Schritt wird dabei abgebrochen.'
       },
+      remove: {
+        title: '„{title}“ entfernen?',
+        body: 'Bull schließt den Tab und nimmt die Session aus der Liste. Der Verlauf bleibt gespeichert, „Neue Session“ › „Fortsetzen“ holt sie zurück.',
+        confirm: 'Entfernen'
+      },
       stop_and_remove: {
         title: 'Claude arbeitet noch',
         body: 'In „{title}“ läuft gerade ein Schritt. Bull stoppt Claude, schließt den Tab und nimmt die Session aus der Liste. Der Verlauf bleibt gespeichert.',

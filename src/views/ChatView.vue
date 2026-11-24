@@ -127,12 +127,12 @@ const handleOpened = () => {
   if (!isNarrow.value && layout.value === 'full') showPanel()
   if (!isChatRoute.value) void router.push({ name: 'chat' })
 }
-// The tab's close button removes the chat like the sidebar does: a chat Claude still works in asks
-// first, a finished one goes at once with an undo. On a phone that also goes back to the list.
+// The tab's close button always asks before the chat is removed; on a phone it then goes back to
+// the list.
 const sessionActions = useSessionActionsStore()
 const removeTab = (id: string) => {
   const tab = chat.tabs.find((open) => open.id === id)
-  if (tab) sessionActions.act('remove', targetOfTab(tab))
+  if (tab) sessionActions.requestRemove(targetOfTab(tab))
 }
 // Also when that tab was already the shown one behind another page.
 const showTerminal = (id: string) => {

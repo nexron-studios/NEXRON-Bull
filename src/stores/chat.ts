@@ -41,7 +41,13 @@ import {
 } from '@/utils/chatTab'
 import { apiRetryOf } from '@/utils/apiRetry'
 import { buildContent, type PendingImage } from '@/utils/content'
-import { finishRanksOf, isSameRanks, withSeen, withUnseen } from '@/utils/finishOrder'
+import {
+  finishRanksOf,
+  finishSortedOf,
+  isSameRanks,
+  withSeen,
+  withUnseen
+} from '@/utils/finishOrder'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
@@ -753,7 +759,11 @@ export const useChatStore = defineStore(
     }
 
     /** The turn that ended at `at` finished while the user looked elsewhere. */
-    const markUnseen = (id: string, at: number) => update(id, (tab) => withUnseen(tab, at))
+    const markUnseen = (id: string, at: number) => {
+      update(id, (tab) => withUnseen(tab, at))
+      // Only when a number appears: a drag afterwards stands until the next chat finishes.
+      if (tabOf(id)?.unseenAt === at) tabs.value = finishSortedOf(tabs.value)
+    }
 
     /** The user looked at the chat: it leaves the finish order. */
     const markSeen = (id: string) => {

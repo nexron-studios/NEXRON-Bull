@@ -20,7 +20,7 @@ export const sessionActionList = ['copy_id', 'clear', 'remove', 'delete'] as con
 export type SessionAction = (typeof sessionActionList)[number]
 
 /** The steps the user confirms first: clearing, removing a tab Claude still works in, deleting. */
-export const confirmationKindList = ['clear', 'stop_and_remove', 'delete'] as const
+export const confirmationKindList = ['clear', 'remove', 'stop_and_remove', 'delete'] as const
 export type ConfirmationKind = (typeof confirmationKindList)[number]
 
 /** i18n keys of a confirmation; `notes` add what happens to a turn that is still running. */
@@ -102,6 +102,7 @@ const runningNotesOf = (kind: ConfirmationKind, target: SessionTarget): string[]
     case 'clear':
       if (status === 'asking') return ['session_actions.confirm.clear.note_asking']
       return status === 'working' ? ['session_actions.confirm.clear.note_working'] : []
+    case 'remove':
     case 'stop_and_remove':
       return []
     case 'delete':

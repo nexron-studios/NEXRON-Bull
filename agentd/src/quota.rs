@@ -27,8 +27,21 @@ use crate::claude::hide_console;
 use crate::tokenscope::{self, ScopedAccount, TokenScope, TokenScopeError};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+/// Names the plan as claude.ai does (`plan_display_label`: "Ultra plan"). The login only knows the
+/// billing family: an Ultra account says `max` there, and its `rateLimitTier` is the one of login day.
+const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";
+const PLAN_LABEL_PREFIX: &str = "claude ";
+const PLAN_LABEL_SUFFIX: &str = " plan";
+/// A plan changes rarely; the label is asked once an hour per login, not every quota round. A
+/// request without an answer is tried again in the next round.
+const PLAN_LABEL_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const OAUTH_BETA: &str = "oauth-2025-04-20";
 const CREDENTIALS_FILE: &str = ".credentials.json";
+/// `default_claude_max_5x`, `default_claude_ai`: the plan is the word after the prefix.
+const RATE_LIMIT_TIER_PREFIX: &str = "default_claude_";
+/// Free and Pro share this tier, so it names no plan.
+const BASE_RATE_LIMIT_TIER: &str = "ai";
+
 const REQUEST_TIMEOUT_SECS: &str = "10";
 /// The endpoint answers 429 quickly, and the Agent Dashboard and TokenScope may poll it too.
 const MIN_FETCH_INTERVAL: Duration = Duration::from_secs(90);
@@ -90,7 +103,7 @@ pub struct AccountQuota {
     pub profile: PathBuf,
     pub label: String,
     pub email: Option<String>,
-    /// `pro`, `max`, … from the login; `None` for an API key login
+    /// `pro`, `max`, `ultra`, … as claude.ai names it; `None` for an API key login
     pub plan: Option<String>,
     pub windows: Vec<QuotaWindow>,
     /// When `windows` were fetched (ms since epoch); 0 if never
@@ -112,8 +125,22 @@ struct Entry {
 pub struct QuotaCache {
     entries: Mutex<HashMap<PathBuf, Entry>>,
     tokenscope: TokenScope,
+    /// Per login (see `login_key`): the last plan label Anthropic gave.
+    plan_labels: Mutex<HashMap<String, KnownLabel>>,
     /// One round at a time; a second caller waits and then reads the fresh cache.
     fetching: Mutex<()>,
+}
+
+#[derive(Clone)]
+struct KnownLabel {
+    answered: Instant,
+    label: Option<String>,
+}
+
+/// Whether Anthropic answered the plan label request; an answer may still name no known plan.
+enum PlanAnswer {
+    Answered(Option<String>),
+    NoAnswer,
 }
 
 struct Credential {
@@ -187,7 +214,12 @@ impl QuotaCache {
             profile: profile.dir.clone(),
             label: profile.label.clone(),
             email: profile.email.clone(),
-            plan: account.plan.clone().or_else(|| read_credential(&profile.dir).and_then(|credential| credential.plan)),
+            // TokenScope's logins are not asked at Anthropic, so only a label an earlier own
+            // round brought home beats TokenScope's plan.
+            plan: self
+                .known_plan_label(profile)
+                .or_else(|| account.plan.clone())
+                .or_else(|| read_credential(&profile.dir).and_then(|credential| credential.plan)),
             windows: account.windows.clone(),
             fetched_ms: account.fetched_ms,
             problem: account.problem,
@@ -223,8 +255,9 @@ impl QuotaCache {
         });
         let mut blocked_until = None;
         match read_credential(&profile.dir).ok_or(QuotaProblem::NoLogin).and_then(|credential| {
-            quota.plan = credential.plan.clone();
-            fetch(&credential)
+            let (label, windows) = self.ask_anthropic(profile, &credential);
+            quota.plan = label.or_else(|| credential.plan.clone());
+            windows
         }) {
             Ok(windows) => {
                 quota.windows = windows;
@@ -242,6 +275,41 @@ impl QuotaCache {
         quota.source = QuotaSource::Anthropic;
         self.entries().insert(profile.dir.clone(), Entry { asked: Some(now), blocked_until, quota: quota.clone() });
         quota
+    }
+
+    /// The plan label and the windows side by side, so a round still ends after one timeout.
+    fn ask_anthropic(&self, profile: &Profile, credential: &Credential) -> (Option<String>, Result<Vec<QuotaWindow>, QuotaProblem>) {
+        thread::scope(|scope| {
+            let label = scope.spawn(|| self.plan_label(&login_key(profile), || fetch_plan_label(credential)));
+            let windows = fetch(credential);
+            (label.join().ok().flatten(), windows)
+        })
+    }
+
+    /// The plan as claude.ai names it, lower case like `subscriptionType` (`ultra`). Without an
+    /// answer the last label stands, and the next round asks again.
+    fn plan_label(&self, key: &str, ask: impl FnOnce() -> PlanAnswer) -> Option<String> {
+        let known = self.labels().get(key).cloned();
+        if let Some(known) = &known {
+            if known.answered.elapsed() < PLAN_LABEL_INTERVAL {
+                return known.label.clone();
+            }
+        }
+        match ask() {
+            PlanAnswer::Answered(label) => {
+                self.labels().insert(key.to_string(), KnownLabel { answered: Instant::now(), label: label.clone() });
+                label
+            }
+            PlanAnswer::NoAnswer => known.and_then(|known| known.label),
+        }
+    }
+
+    fn known_plan_label(&self, profile: &Profile) -> Option<String> {
+        self.labels().get(&login_key(profile)).and_then(|known| known.label.clone())
+    }
+
+    fn labels(&self) -> MutexGuard<'_, HashMap<String, KnownLabel>> {
+        self.plan_labels.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn entries(&self) -> MutexGuard<'_, HashMap<PathBuf, Entry>> {
@@ -296,6 +364,31 @@ fn fetch(credential: &Credential) -> Result<Vec<QuotaWindow>, QuotaProblem> {
         429 => Err(QuotaProblem::RateLimited),
         _ => Err(QuotaProblem::BadAnswer),
     }
+}
+
+/// Profiles of one login share their plan, like `account_groups` shares their numbers.
+fn login_key(profile: &Profile) -> String {
+    profile.email.as_deref().map_or_else(|| profile.dir.to_string_lossy().into_owned(), str::to_lowercase)
+}
+
+fn fetch_plan_label(credential: &Credential) -> PlanAnswer {
+    if credential.is_logged_out || credential.expires_at_ms.is_some_and(|expires| expires <= now_ms()) {
+        return PlanAnswer::NoAnswer;
+    }
+    match curl_get(PROFILE_URL, &credential.token) {
+        Ok((200, body)) => PlanAnswer::Answered(plan_label_of(&body)),
+        _ => PlanAnswer::NoAnswer,
+    }
+}
+
+/// `"plan_display_label": "Ultra plan"` → `ultra`. A label that is not one plain word names no
+/// plan Bull can colour, and the login's own plan stands instead.
+fn plan_label_of(body: &str) -> Option<String> {
+    let payload: Value = serde_json::from_str(body).ok()?;
+    let label = payload.get("organization")?.get("plan_display_label")?.as_str()?.trim().to_lowercase();
+    let label = label.strip_prefix(PLAN_LABEL_PREFIX).unwrap_or(&label);
+    let plan = label.strip_suffix(PLAN_LABEL_SUFFIX).unwrap_or(label);
+    (!plan.is_empty() && plan.chars().all(|c| c.is_ascii_alphanumeric())).then(|| plan.to_string())
 }
 
 fn windows_of(body: &str) -> Result<Vec<QuotaWindow>, QuotaProblem> {
@@ -354,8 +447,20 @@ fn credential_of(raw: &str) -> Option<Credential> {
         token: oauth.get("accessToken")?.as_str()?.to_string(),
         expires_at_ms: oauth.get("expiresAt").and_then(Value::as_u64),
         is_logged_out: oauth.get("loginEnded").is_some_and(|ended| !ended.is_null() && ended != false),
-        plan: oauth.get("subscriptionType").and_then(Value::as_str).map(str::to_string),
+        plan: plan_of(oauth),
     })
+}
+
+/// The fallback while the plan label is out of reach: the CLI's `subscriptionType` (`pro`, `max`),
+/// or, where a CLI writes none, the word in `rateLimitTier` (`default_claude_ultra` → `ultra`).
+fn plan_of(oauth: &Value) -> Option<String> {
+    let named = oauth.get("subscriptionType").and_then(Value::as_str).filter(|plan| !plan.is_empty());
+    if let Some(plan) = named {
+        return Some(plan.to_string());
+    }
+    let tier = oauth.get("rateLimitTier")?.as_str()?.strip_prefix(RATE_LIMIT_TIER_PREFIX)?;
+    let plan = tier.split('_').next().filter(|plan| !plan.is_empty() && *plan != BASE_RATE_LIMIT_TIER)?;
+    Some(plan.to_string())
 }
 
 fn now_ms() -> u64 {
@@ -404,6 +509,62 @@ mod tests {
             ("t", Some(5), Some("max"), true)
         );
         assert_eq!(fetch(&credential).err(), Some(QuotaProblem::LoggedOut));
+    }
+
+    #[test]
+    fn names_a_plan_the_cli_does_not_know_by_its_rate_limit_tier() {
+        let plan_of_raw = |oauth: &str| credential_of(&format!(r#"{{"claudeAiOauth":{{"accessToken":"t",{oauth}}}}}"#)).unwrap().plan;
+        assert_eq!(
+            [
+                plan_of_raw(r#""subscriptionType":null,"rateLimitTier":"default_claude_ultra""#),
+                plan_of_raw(r#""subscriptionType":"max","rateLimitTier":"default_claude_max_20x""#),
+                plan_of_raw(r#""rateLimitTier":"default_claude_ai""#),
+                plan_of_raw(r#""rateLimitTier":"something_else""#),
+            ],
+            [Some("ultra".to_string()), Some("max".to_string()), None, None]
+        );
+    }
+
+    #[test]
+    fn names_the_plan_as_claude_ai_does() {
+        let label_of = |label: &str| plan_label_of(&format!(r#"{{"organization":{{"plan_display_label":{label}}}}}"#));
+        assert_eq!(
+            [
+                label_of(r#""Ultra plan""#),
+                label_of(r#""Claude Max""#),
+                label_of(r#""Max plan (20x)""#),
+                label_of(r#""""#),
+                label_of("null"),
+            ],
+            [Some("ultra".to_string()), Some("max".to_string()), None, None, None]
+        );
+        assert_eq!(plan_label_of(r#"{"organization":{}}"#), None);
+    }
+
+    #[test]
+    fn asks_the_plan_label_once_an_hour_and_keeps_it_without_an_answer() {
+        let cache = QuotaCache::default();
+        let first = cache.plan_label("work@example.com", || PlanAnswer::Answered(Some("ultra".into())));
+        let within_the_hour = cache.plan_label("work@example.com", || panic!("asked again within the hour"));
+        assert_eq!((first.as_deref(), within_the_hour.as_deref()), (Some("ultra"), Some("ultra")));
+
+        let silent = cache.plan_label("home@example.com", || PlanAnswer::NoAnswer);
+        let next_round = cache.plan_label("home@example.com", || PlanAnswer::Answered(Some("pro".into())));
+        assert_eq!((silent, next_round.as_deref()), (None, Some("pro")));
+
+        cache.labels().get_mut("work@example.com").unwrap().answered -= PLAN_LABEL_INTERVAL;
+        assert_eq!(cache.plan_label("work@example.com", || PlanAnswer::NoAnswer).as_deref(), Some("ultra"));
+    }
+
+    #[test]
+    fn a_known_plan_label_beats_tokenscopes_plan_without_asking_anthropic() {
+        let cache = QuotaCache::default();
+        let scope = || Ok(vec![scoped_work(Some("max"), now_ms(), None)]);
+        let profiles = profiles_without_credentials();
+        assert_eq!(cache.current_with(&profiles, false, scope)[0].plan.as_deref(), Some("max"));
+
+        cache.plan_label("work@example.com", || PlanAnswer::Answered(Some("ultra".into())));
+        assert_eq!(cache.current_with(&profiles, false, scope)[0].plan.as_deref(), Some("ultra"));
     }
 
     #[test]

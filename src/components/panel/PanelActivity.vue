@@ -45,12 +45,12 @@ const now = useSecondClock(isRunning)
 const view = computed(() => activityViewOf(state.value, tools.value))
 const aside = computed(() => activityAsideOf(view.value, tools.value.length))
 
-// Running calls first, then the newest finished ones; one list, so a call that finishes keeps its
-// row instead of entering again.
+// Running calls first, then the newest finished ones, the newest on top in both (24.11.2026); one
+// list, so a call that finishes keeps its row and slides down instead of entering again.
 const rows = computed(() => [
-  ...(isRunning.value ? tools.value.filter((tool) => tool.status === 'running') : []).map(
-    (run) => ({ run, isRunning: true })
-  ),
+  ...(isRunning.value ? tools.value.filter((tool) => tool.status === 'running') : [])
+    .toReversed()
+    .map((run) => ({ run, isRunning: true })),
   ...recent.value.map((run) => ({ run, isRunning: false }))
 ])
 const { staggerIndexOf } = useRowArrivals(() => rows.value.map((row) => row.run.id), isEntering)
@@ -139,7 +139,12 @@ const showApproval = async () => {
     />
     <p v-else-if="summary" class="text-small text-muted-foreground">{{ summary }}</p>
 
-    <ul v-if="rows.length" class="-my-1 flex flex-col">
+    <TransitionGroup
+      v-if="rows.length"
+      tag="ul"
+      move-class="panel-row-move"
+      class="-my-1 flex flex-col"
+    >
       <li
         v-for="row in rows"
         :key="row.run.id"
@@ -152,7 +157,7 @@ const showApproval = async () => {
           @open="show(row.run.id)"
         />
       </li>
-    </ul>
+    </TransitionGroup>
     <button
       v-if="hasHiddenTools"
       type="button"

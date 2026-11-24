@@ -19,21 +19,39 @@ export const questionsOf = (input: Record<string, unknown>): Question[] => {
   }))
 }
 
-/** One answer string per question, as AskUserQuestion expects in `answers`; free text wins. */
+/**
+ * The own answer as a choice, like Claude Code's "Other". The NUL keeps it apart from any label
+ * the model could write.
+ */
+export const OTHER_CHOICE = '\u0000other'
+
+/**
+ * One answer string per question, as AskUserQuestion expects in `answers`. Single choice: the
+ * option or the own answer, whichever was chosen last. Several: the checked options plus the own
+ * answer, joined like Claude Code does.
+ */
 export const answersOf = (
   questions: Question[],
   chosen: Record<string, string[]>,
   other: Record<string, string>
 ): Record<string, string> =>
   Object.fromEntries(
-    questions.map((q) => [
-      q.question,
-      other[q.question]?.trim() || (chosen[q.question] ?? []).join(', ')
-    ])
+    questions.map((q) => {
+      const picks = chosen[q.question] ?? []
+      const labels = picks.filter((pick) => pick !== OTHER_CHOICE)
+      const own = picks.includes(OTHER_CHOICE) ? (other[q.question]?.trim() ?? '') : ''
+      return [q.question, [...labels, own].filter(Boolean).join(', ')]
+    })
   )
 
 /** The choices of one question after a click on `label`: several toggle, a single one replaces. */
 export const toggledChoice = (current: string[], label: string, isMulti: boolean): string[] => {
   if (!isMulti) return [label]
   return current.includes(label) ? current.filter((l) => l !== label) : [...current, label]
+}
+
+/** The choices once the user turns to the own answer: it replaces a single choice, adds to several. */
+export const withOtherChoice = (current: string[], isMulti: boolean): string[] => {
+  if (!isMulti) return [OTHER_CHOICE]
+  return current.includes(OTHER_CHOICE) ? current : [...current, OTHER_CHOICE]
 }

@@ -7,6 +7,8 @@ export const LARGE_CONTEXT_WINDOW = 1_000_000
 const LARGE_CONTEXT_MARKER = '[1m]'
 /** The tools that start a subagent: `Agent` today, `Task` before. */
 export const AGENT_TOOL_NAMES = ['Agent', 'Task']
+/** Messages a subagent; one that had finished runs again in the background (Claude Code 2.1.3xx). */
+const SEND_MESSAGE_TOOL_NAME = 'SendMessage'
 
 /** What a context is made of, in the order it is read: cache read, cache written, new. */
 export const contextPartList = ['cached', 'written', 'fresh'] as const
@@ -33,8 +35,13 @@ export interface Subagent {
   isBackground: boolean
   /** The id its start answer names (`agentId: …`); its own transcript is filed under it */
   agentId: string | null
+  /**
+   * The call that started its current run: the Agent call, or the `SendMessage` that woke it up
+   * again after it had finished or a limit or stop had cut it off
+   */
+  runId: string
   status: SubagentStatus
-  /** ms since epoch; `null` when the message carried no time */
+  /** Start of its current run, ms since epoch; `null` when the message carried no time */
   startedAt: number | null
   finishedAt: number | null
 }
@@ -103,10 +110,35 @@ const connectorListOf = (servers: { name?: string; status?: string }[]): Connect
     }))
 }
 
-/** `system/init` lists the session's MCP servers; any other event gives `null`. */
+/**
+ * `system/init` lists the session's MCP servers; any other event gives `null`, and so does a
+ * subagent's init (`parent_tool_use_id`): it names the servers of that subagent, not the session's.
+ */
 export const connectorsOf = (event: ClaudeEvent): Connector[] | null => {
-  if (event.type !== 'system' || event.subtype !== 'init') return null
+  if (event.type !== 'system' || event.subtype !== 'init' || event.parent_tool_use_id) return null
   return connectorListOf((event.mcp_servers ?? []) as { name?: string; status?: string }[])
+}
+
+/**
+ * The servers of a new report, keeping what was known of each while Claude connects it again.
+ * Every Claude start and many turns report a server `pending` until it is up, though it worked a
+ * moment ago; showing that each time made the list flicker and jump (Jonas, 24.11.2026: "laden
+ * immer neu"). Only a server never seen settled shows `pending`.
+ */
+export const withKnownConnectors = (
+  known: Connector[] | null,
+  reported: Connector[]
+): Connector[] => {
+  const settled = new Map(
+    (known ?? []).flatMap((connector) =>
+      connector.status === 'pending' ? [] : [[connector.name, connector.status] as const]
+    )
+  )
+  return reported.map((connector) =>
+    connector.status === 'pending'
+      ? { ...connector, status: settled.get(connector.name) ?? 'pending' }
+      : connector
+  )
 }
 
 /** A server entry Claude sent as an object with a name; anything else is skipped. */
@@ -176,10 +208,66 @@ const ASYNC_AGENT_PATTERN = /^Async agent launched/
 const resultText = (blocks: Block[]): string =>
   blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
 
+/** `{"success":true,"message":"Resuming agent a7f","resumedAgentId":"a7f…"}` */
+const RESUMED_AGENT_PATTERN = /"resumedAgentId"\s*:\s*"([\w-]+)"/
+
+type ToolResultInfo = { isError: boolean; at: number | null; text: string }
+
+/** The run of a subagent a `SendMessage` started again. */
+interface Resume {
+  callId: string
+  startedAt: number | null
+}
+
+/**
+ * The newest resume of each subagent, by agent id. A `SendMessage` to a subagent that is no longer
+ * running starts it again in the background; its answer names the agent, and the stream then
+ * reports the run under the `SendMessage` call (`task_started`, `task_notification`). The
+ * subagent's own events keep the id of its Agent call (checked with Claude Code 2.1.3xx), so its
+ * live actions stay where they were.
+ */
+const resumesOf = (
+  messages: ChatMessage[],
+  results: Map<string, ToolResultInfo>
+): Map<string, Resume> => {
+  const resumes = new Map<string, Resume>()
+  for (const message of messages)
+    for (const block of message.blocks) {
+      if (block.type !== 'tool_use' || block.name !== SEND_MESSAGE_TOOL_NAME) continue
+      const result = results.get(block.id)
+      const agentId = result?.isError ? null : result?.text.match(RESUMED_AGENT_PATTERN)?.[1]
+      if (agentId) resumes.set(agentId, { callId: block.id, startedAt: timeOf(message) })
+    }
+  return resumes
+}
+
+type AgentBase = Omit<Subagent, 'status' | 'finishedAt'>
+
+/**
+ * A background run: done with its notice, done once the stream's task list no longer names it
+ * (a notice lost to a reload), else running while Claude runs. A resumed run only trusts a list
+ * that came after it: the one before still lacks the agent from its first end.
+ */
+const backgroundRunOf = (
+  base: AgentBase,
+  notice: AgentNotice | undefined,
+  tasks: BackgroundTasks | null,
+  isLive: boolean,
+  isResumed: boolean
+): Subagent => {
+  if (notice) return { ...base, status: notice.status, finishedAt: notice.at }
+  const isListCurrent = !isResumed || tasks === null || tasks.at >= (base.startedAt ?? 0)
+  if (base.agentId && tasks && isListCurrent && !tasks.ids.includes(base.agentId))
+    return { ...base, status: 'done', finishedAt: tasks.at }
+  return { ...base, status: isLive ? 'running' : 'done', finishedAt: null }
+}
+
 /**
  * Subagents of a tab, oldest first. A background agent runs until its notice arrives or the
  * stream's task list (`tasks`) no longer names it; once Claude has exited (`isLive` false) nothing
- * can run any more, and a notice lost to a restart reads as done.
+ * can run any more, and a notice lost to a restart reads as done. A subagent woken again with
+ * `SendMessage` (after a limit or a stop cut it off, Claude does that on its own) is in its new run,
+ * which the panel lists under the turn that resumed it.
  */
 export const subagentsOf = (
   messages: ChatMessage[],
@@ -187,7 +275,7 @@ export const subagentsOf = (
   isLive: boolean,
   tasks: BackgroundTasks | null = null
 ): Subagent[] => {
-  const results = new Map<string, { isError: boolean; at: number | null; text: string }>()
+  const results = new Map<string, ToolResultInfo>()
   for (const message of messages)
     for (const block of message.blocks)
       if (block.type === 'tool_result')
@@ -197,6 +285,7 @@ export const subagentsOf = (
           text: resultText(block.content)
         })
   const noticeOf = new Map(notices.map((notice) => [notice.id, notice]))
+  const resumes = resumesOf(messages, results)
 
   return messages.flatMap((message) =>
     message.blocks.flatMap((block): Subagent[] => {
@@ -209,22 +298,32 @@ export const subagentsOf = (
       const result = results.get(block.id)
       const isBackground =
         input.run_in_background === true || ASYNC_AGENT_PATTERN.test(result?.text ?? '')
-      const agentId = result?.text.match(AGENT_ID_PATTERN)?.[1]
-      const notice = noticeOf.get(block.id) ?? (agentId ? noticeOf.get(agentId) : undefined)
+      const agentId = result?.text.match(AGENT_ID_PATTERN)?.[1] ?? null
       const base = {
         id: block.id,
         title: input.description ?? '',
         agentType: input.subagent_type ?? 'general-purpose',
         isBackground,
-        agentId: agentId ?? null,
+        agentId,
+        runId: block.id,
         startedAt: timeOf(message)
       }
+      const resume = agentId ? resumes.get(agentId) : undefined
+      if (resume) {
+        const run = {
+          ...base,
+          isBackground: true,
+          runId: resume.callId,
+          startedAt: resume.startedAt
+        }
+        return [backgroundRunOf(run, noticeOf.get(resume.callId), tasks, isLive, true)]
+      }
       if (result?.isError) return [{ ...base, status: 'failed', finishedAt: result.at }]
-      if (isBackground && notice) return [{ ...base, status: notice.status, finishedAt: notice.at }]
-      // A notice lost to a reload: the stream's task list no longer names the agent.
-      if (isBackground && agentId && tasks && !tasks.ids.includes(agentId))
-        return [{ ...base, status: 'done', finishedAt: tasks.at }]
-      if (!isBackground && result) return [{ ...base, status: 'done', finishedAt: result.at }]
+      if (isBackground) {
+        const notice = noticeOf.get(block.id) ?? (agentId ? noticeOf.get(agentId) : undefined)
+        return [backgroundRunOf(base, notice, tasks, isLive, false)]
+      }
+      if (result) return [{ ...base, status: 'done', finishedAt: result.at }]
       return [{ ...base, status: isLive ? 'running' : 'done', finishedAt: null }]
     })
   )
@@ -232,8 +331,8 @@ export const subagentsOf = (
 
 /**
  * The panel's subagents (21.11.2026: the list starts over with every prompt, like
- * "Aktivität"): those the turn started, plus older background agents still running or finished
- * during it, so the user sees them end. An older foreground agent without a result was cut off by
+ * "Aktivität"): those the turn started or resumed, plus older background agents still running or
+ * finished during it, so the user sees them end. An older foreground agent without a result was cut off by
  * a stop, it does not run on.
  */
 export const turnSubagentsOf = (
@@ -250,6 +349,7 @@ export const turnSubagentsOf = (
   return subagents.filter(
     (agent) =>
       startedThisTurn.has(agent.id) ||
+      startedThisTurn.has(agent.runId) ||
       (agent.isBackground && (agent.status === 'running' || hasEndedDuringTurn(agent)))
   )
 }

@@ -12,6 +12,9 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
 - `npm run app:dev`: Tauri window, Vite on port **1460** (HMR 1461, `strictPort`).
 - `npm test` (Vitest), `npm run test:rust` (agentd with the fake Claude),
   `npm run build`, `npm run format:check`.
+- `npm run app:build`: on macOS it then unregisters every Bull copy outside an Applications
+  folder from LaunchServices (`scripts/forget-stale-bundles.mjs`). The DMG step leaves its
+  temporary mount registered, so macOS could resolve Bull's bundle id to a vanished copy.
 
 ## Layout
 

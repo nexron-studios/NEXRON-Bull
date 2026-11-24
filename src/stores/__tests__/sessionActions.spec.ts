@@ -44,6 +44,28 @@ describe('useSessionActionsStore', () => {
     toast.mockClear()
   })
 
+  it('should ask before a finished chat is removed from its tab', async () => {
+    const chat = useChatStore()
+    chat.tabs = ['a', 'b'].map(tab)
+    const actions = useSessionActionsStore()
+
+    actions.requestRemove(targetOfTab(chat.tabs[0]))
+    expect(actions.confirmation?.kind).toBe('remove')
+    expect(chat.tabs.map((open) => open.id)).toEqual(['a', 'b'])
+
+    await actions.confirm()
+    expect(chat.tabs.map((open) => open.id)).toEqual(['b'])
+  })
+
+  it('should ask to stop a working chat removed from its tab', () => {
+    const chat = useChatStore()
+    chat.tabs = [{ ...tab('a'), status: 'working' }]
+    const actions = useSessionActionsStore()
+
+    actions.requestRemove(targetOfTab(chat.tabs[0]))
+    expect(actions.confirmation?.kind).toBe('stop_and_remove')
+  })
+
   it('should put removed tabs back where they were on undo', async () => {
     const chat = useChatStore()
     chat.tabs = ['a', 'b', 'c', 'd'].map(tab)

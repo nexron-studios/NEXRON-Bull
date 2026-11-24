@@ -66,7 +66,7 @@ const images = computed(() =>
 
 <template>
   <details
-    class="group relative w-full max-w-[72ch] pl-3 before:absolute before:-top-1 before:-bottom-1 before:left-0 before:w-px before:bg-border"
+    class="group relative w-full pl-3 before:absolute before:-top-1 before:-bottom-1 before:left-0 before:w-px before:bg-border"
     :open="isOpen"
     @toggle="handleToggle"
   >

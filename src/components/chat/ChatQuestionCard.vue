@@ -15,7 +15,13 @@ import { Button } from '@/components/ui/button'
 import { useChoiceKeys } from '@/composables/useChoiceKeys'
 import { MAX_CHOICE_KEY } from '@/utils/approval'
 import type { PermissionAsk } from '@/utils/chatTab'
-import { answersOf, questionsOf, toggledChoice } from '@/utils/questions'
+import {
+  OTHER_CHOICE,
+  answersOf,
+  questionsOf,
+  toggledChoice,
+  withOtherChoice
+} from '@/utils/questions'
 import { glowClassOf } from '@/theme/glow'
 
 // Claude's AskUserQuestion (Figma "11", "M07"): the options one under the other as compact rows,
@@ -24,7 +30,7 @@ import { glowClassOf } from '@/theme/glow'
 const { permission, isKeyed } = defineProps<{ permission: PermissionAsk; isKeyed: boolean }>()
 const emit = defineEmits<{ answer: [answers: Record<string, string>]; skip: [] }>()
 
-/** Chosen labels per question; free text goes in `other`. */
+/** Chosen labels per question, `OTHER_CHOICE` for the own answer; its text goes in `other`. */
 const chosen = ref<Record<string, string[]>>({})
 const other = ref<Record<string, string>>({})
 
@@ -32,11 +38,9 @@ const { t } = useI18n()
 const id = useId()
 
 const questions = computed(() => questionsOf(permission.input))
-const isComplete = computed(() =>
-  questions.value.every(
-    (q) => (chosen.value[q.question]?.length ?? 0) > 0 || !!other.value[q.question]?.trim()
-  )
-)
+const answers = computed(() => answersOf(questions.value, chosen.value, other.value))
+// An own answer chosen but left empty answers nothing.
+const isComplete = computed(() => Object.values(answers.value).every(Boolean))
 // Number keys only where they are unambiguous: one question on the card.
 const keyed = computed(() => (isKeyed && questions.value.length === 1 ? questions.value[0] : null))
 
@@ -50,9 +54,18 @@ const toggle = (question: string, label: string, isMulti: boolean) => {
   }
 }
 
+// Typing in the own answer chooses it, so the card shows what "answer" sends. Focus alone only
+// chooses text typed before: tabbing past the field must not drop the picked option.
+const chooseOther = (question: string, isMulti: boolean) => {
+  chosen.value = {
+    ...chosen.value,
+    [question]: withOtherChoice(chosen.value[question] ?? [], isMulti)
+  }
+}
+
 const submit = () => {
   if (!isComplete.value) return
-  emit('answer', answersOf(questions.value, chosen.value, other.value))
+  emit('answer', answers.value)
 }
 
 // A single choice is the whole answer, as in Claude Code; several choices still need "answer".
@@ -63,10 +76,7 @@ useChoiceKeys(
     const option = question?.options[index]
     if (!question || !option) return
     toggle(question.question, option.label, question.multiSelect)
-    if (question.multiSelect) return
-    // The key picks this option; leftover free text would otherwise win over it.
-    other.value = { ...other.value, [question.question]: '' }
-    submit()
+    if (!question.multiSelect) submit()
   }
 )
 </script>
@@ -133,13 +143,24 @@ useChoiceKeys(
           <NchKbd v-if="keyed && oIndex < MAX_CHOICE_KEY" :key-label="String(oIndex + 1)" />
         </label>
         <div
-          class="flex items-center gap-2.5 rounded-lg border border-border bg-card/60 px-2.5 has-focus-visible:ring-2 has-focus-visible:ring-ring"
+          class="flex items-center gap-2.5 rounded-lg border px-2.5 transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring"
+          :class="
+            isChosen(q.question, OTHER_CHOICE)
+              ? 'border-brand bg-brand/8'
+              : 'border-border bg-card/60'
+          "
         >
-          <Pencil class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Pencil
+            class="size-4 shrink-0"
+            :class="isChosen(q.question, OTHER_CHOICE) ? 'text-brand' : 'text-muted-foreground'"
+            aria-hidden="true"
+          />
           <input
             v-model="other[q.question]"
             :placeholder="t('chat.question_other')"
             :aria-label="t('chat.question_other')"
+            @focus="other[q.question]?.trim() && chooseOther(q.question, q.multiSelect)"
+            @input="chooseOther(q.question, q.multiSelect)"
             class="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-small"
           />
         </div>

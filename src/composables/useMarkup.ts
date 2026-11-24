@@ -13,7 +13,8 @@ import {
 
 /**
  * Drawing state of the preview: tool, colour, size, strokes with undo, comment. Provided by the
- * lightbox, read by the canvas, the toolbars and the comment panel.
+ * lightbox, read by the canvas, the toolbars and the comment panel. The comment can be written
+ * while only viewing; the strokes only while marking.
  */
 const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const tool = ref<MarkupTool>('pen')
@@ -37,11 +38,15 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const redo = () => {
     history.value = redoHistory(history.value)
   }
+  /** Back to viewing: the drawing goes, the comment stays for the same image. */
+  const clearStrokes = () => {
+    history.value = emptyHistory()
+    isKeepingOriginal.value = false
+  }
   /** A fresh sheet for the next image; tool, colour and size stay as chosen. */
   const reset = () => {
-    history.value = emptyHistory()
+    clearStrokes()
     comment.value = ''
-    isKeepingOriginal.value = false
   }
 
   return {
@@ -57,6 +62,7 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
     commit,
     undo,
     redo,
+    clearStrokes,
     reset
   }
 })

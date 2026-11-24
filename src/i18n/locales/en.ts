@@ -331,6 +331,7 @@ export default {
     apply_phone_hint: 'Arrow: marked image and comment into your message',
     cancel: 'Cancel',
     comment_line: 'About image {n} ({name}): {comment}',
+    reference: '[Image {n} ({name})]',
     close_warning: 'The comment or markup is not in your message yet. Do it again to discard it.',
     too_large: 'The marked image is too large for Claude.',
     marked_limit: 'At most {max} images per message. Remove an image first.'

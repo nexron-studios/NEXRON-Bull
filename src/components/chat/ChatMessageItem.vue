@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/types/agentd.type'
 import { copyText } from '@/lib/clipboard'
 import { imageBlocksOf } from '@/utils/attachments'
+import { sentImageRefHighlightsOf } from '@/utils/imageRefs'
+import { textPiecesOf } from '@/utils/textPieces'
 import type { ToolResultBlock } from '@/utils/toolPairs'
 import type { TurnStats } from '@/utils/turnStats'
 import NchIconButton from '@/components/common/NchIconButton.vue'
@@ -14,12 +16,14 @@ import ChatImageGallery from '@/components/chat/ChatImageGallery.vue'
 import ChatLimitMovedCard from '@/components/chat/ChatLimitMovedCard.vue'
 import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import ChatShellBlock from '@/components/chat/ChatShellBlock.vue'
+import ChatTextPieces from '@/components/chat/ChatTextPieces.vue'
 import ChatToolCall from '@/components/chat/ChatToolCall.vue'
 import ChatToolResult from '@/components/chat/ChatToolResult.vue'
 import ChatTurnStats from '@/components/chat/ChatTurnStats.vue'
 import ChatUserMessageActions from '@/components/chat/ChatUserMessageActions.vue'
 import { useCalloutTarget } from '@/composables/useCalloutTarget'
 import { toolCardIdOf } from '@/composables/useChatReveal'
+import { useImageRefFormat } from '@/composables/useImageRefFormat'
 
 // `stats`: the answer ends its turn; the line under it says what the turn took.
 const {
@@ -36,6 +40,7 @@ const {
 
 const { t } = useI18n()
 const calloutTarget = useCalloutTarget()
+const imageRefFormat = useImageRefFormat()
 
 const isLatestAnswer = computed(() => calloutTarget?.isLatestAnswer(message.uuid) ?? false)
 
@@ -52,6 +57,10 @@ const firstImageIndex = computed(() => message.blocks.findIndex((block) => block
 const texts = computed(() =>
   message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
 )
+
+/** A sent prompt's text with its image references highlighted like in the composer. */
+const promptPiecesOf = (text: string) =>
+  textPiecesOf(text, sentImageRefHighlightsOf(text, imageBlocks.value.length, imageRefFormat.value))
 
 // What the row under a sent prompt copies; a prompt of only images or a command gets no row.
 const promptText = computed(() => (message.role === 'user' ? texts.value.join('\n\n') : ''))
@@ -119,7 +128,7 @@ const shellOutputAt = (index: number) => {
         v-else-if="block.type === 'text' && message.role === 'user'"
         class="max-w-[72ch] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-body break-words whitespace-pre-wrap"
       >
-        {{ block.text }}
+        <ChatTextPieces :pieces="promptPiecesOf(block.text)" />
       </div>
       <ChatMarkdown
         v-else-if="block.type === 'text'"

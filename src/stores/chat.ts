@@ -43,6 +43,7 @@ import { apiRetryOf } from '@/utils/apiRetry'
 import { buildContent, type PendingImage } from '@/utils/content'
 import { finishRanksOf, isSameRanks, withSeen, withUnseen } from '@/utils/finishOrder'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
+import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
 import { draftWithUnsent, pendingMessageOf, type SentDraft } from '@/utils/pendingPrompts'
@@ -61,6 +62,9 @@ const RECONNECT_FIRST_MS = 250
 const RECONNECT_MAX_MS = 30_000
 const DENIED_MESSAGE = 'The user denied this tool use.'
 /** What Claude reads when the user turned a call down and said why, as in the terminal. */
+/** How image references read in the app's language, for drafts that come back to the composer. */
+const imageRefFormat = () => imageRefFormatOf(i18n.global.t('images.reference', IMAGE_REF_SLOTS))
+
 const deniedWithReason = (reason: string) =>
   `The user denied this tool use and said what to do instead: ${reason}`
 // Said to Claude when the user turns down a plan to change it: stay in plan mode and wait for them.
@@ -152,7 +156,7 @@ export const useChatStore = defineStore(
       if (!back.length) return
       const draft = useDraftStore().draftOf(id)
       const unsent = back.flatMap((prompt) => sentDrafts.get(prompt.uuid) ?? [])
-      Object.assign(draft, draftWithUnsent(draft, unsent))
+      Object.assign(draft, draftWithUnsent(draft, unsent, imageRefFormat()))
       back.forEach((prompt) => sentDrafts.delete(prompt.uuid))
       useShellRunsStore().putBack(
         id,
@@ -233,7 +237,7 @@ export const useChatStore = defineStore(
       const held = useHeldPromptsStore().takeAll(id)
       if (!held.length) return
       const draft = useDraftStore().draftOf(id)
-      Object.assign(draft, draftWithUnsent(draft, held))
+      Object.assign(draft, draftWithUnsent(draft, held, imageRefFormat()))
     }
 
     // Claude finished: what was typed meanwhile goes out now, one right after the other; Claude
@@ -576,7 +580,7 @@ export const useChatStore = defineStore(
           .flatMap((block) => (block.type === 'text' ? [block.text] : []))
           .join('')
         const draft = useDraftStore().draftOf(id)
-        Object.assign(draft, draftWithUnsent(draft, [{ text, images: [] }]))
+        Object.assign(draft, draftWithUnsent(draft, [{ text, images: [] }], imageRefFormat()))
       }
       giveBack(id)
     }

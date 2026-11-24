@@ -14,6 +14,7 @@ import ChatPasteChip from '@/components/chat/ChatPasteChip.vue'
 import { useComposerMenu } from '@/composables/useComposerMenu'
 import { useComposerPaste } from '@/composables/useComposerPaste'
 import { useImageAttachments } from '@/composables/useImageAttachments'
+import { useImageReferences } from '@/composables/useImageReferences'
 import type { MarkupResult } from '@/composables/useMarkupTarget'
 import { usePromptHistory } from '@/composables/usePromptHistory'
 import { useDraftStore } from '@/stores/drafts'
@@ -52,8 +53,18 @@ const { t } = useI18n()
 const stored = useDraftStore().draftOf(tab.id)
 const draft = toRef(stored, 'text')
 const pastes = toRef(stored, 'pastes')
-const { images, readingCount, isReading, addFiles, remove, move, clear, placeMarkedImages } =
-  useImageAttachments(toRef(stored, 'images'), toRef(stored, 'readingCount'))
+const references = useImageReferences(draft, toRef(stored, 'images'))
+const {
+  images,
+  readingCount,
+  isReading,
+  addFiles,
+  remove,
+  move,
+  reorder,
+  clear,
+  placeMarkedImages
+} = useImageAttachments(toRef(stored, 'images'), toRef(stored, 'readingCount'), references.follow)
 const held = useHeldPromptsStore()
 const shell = useShellRunsStore()
 const slashCommands = useSlashCommandsStore()
@@ -71,7 +82,20 @@ const menu = useComposerMenu({
   }
 })
 const history = usePromptHistory(() => [...tab.messages, ...tab.pending], draft, setCaret)
-const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles })
+
+/**
+ * Pasted, dropped or picked images: each also gets a reference where the user writes, or at the
+ * end when the field never had the caret. A shell command has no room for one.
+ */
+const attachFiles = async (files: Iterable<File>) => {
+  const added = await addFiles(files)
+  if (isShell.value) return
+  const isFocused = field.value?.isFocused() ?? false
+  const caretAfter = references.insert(added, field.value?.selection() ?? null)
+  if (caretAfter !== null && isFocused) setCaret(caretAfter)
+}
+
+const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles: attachFiles })
 
 // Images still being read would otherwise miss this message and turn up in the next one.
 const canSend = computed(
@@ -135,6 +159,7 @@ const handleShellKey = (event: KeyboardEvent): boolean => {
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.isComposing || menu.handleKey(event) || handleShellKey(event)) return
   const textarea = field.value?.field
+  if (textarea) references.selectWhole(event, textarea)
   if (textarea && history.handleKey(event, textarea)) return
   if (event.key !== 'Enter' || event.shiftKey) return
   event.preventDefault()
@@ -145,13 +170,13 @@ const handleKeydown = (event: KeyboardEvent) => {
 const editHeld = (id: string) => {
   const prompt = held.release(tab.id, id)
   if (!prompt) return
-  Object.assign(stored, draftWithUnsent(stored, [prompt]))
+  Object.assign(stored, draftWithUnsent(stored, [prompt], references.format.value))
   setCaret(draft.value.length)
 }
 
 const handlePicked = (event: Event) => {
   const input = event.target as HTMLInputElement
-  void addFiles(input.files ?? [])
+  void attachFiles(input.files ?? [])
   input.value = ''
 }
 
@@ -190,7 +215,7 @@ const takeMarkup = ({ sourceId, images: incoming, name, comment }: MarkupResult)
   return true
 }
 
-defineExpose({ addFiles, fill, focus: focusField, quote, takeMarkup })
+defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup })
 </script>
 
 <template>
@@ -229,8 +254,9 @@ defineExpose({ addFiles, fill, focus: focusField, quote, takeMarkup })
         >
           <ChatComposerAttachments
             v-if="images.length || isReading"
-            v-model:images="images"
+            :images
             :reading-count="readingCount"
+            @update:images="reorder"
             @remove="remove"
             @move="move"
           />
@@ -255,6 +281,7 @@ defineExpose({ addFiles, fill, focus: focusField, quote, takeMarkup })
             :label="isShell ? t('prompt_input.shell_label') : t('chat.composer_label')"
             :placeholder="placeholder"
             :known="menu.known.value"
+            :highlights="references.highlights.value"
             :is-shell
             :menu-id="menu.isOpen.value ? menuId : null"
             :active-option-id="menuView?.activeOptionId ?? null"

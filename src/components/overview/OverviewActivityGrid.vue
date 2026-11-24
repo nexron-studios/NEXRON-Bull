@@ -15,9 +15,11 @@ import {
 
 // Figma "39 Übersicht": one square per day, a column per week, like GitHub's contribution graph.
 // The whole grid is one tab stop; arrow keys move by day and week, hover, focus and a tap open
-// the one tooltip, which follows the cell it describes. The squares grow with the card, so a
-// wide window gets a bigger year instead of an empty strip beside it (layout.md); below their
-// minimum the grid scrolls. While the year loads, the same grid stands empty and pulses.
+// the one tooltip, which follows the cell it describes. The squares grow with the card up to a
+// cap, so a wide window gets a bigger year but never the fist-sized squares a 4K screen showed;
+// the section puts the cards beside each other before the cap leaves a strip (layout.md). The
+// section may lower the cap with `--activity-cell-max`. Below their minimum the grid scrolls.
+// While the year loads, the same grid stands empty and pulses.
 const {
   weeks,
   days,
@@ -32,6 +34,8 @@ const {
 
 /** Smallest square, GitHub's size; narrower than 53 of them, the grid scrolls. */
 const MIN_CELL_PX = 12
+/** Largest square while the card has the row to itself; reached just before peers join it. */
+const MAX_CELL_PX = 22
 /** Grid lines before the weeks: month labels above, weekday labels to the left. */
 const HEADER_LINES = 1
 /** Rows of the weekday labels: Monday, Wednesday, Friday. */
@@ -59,7 +63,7 @@ const bounds = computed(() =>
 )
 const months = computed(() => monthStartsOf(weeks))
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `auto repeat(${weeks.length}, minmax(${MIN_CELL_PX}px, 1fr))`
+  gridTemplateColumns: `auto repeat(${weeks.length}, minmax(${MIN_CELL_PX}px, var(--activity-cell-max, ${MAX_CELL_PX}px)))`
 }))
 const today = computed(() => allDays.value.at(-1) ?? null)
 // After midnight the oldest week may drop out; the tab stop then falls back to today.

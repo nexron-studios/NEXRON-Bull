@@ -1025,6 +1025,11 @@ export default {
         'Light or dark, and the colour Bull accents with. The bull and the Claude mark follow it at once, in the browser tab and the taskbar too. The Start menu and desktop shortcut keep the blue icon.',
       theme: 'Theme',
       themes: { auto: 'System', light: 'Light', dark: 'Dark' },
+      zoom: 'Size',
+      zoom_auto: 'Automatic',
+      zoom_note_auto:
+        'Follows the window size, {zoom} right now. {larger} and {smaller} change the size, {reset} goes back to automatic.',
+      zoom_note: '{larger} and {smaller} change the size, {reset} goes back to automatic.',
       scheme: 'Colour scheme',
       presets: {
         'night-desk': 'Night Desk',
@@ -1115,9 +1120,18 @@ export default {
     done: 'Done',
     range_label: 'Range of finished sessions',
     ranges: { today: 'Today', week: 'Week', all: 'All' },
-    context_tokens: '{tokens} tokens',
-    open: 'Open',
     open_label: 'Open {title}',
+    card: {
+      finished_at: 'done {time}',
+      ago: '{age} ago',
+      prompts: '{n} prompt | {n} prompts',
+      context: '{tokens} of {window} tokens in context',
+      started_with: 'Started with:',
+      last_prompt: 'Last prompt:',
+      claude: 'Claude:',
+      asks_for: 'Asks for:',
+      to_chat: 'Go to chat'
+    },
     resume: 'Continue',
     resume_label: 'Continue {title}',
     running_empty_title: 'Nothing is running',

@@ -1043,6 +1043,11 @@ export default {
         'Hell oder dunkel, und die Farbe, in der Bull akzentuiert. Die Bulle und die Claude-Marke färben sich sofort mit, auch im Browser-Tab und in der Taskleiste. Startmenü und Desktop-Verknüpfung behalten das blaue Icon.',
       theme: 'Design',
       themes: { auto: 'System', light: 'Hell', dark: 'Dunkel' },
+      zoom: 'Größe',
+      zoom_auto: 'Automatisch',
+      zoom_note_auto:
+        'Passt sich der Fenstergröße an, gerade {zoom}. {larger} und {smaller} ändern die Größe, {reset} stellt Automatisch wieder her.',
+      zoom_note: '{larger} und {smaller} ändern die Größe, {reset} stellt Automatisch wieder her.',
       scheme: 'Farbschema',
       presets: {
         'night-desk': 'Night Desk',
@@ -1133,9 +1138,18 @@ export default {
     done: 'Fertig',
     range_label: 'Zeitraum der fertigen Sessions',
     ranges: { today: 'Heute', week: 'Woche', all: 'Alle' },
-    context_tokens: '{tokens} Tokens',
-    open: 'Öffnen',
     open_label: '{title} öffnen',
+    card: {
+      finished_at: 'fertig {time}',
+      ago: 'vor {age}',
+      prompts: '{n} Anfrage | {n} Anfragen',
+      context: '{tokens} von {window} Tokens im Kontext',
+      started_with: 'Gestartet mit:',
+      last_prompt: 'Letzte Anfrage:',
+      claude: 'Claude:',
+      asks_for: 'Fragt nach:',
+      to_chat: 'Zum Chat'
+    },
     resume: 'Fortsetzen',
     resume_label: '{title} fortsetzen',
     running_empty_title: 'Gerade läuft nichts',

@@ -23,9 +23,10 @@
  *   account-a…d  the dot that marks a Claude account (composer chip, panel, sidebar footer),
  *              nothing else; each account gets one from a hash of its login (`accountToneOf`) or the
  *              one picked in the settings
- *   plan-pro, plan-max  the pill that names an account's subscription (AccountPlan), nothing
- *              else: silver and a muted gold, a tier pair anyone reads; the gold stays dull so it
- *              never reads as the warning amber (21.11.2026)
+ *   plan-pro, plan-max, plan-ultra  the pill that names an account's subscription (AccountPlan),
+ *              nothing else: silver, a muted gold and rose gold, a tier row anyone reads; the gold
+ *              stays dull so it never reads as the warning amber (21.11.2026), the rose gold stays
+ *              pale so it never reads as Clawd's orange (24.11.2026)
  *   shadow-edge  the shadow a bar casts over content that scrolls past it (NchScrollEdge), nothing
  *              else; stronger on dark, where little is left to darken
  * Nothing outside this file introduces a hue.
@@ -84,6 +85,7 @@
   --color-account-d: var(--account-d);
   --color-plan-pro: var(--plan-pro);
   --color-plan-max: var(--plan-max);
+  --color-plan-ultra: var(--plan-ultra);
   --color-shadow-edge: var(--shadow-edge);
 
   --radius-sm: calc(var(--radius) * 0.6);
@@ -164,6 +166,7 @@
   /* Plan pills: at least 4.5:1 on their own 15 % tint over muted. */
   --plan-pro: #505a69;
   --plan-max: #745914;
+  --plan-ultra: #8a4535;
   /* A row, tab or image lifted by drag and drop: ambient plus direct shadow. */
   --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.12);
   /* Where a bar casts its edge (NchScrollEdge): the start of a short gradient to transparent. */
@@ -217,6 +220,7 @@
   --account-d: #e070b0;
   --plan-pro: #c5cdd9;
   --plan-max: #d8b76a;
+  --plan-ultra: #eeb0a0;
   --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.35);
   --shadow-edge: rgb(0 0 0 / 0.7);
 }

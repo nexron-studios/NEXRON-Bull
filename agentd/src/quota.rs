@@ -29,6 +29,11 @@ use crate::tokenscope::{self, ScopedAccount, TokenScope, TokenScopeError};
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA: &str = "oauth-2025-04-20";
 const CREDENTIALS_FILE: &str = ".credentials.json";
+/// `default_claude_max_5x`, `default_claude_ai`: the plan is the word after the prefix.
+const RATE_LIMIT_TIER_PREFIX: &str = "default_claude_";
+/// Free and Pro share this tier, so it names no plan.
+const BASE_RATE_LIMIT_TIER: &str = "ai";
+
 const REQUEST_TIMEOUT_SECS: &str = "10";
 /// The endpoint answers 429 quickly, and the Agent Dashboard and TokenScope may poll it too.
 const MIN_FETCH_INTERVAL: Duration = Duration::from_secs(90);
@@ -354,8 +359,20 @@ fn credential_of(raw: &str) -> Option<Credential> {
         token: oauth.get("accessToken")?.as_str()?.to_string(),
         expires_at_ms: oauth.get("expiresAt").and_then(Value::as_u64),
         is_logged_out: oauth.get("loginEnded").is_some_and(|ended| !ended.is_null() && ended != false),
-        plan: oauth.get("subscriptionType").and_then(Value::as_str).map(str::to_string),
+        plan: plan_of(oauth),
     })
+}
+
+/// The CLI's `subscriptionType` (`pro`, `max`). A CLI older than a tier writes none for it, but
+/// `rateLimitTier` still names it (`default_claude_ultra` → `ultra`), so a new plan shows by name.
+fn plan_of(oauth: &Value) -> Option<String> {
+    let named = oauth.get("subscriptionType").and_then(Value::as_str).filter(|plan| !plan.is_empty());
+    if let Some(plan) = named {
+        return Some(plan.to_string());
+    }
+    let tier = oauth.get("rateLimitTier")?.as_str()?.strip_prefix(RATE_LIMIT_TIER_PREFIX)?;
+    let plan = tier.split('_').next().filter(|plan| !plan.is_empty() && *plan != BASE_RATE_LIMIT_TIER)?;
+    Some(plan.to_string())
 }
 
 fn now_ms() -> u64 {
@@ -404,6 +421,20 @@ mod tests {
             ("t", Some(5), Some("max"), true)
         );
         assert_eq!(fetch(&credential).err(), Some(QuotaProblem::LoggedOut));
+    }
+
+    #[test]
+    fn names_a_plan_the_cli_does_not_know_by_its_rate_limit_tier() {
+        let plan_of_raw = |oauth: &str| credential_of(&format!(r#"{{"claudeAiOauth":{{"accessToken":"t",{oauth}}}}}"#)).unwrap().plan;
+        assert_eq!(
+            [
+                plan_of_raw(r#""subscriptionType":null,"rateLimitTier":"default_claude_ultra""#),
+                plan_of_raw(r#""subscriptionType":"max","rateLimitTier":"default_claude_max_20x""#),
+                plan_of_raw(r#""rateLimitTier":"default_claude_ai""#),
+                plan_of_raw(r#""rateLimitTier":"something_else""#),
+            ],
+            [Some("ultra".to_string()), Some("max".to_string()), None, None]
+        );
     }
 
     #[test]

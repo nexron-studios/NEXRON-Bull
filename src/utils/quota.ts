@@ -144,14 +144,17 @@ export const problemKeyOf = (problem: QuotaProblem, source?: QuotaSource): strin
 export const planLabelOf = (plan: string | null): string | null =>
   plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : null
 
-/** Pill tones of the plans (`--plan-*` in tokens.css); a plan without its own, like free, is neutral. */
-export const planToneList = ['pro', 'max', 'neutral'] as const
+/**
+ * Pill tones of the plans (`--plan-*` in tokens.css). A plan without its own, like free or one
+ * newer than Bull, is neutral and still shows its name.
+ */
+export const planToneList = ['pro', 'max', 'ultra', 'neutral'] as const
 export type PlanTone = (typeof planToneList)[number]
 
-export const planToneOf = (plan: string): PlanTone => {
-  const tone = plan.toLowerCase()
-  return tone === 'pro' || tone === 'max' ? tone : 'neutral'
-}
+const TIERED_PLANS: readonly PlanTone[] = ['pro', 'max', 'ultra']
+
+export const planToneOf = (plan: string): PlanTone =>
+  TIERED_PLANS.find((tone) => tone === plan.toLowerCase()) ?? 'neutral'
 
 /** Dot colours of the accounts (`--account-*` in tokens.css); more accounts share them in turn. */
 export const accountToneList = ['a', 'b', 'c', 'd'] as const

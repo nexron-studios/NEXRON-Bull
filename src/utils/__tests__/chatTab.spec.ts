@@ -59,6 +59,17 @@ describe('newTab', () => {
     expect(newTab(saved).unseenAt).toBe(5000)
   })
 
+  it('should keep the context window across a restart', () => {
+    const saved = JSON.parse(
+      JSON.stringify(savedTabOf({ ...tab(), contextWindow: 1_000_000 }))
+    ) as SavedTab
+    expect(newTab(saved).contextWindow).toBe(1_000_000)
+  })
+
+  it('should leave the window unknown for a tab saved before it was kept', () => {
+    expect(newTab(tab()).contextWindow).toBe(null)
+  })
+
   it('should give a tab saved before the finish order no place in it', () => {
     expect(newTab(tab()).unseenAt).toBe(null)
   })

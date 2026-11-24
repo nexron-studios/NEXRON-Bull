@@ -17,6 +17,8 @@ const fetchReport = async (tabId: string, detail: Detail) => {
     await chat.askClaude(tabId, { subtype: 'get_context_usage', detail })
   )
   if (!report) throw new Error('get_context_usage gave no usable answer')
+  // The ring and the panel read the window from the tab, so they agree with this report.
+  chat.setContextWindow(tabId, report.window)
   return report
 }
 

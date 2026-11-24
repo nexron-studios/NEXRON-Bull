@@ -107,7 +107,10 @@ export interface ChatTabState {
   hasMore: boolean
   /** MCP servers of the session, from Claude's `system/init`; `null` until it reported them once */
   connectors: Connector[] | null
-  /** Context window Claude reported with the last result; `null` until a turn ended */
+  /**
+   * Context window Claude last reported, with a result or the context report; saved, because a
+   * reopened tab has no result yet and a guessed window would make the ring wrong
+   */
   contextWindow: number | null
   /** Background agents that finished while the app listened */
   agentNotices: AgentNotice[]
@@ -147,8 +150,8 @@ export type PermissionMode = OfferedMode | (typeof otherPermissionModeList)[numb
 
 /** What reopens a tab after a restart; everything else comes back from the transcript. */
 export type SavedTab = SavedTabFields &
-  // Optional: tabs saved before muting or effort existed have neither.
-  Partial<Pick<ChatTabState, 'isMuted' | 'effort'>>
+  // Optional: tabs saved before muting, effort or the window existed have none of these.
+  Partial<Pick<ChatTabState, 'isMuted' | 'effort' | 'contextWindow'>>
 
 type SavedTabFields = Pick<
   ChatTabState,
@@ -179,7 +182,8 @@ export const savedTabOf = ({
   permissionMode,
   effort,
   isFresh,
-  unseenAt
+  unseenAt,
+  contextWindow
 }: ChatTabState): SavedTab => ({
   id,
   title,
@@ -193,7 +197,8 @@ export const savedTabOf = ({
   permissionMode,
   effort,
   isFresh,
-  unseenAt
+  unseenAt,
+  contextWindow
 })
 
 export const newTab = (fields: SavedTab): ChatTabState => ({
@@ -220,7 +225,7 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   notice: null,
   hasMore: false,
   connectors: null,
-  contextWindow: null,
+  contextWindow: fields.contextWindow ?? null,
   agentNotices: [],
   liveSubagents: {},
   backgroundTasks: null,

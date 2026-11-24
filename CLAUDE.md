@@ -76,7 +76,11 @@ The Windows installer is built here (`npm run app:build`) and uploaded by hand.
 `.github/workflows/release-unix.yml` runs on every pushed tag `v*` (or by hand with a tag): it
 builds the universal macOS `.dmg` (ad-hoc signed, not notarised) and `agentd-<target>` for Linux
 (musl, x86_64 and aarch64), macOS and Windows, and attaches them to that tag's release, drafting
-one if there is none. The tag must equal the version in `tauri.conf.json`.
+one if there is none. The tag must equal the version in `tauri.conf.json`. It runs `tauri build`
+itself, not `app:build`: the LaunchServices clean-up is for a Mac that keeps its build, and a
+runner is thrown away afterwards.
+Unix machines download `agentd-<target>` of their app's version, so only tags from after the
+macOS/Linux support build a usable one, and Mac/Linux installs fail until that release exists.
 
 ## Deviations from the house rules
 

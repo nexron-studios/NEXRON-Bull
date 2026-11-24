@@ -33,6 +33,8 @@ use crate::profile_setup;
 use crate::removal;
 use crate::rewind;
 use crate::subagents;
+use crate::title_flow::TitleRequest;
+use crate::titles::TitleStore;
 use crate::transfer;
 use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
 
@@ -98,8 +100,19 @@ pub(crate) struct Session {
     pub(crate) is_draining: bool,
     /// What Claude listed last, sent again to an app that attaches later.
     commands: Option<Vec<SlashCommand>>,
+    /// Claude's last `background_tasks_changed`, sent again to an app that attaches later: Claude
+    /// sends it only on a change, and without it the app would show a chat whose shells or agents
+    /// still run as finished.
+    background_tasks: Option<Value>,
     /// Mode, model or effort changes Claude has not answered yet.
     pub(crate) configuring: Vec<PendingChange>,
+}
+
+impl Session {
+    /// A sent `/clear` waits for Claude to report the new session.
+    pub(crate) fn is_clearing(&self) -> bool {
+        self.clearing.is_some()
+    }
 }
 
 /// A control request the app sent through `control`, waiting for Claude's response.
@@ -122,6 +135,10 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) moving: Mutex<HashSet<String>>,
     /// The waiting messages of a moving tab, from its old Claude's exit until the new one starts.
     pub(crate) carried: Mutex<HashMap<String, Vec<Queued>>>,
+    /// Chat titles by session id, see `title_flow`.
+    pub(crate) titles: TitleStore,
+    /// Tabs with a title call running, each with the newest message sent meanwhile.
+    title_waiting: Mutex<HashMap<String, Option<TitleRequest>>>,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -138,6 +155,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
             policy: Mutex::new(policy),
             moving: Mutex::new(HashSet::new()),
             carried: Mutex::new(HashMap::new()),
+            titles: TitleStore::load(home().as_deref()),
+            title_waiting: Mutex::new(HashMap::new()),
         });
         daemon.start_limit_clock();
         daemon
@@ -180,7 +199,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             Request::Start(params) => self.start(id, params),
             Request::Send { tab, content } if self.queue_if_waiting(&tab, &content) => Ok(()),
-            Request::Send { tab, content } => self.send_prompt(&tab, &content),
+            Request::Send { tab, content } => self.send_prompt(&tab, &content).inspect(|()| self.retitle(&tab, &content)),
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
                 self.with_session(&tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
@@ -205,7 +224,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 home.map(|home| self.emit(&Event::Profiles { id, profiles: catalog::profiles(&home) }))
             }
             Request::Recent { limit } => home().ok_or(DaemonError::NoHome).map(|home| {
-                let sessions = catalog::recent_sessions(&catalog::profiles(&home), limit);
+                let mut sessions = catalog::recent_sessions(&catalog::profiles(&home), limit);
+                for session in &mut sessions {
+                    if let Some(title) = self.titles.get(&session.session_id) {
+                        session.title = title;
+                    }
+                }
                 self.emit(&Event::Recent { id, sessions });
             }),
             Request::MoveSession { from, to, session_id, is_fresh } => self.move_session(id, from, to, session_id, is_fresh),
@@ -315,19 +339,24 @@ impl<W: Write + Send + 'static> Daemon<W> {
             .get(&params.tab)
             .map(|session| {
                 let working = session.is_working || session.clearing.is_some();
-                (session.session_id.clone(), working, session.asks.clone(), session.params.profile.clone(), session.limit.clone(), session.commands.clone())
+                let replayed = Replayed { asks: session.asks.clone(), commands: session.commands.clone(), background_tasks: session.background_tasks.clone() };
+                (session.session_id.clone(), working, replayed, session.params.profile.clone(), session.limit.clone())
             });
-        if let Some((session_id, working, asks, profile, limit, commands)) = running {
+        if let Some((session_id, working, Replayed { asks, commands, background_tasks }, profile, limit)) = running {
             let (profile, account) = Self::account_of(profile);
-            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id, working, profile, account });
+            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id: session_id.clone(), working, profile, account });
             if let Some(commands) = commands {
                 self.emit(&Event::Commands { tab: params.tab.clone(), commands });
             }
+            self.replay_title(&params.tab, &session_id);
             // Marked, so the app can tell an approval it already knew from a new one.
             for mut event in asks {
                 if let Some(fields) = event.as_object_mut() {
                     fields.insert("replay".into(), Value::Bool(true));
                 }
+                self.emit(&Event::Claude { tab: params.tab.clone(), event });
+            }
+            if let Some(event) = background_tasks {
                 self.emit(&Event::Claude { tab: params.tab.clone(), event });
             }
             if limit != LimitState::None {
@@ -359,6 +388,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             in_flight: Vec::new(),
             is_draining: false,
             commands: None,
+            background_tasks: None,
             configuring: Vec::new(),
         };
         self.sessions().insert(tab.clone(), session);
@@ -598,6 +628,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.sessions().is_empty()
     }
 
+    pub(crate) fn title_waiting(&self) -> MutexGuard<'_, HashMap<String, Option<TitleRequest>>> {
+        self.title_waiting.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     fn controls(&self) -> MutexGuard<'_, HashMap<String, PendingControl>> {
         self.controls.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -692,6 +726,13 @@ fn tab_of(request: &Request) -> Option<String> {
     }
 }
 
+/// What a running session sends again to an app that attaches later.
+struct Replayed {
+    asks: Vec<Value>,
+    commands: Option<Vec<SlashCommand>>,
+    background_tasks: Option<Value>,
+}
+
 /// Keeps what an app attaching later needs: whether a turn runs and which asks are open.
 fn track_turn(session: &mut Session, event: &Value) {
     // The mode Claude reports (`status` on every change, `init` per turn), also one it switched to
@@ -710,6 +751,7 @@ fn track_turn(session: &mut Session, event: &Value) {
         Some("control_request") if event["request"]["subtype"] == "can_use_tool" => session.asks.push(event.clone()),
         // `/clear` starts a new session in the same process; later checks and replays need its id.
         // A subagent's events carry its parent call and say nothing about the tab's session.
+        Some("system") if event["subtype"] == "background_tasks_changed" => session.background_tasks = Some(event.clone()),
         Some("system") if event["subtype"] == "init" && event["parent_tool_use_id"].is_null() => {
             if let Some(id) = event["session_id"].as_str() {
                 if session.clearing.as_deref().is_some_and(|old| old != id) {

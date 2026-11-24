@@ -87,6 +87,24 @@ describe('useChatSettingsStore', () => {
     expect(chat.tabs[0]?.permissionMode).toBe('plan')
   })
 
+  it('should forget the window of the model a tab leaves', async () => {
+    const chat = openTab('ended')
+    chat.tabs = chat.tabs.map((tab) => ({ ...tab, contextWindow: 1_000_000 }))
+
+    await useChatSettingsStore().setModel('t1', 'haiku')
+
+    expect(chat.tabs[0]?.contextWindow).toBe(null)
+  })
+
+  it('should keep the window when the same model is picked again', async () => {
+    const chat = openTab('ended')
+    chat.tabs = chat.tabs.map((tab) => ({ ...tab, contextWindow: 1_000_000 }))
+
+    await useChatSettingsStore().setModel('t1', 'opus')
+
+    expect(chat.tabs[0]?.contextWindow).toBe(1_000_000)
+  })
+
   it('should open the model picker of one tab', () => {
     const settings = useChatSettingsStore()
     settings.openModelPicker('t1')

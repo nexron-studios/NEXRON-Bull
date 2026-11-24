@@ -24,7 +24,12 @@ import {
 const UNDO_TOAST_MS = 8000
 
 /** The agentd op behind each confirmation; an agentd without it names it in its error. */
-const OP_OF = { clear: 'clear', stop_and_remove: null, delete: 'delete_session' } as const
+const OP_OF = {
+  clear: 'clear',
+  remove: null,
+  stop_and_remove: null,
+  delete: 'delete_session'
+} as const
 
 /** A step the user confirms in the dialog first. `sessionId` is the one they saw when asking. */
 export interface SessionConfirmation {
@@ -118,6 +123,10 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     hideAll([target]).catch(handleError)
   }
 
+  /** The tab's close button: unlike the menus it always asks, a finished chat too (Jonas, 24.11.2026). */
+  const requestRemove = (target: SessionTarget) =>
+    ask(needsStop(target) ? 'stop_and_remove' : 'remove', target)
+
   /** "Remove all" over finished sessions: none of them has a Claude at work. */
   const removeAll = (targets: SessionTarget[]) => {
     const finished = targets.filter((target) => !needsStop(target))
@@ -171,6 +180,7 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     switch (current.kind) {
       case 'clear':
         return clear(current)
+      case 'remove':
       case 'stop_and_remove':
         return hideAll([current.target])
       case 'delete':
@@ -206,6 +216,7 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     isWorking,
     titleOf,
     act,
+    requestRemove,
     removeAll,
     confirm,
     cancel

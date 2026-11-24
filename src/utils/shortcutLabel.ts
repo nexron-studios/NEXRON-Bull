@@ -24,7 +24,7 @@ export type KeyStyle = (typeof keyStyleList)[number]
 export const keyStyleOf = (system: SystemName | null): KeyStyle =>
   system === 'macOS' ? 'mac' : 'pc'
 
-const KEY_GLYPHS: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→' }
+const KEY_GLYPHS: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', '-': '−' }
 
 const keyGlyphOf = (key: string): string => KEY_GLYPHS[key] ?? key
 

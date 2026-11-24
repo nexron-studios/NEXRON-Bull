@@ -37,7 +37,7 @@ const isAlarm = computed(() => outcome !== 'output')
 
 <template>
   <div
-    class="flex w-full max-w-[72ch] flex-col gap-1 border-l-2 py-1 pl-3"
+    class="flex w-full flex-col gap-1 border-l-2 py-1 pl-3"
     :class="isAlarm ? 'border-critical' : 'border-border'"
   >
     <button

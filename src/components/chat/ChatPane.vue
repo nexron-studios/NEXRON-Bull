@@ -85,8 +85,9 @@ const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo } = useChatFo
 // The open search floats over the chat's top: a revealed card lands below it.
 useRevealTarget(scroller, glideTo, () => searchBox.value?.coverOf() ?? null)
 const reducedMotion = usePreferredReducedMotion()
-// The session bar (phone: the screen's top bar) above, the composer below.
-const { hasMoreAbove, hasMoreBelow } = useScrollEdges(scroller)
+// The session bar (phone: the screen's top bar) casts its edge. The composer deliberately does
+// not (Jonas, 24.11.2026): a band above it read as a footer and blinked off after every message.
+const { hasMoreAbove } = useScrollEdges(scroller)
 
 const isWorking = computed(() => tab.status === 'working' || tab.status === 'asking')
 // Every streamed token replaces the tab object, but not its message lists. These computeds return
@@ -241,8 +242,10 @@ watch(
     <!-- The backdrop starts below the session bar: the bar is chrome, not part of the chat. -->
     <div class="relative isolate flex min-h-0 flex-1 flex-col">
       <ChatBackdrop />
-      <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto">
+      <div ref="scroller" class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <!-- data-tab-content: the part that fades in on a tab switch (transitions.css). -->
         <div
+          data-tab-content
           class="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-5"
           :class="isCompact ? 'px-4 py-4' : 'px-6 py-6'"
         >
@@ -330,7 +333,6 @@ watch(
         </div>
       </div>
       <NchScrollEdge edge="top" :is-shown="hasMoreAbove" />
-      <NchScrollEdge edge="bottom" :is-shown="hasMoreBelow" />
       <ChatSearch
         v-if="search.isOpen"
         ref="searchBox"

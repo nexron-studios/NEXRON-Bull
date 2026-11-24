@@ -76,9 +76,11 @@ const stats = computed(() => {
 </script>
 
 <template>
-  <!-- A container: beside the grid or below it, the numbers follow the card's own width. -->
+  <!-- No container of its own: beside its peers the card takes the grid's natural width, which a
+       container (sized from outside, never from its content) cannot. The page's width decides
+       whether the numbers stand beside the grid or below it. -->
   <section
-    class="@container flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:p-5"
+    class="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:p-5"
     aria-labelledby="overview-activity"
   >
     <header class="flex flex-wrap items-start justify-between gap-3">
@@ -113,7 +115,9 @@ const stats = computed(() => {
     </header>
 
     <div class="flex flex-col gap-5 @4xl:flex-row @4xl:items-center @4xl:gap-8">
-      <div class="flex min-w-0 flex-1 flex-col gap-2">
+      <!-- As wide as the capped grid, narrower when the card is: the numbers follow right after
+           it instead of across an empty strip. -->
+      <div class="flex min-w-0 flex-initial flex-col gap-2">
         <OverviewActivityGrid :weeks :days :metric :is-pending />
         <p
           class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-meta text-muted-foreground"

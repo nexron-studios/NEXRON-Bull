@@ -3,7 +3,7 @@ import { useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useClipped } from '@/composables/useClipped'
+import { useClippedTooltip } from '@/composables/useClippedTooltip'
 import type { Connector, ConnectorStatus } from '@/utils/tabInsights'
 
 // One MCP server in "Konnektoren": a dot for its state, the name (full name in a tooltip once it
@@ -30,7 +30,7 @@ const LABEL_CLASS: Record<Exclude<ConnectorStatus, 'connected' | 'needs-auth'>, 
 const nameEl = useTemplateRef<HTMLElement>('name')
 
 const { t } = useI18n()
-const { isClipped, measure: measureClip } = useClipped([nameEl])
+const { open, setOpen } = useClippedTooltip([nameEl])
 </script>
 
 <template>
@@ -40,9 +40,9 @@ const { isClipped, measure: measureClip } = useClipped([nameEl])
       :class="DOT_CLASS[connector.status]"
       aria-hidden="true"
     />
-    <Tooltip :disabled="!isClipped">
+    <Tooltip :open @update:open="setOpen">
       <TooltipTrigger as-child>
-        <span ref="name" class="min-w-0 flex-1 truncate" @pointerenter="measureClip">
+        <span ref="name" class="min-w-0 flex-1 truncate">
           {{ connector.name }}
         </span>
       </TooltipTrigger>

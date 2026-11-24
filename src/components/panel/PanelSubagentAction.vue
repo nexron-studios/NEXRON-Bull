@@ -2,7 +2,7 @@
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useClipped } from '@/composables/useClipped'
+import { useClippedTooltip } from '@/composables/useClippedTooltip'
 import { formatElapsed } from '@/utils/elapsed'
 import type { ToolRun } from '@/utils/tabActivity'
 import { TOOL_ICON, TOOL_KIND_CLASS, TOOL_RUN_LOOK } from '@/utils/toolIcons'
@@ -20,7 +20,7 @@ const nameEl = useTemplateRef<HTMLElement>('name')
 const targetEl = useTemplateRef<HTMLElement>('target')
 
 const { t } = useI18n()
-const { isClipped, measure } = useClipped([nameEl, targetEl])
+const { open, setOpen } = useClippedTooltip([nameEl, targetEl])
 
 const info = computed(() => toolInfoOf(run.name))
 const duration = computed(() => {
@@ -31,13 +31,9 @@ const duration = computed(() => {
 </script>
 
 <template>
-  <Tooltip :disabled="!isClipped">
+  <Tooltip :open @update:open="setOpen">
     <TooltipTrigger as-child>
-      <span
-        v-bind="$attrs"
-        class="flex min-w-0 items-center gap-1.5 py-0.5 text-meta"
-        @pointerenter="measure"
-      >
+      <span v-bind="$attrs" class="flex min-w-0 items-center gap-1.5 py-0.5 text-meta">
         <component
           :is="TOOL_RUN_LOOK[run.status].icon"
           class="size-3 shrink-0"

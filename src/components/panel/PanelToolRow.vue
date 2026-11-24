@@ -2,7 +2,7 @@
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useClipped } from '@/composables/useClipped'
+import { useClippedTooltip } from '@/composables/useClippedTooltip'
 import { formatElapsed } from '@/utils/elapsed'
 import type { ToolRun } from '@/utils/tabActivity'
 import { TOOL_ICON, TOOL_KIND_CLASS, TOOL_RUN_LOOK } from '@/utils/toolIcons'
@@ -18,7 +18,7 @@ const nameEl = useTemplateRef<HTMLElement>('name')
 const targetEl = useTemplateRef<HTMLElement>('target')
 
 const { t } = useI18n()
-const { isClipped, measure } = useClipped([nameEl, targetEl])
+const { open, setOpen } = useClippedTooltip([nameEl, targetEl])
 
 const info = computed(() => toolInfoOf(run.name))
 const duration = computed(() => {
@@ -28,13 +28,11 @@ const duration = computed(() => {
 </script>
 
 <template>
-  <Tooltip :disabled="!isClipped">
+  <Tooltip :open @update:open="setOpen">
     <TooltipTrigger as-child>
       <button
         type="button"
-        class="motion-press flex w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-meta outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
-        @pointerenter="measure"
-        @focus="measure"
+        class="motion-press flex w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-meta outline-none select-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
         @click="emit('open')"
       >
         <component

@@ -6,8 +6,10 @@ import type { TextSelection } from '@/utils/imageRefs'
 import { textPiecesOf, type Highlight } from '@/utils/textPieces'
 
 // The composer's text field. A textarea cannot style part of its text, so mentioned files and
-// image references are tinted by a copy of the text behind it, laid out the same (Figma 32:
+// image references are drawn by a copy of the text behind it, laid out the same (Figma 32:
 // `@ChatComposer.vue`). Both always keep a scrollbar's room, so a long draft wraps alike in both.
+// A mention only needs a tint; an image reference becomes a chip, so while one is there the copy
+// shows the text and the textarea above keeps only caret and selection.
 const {
   placeholder,
   label,
@@ -44,7 +46,8 @@ const hasCaret = ref(false)
 const pieces = computed(() =>
   isShell ? [] : textPiecesOf(text.value, [...mentionRangesOf(text.value, known), ...highlights])
 )
-const hasHighlight = computed(() => pieces.value.some((piece) => piece.kind))
+const hasHighlight = computed(() => pieces.value.some((piece) => piece.mark))
+const hasChip = computed(() => pieces.value.some((piece) => piece.mark?.kind === 'image'))
 
 const reportCaret = () => emit('caret', field.value?.selectionStart ?? text.value.length)
 const handleFocus = () => {
@@ -83,7 +86,8 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
       v-if="hasHighlight"
       ref="mirror"
       aria-hidden="true"
-      class="pointer-events-none col-start-1 row-start-1 max-h-60 overflow-y-scroll px-4 pt-3 pb-1 text-body break-words whitespace-pre-wrap text-transparent [&::-webkit-scrollbar-thumb]:bg-transparent"
+      class="pointer-events-none col-start-1 row-start-1 max-h-60 overflow-y-scroll px-4 pt-3 pb-1 text-body break-words whitespace-pre-wrap [&::-webkit-scrollbar-thumb]:bg-transparent"
+      :class="hasChip ? 'text-foreground' : 'text-transparent'"
     >
       <ChatTextPieces :pieces />
       <!-- A trailing line break only counts in the textarea; this keeps the last line in the copy. -->
@@ -102,7 +106,7 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
       :aria-activedescendant="activeOptionId ?? undefined"
       rows="1"
       class="col-start-1 row-start-1 field-sizing-content max-h-60 min-h-11 w-full resize-none overflow-y-scroll bg-transparent px-4 pt-3 pb-1 text-body outline-none placeholder:text-muted-foreground"
-      :class="isShell && 'font-mono'"
+      :class="[isShell && 'font-mono', hasChip && 'text-transparent caret-foreground']"
       @keydown="emit('keydown', $event)"
       @paste="emit('paste', $event)"
       @input="reportCaret"

@@ -16,29 +16,33 @@ const shot = { id: 'a', name: 'Bild 15-01-01.png' }
 const logo = { id: 'b', name: 'logo.png' }
 const third = { id: 'c', name: 'Bild 12-03-04 (2).png' }
 
+/** As the composer renders a reference: no line break inside, so no-break spaces and hyphens. */
+const unbroken = (text: string) =>
+  text.replace(/\[[^\]]*\]/g, (token) => token.replaceAll(' ', '\u00a0').replaceAll('-', '\u2011'))
+
 describe('imageRefFormatOf', () => {
   it('should render number and a shortened name into the template', () => {
     expect(FORMAT.render(2, 'a very long screenshot name of a window.png')).toBe(
-      '[Bild 2 (a very long screenshot n…)]'
+      '[Bild\u00a02\u00a0(a\u00a0very\u00a0long\u00a0screenshot\u00a0n…)]'
     )
   })
 
   it('should turn brackets in a name into round ones so the reference stays one token', () => {
-    expect(FORMAT.render(1, 'shot [1].png')).toBe('[Bild 1 (shot (1).png)]')
+    expect(FORMAT.render(1, 'shot [1].png')).toBe(unbroken('[Bild 1 (shot (1).png)]'))
   })
 
   it('should fill and find a slot the template uses twice', () => {
     const twice = imageRefFormatOf(
       `[${IMAGE_REF_SLOTS.n}: Bild ${IMAGE_REF_SLOTS.n} (${IMAGE_REF_SLOTS.name})]`
     )
-    expect(twice.render(2, 'a.png')).toBe('[2: Bild 2 (a.png)]')
+    expect(twice.render(2, 'a.png')).toBe(unbroken('[2: Bild 2 (a.png)]'))
     expect(imageRefsOf('x [2: Bild 2 (a.png)]', twice)).toEqual([
       { start: 2, end: 21, n: 2, name: 'a.png' }
     ])
   })
 
   it('should keep dollar signs in a name as they are', () => {
-    expect(FORMAT.render(1, '$&.png')).toBe('[Bild 1 ($&.png)]')
+    expect(FORMAT.render(1, '$&.png')).toBe(unbroken('[Bild 1 ($&.png)]'))
   })
 })
 
@@ -63,6 +67,11 @@ describe('validImageRefsOf', () => {
     expect(validImageRefsOf(text, [shot, logo], FORMAT).map((ref) => ref.image.id)).toEqual(['a'])
   })
 
+  it('should recognise a reference typed with plain spaces and hyphens', () => {
+    const text = '[Bild 1 (Bild 15-01-01.png)]'
+    expect(validImageRefsOf(text, [shot], FORMAT).map((ref) => ref.image.id)).toEqual(['a'])
+  })
+
   it('should recognise a rendered reference to a name with parentheses', () => {
     const text = FORMAT.render(1, third.name)
     expect(validImageRefsOf(text, [third], FORMAT).map((ref) => ref.image.id)).toEqual(['c'])
@@ -74,13 +83,13 @@ describe('remapImageRefs', () => {
 
   it('should renumber references when the images change places', () => {
     expect(remapImageRefs(text, [shot, logo], [logo, shot], FORMAT)).toBe(
-      'look at [Bild 2 (Bild 15-01-01.png)] and [Bild 1 (logo.png)] here'
+      unbroken('look at [Bild 2 (Bild 15-01-01.png)] and [Bild 1 (logo.png)] here')
     )
   })
 
   it('should drop the reference of a removed image with one space and renumber the rest', () => {
     expect(remapImageRefs(text, [shot, logo], [logo], FORMAT)).toBe(
-      'look at and [Bild 1 (logo.png)] here'
+      unbroken('look at and [Bild 1 (logo.png)] here')
     )
   })
 
@@ -91,7 +100,7 @@ describe('remapImageRefs', () => {
   it('should point a replaced image at its successor under the new name', () => {
     const marked = { id: 'm', name: 'Bild 15-01-01.png' }
     expect(remapImageRefs(text, [shot, logo], [marked, shot, logo], FORMAT, { a: 'm' })).toBe(
-      'look at [Bild 1 (Bild 15-01-01.png)] and [Bild 3 (logo.png)] here'
+      unbroken('look at [Bild 1 (Bild 15-01-01.png)] and [Bild 3 (logo.png)] here')
     )
   })
 
@@ -139,9 +148,9 @@ describe('imageRefAt', () => {
 })
 
 describe('sentImageRefHighlightsOf', () => {
-  it('should highlight only references within the image count of the prompt', () => {
-    expect(sentImageRefHighlightsOf('[Bild 1 (a)] [Bild 3 (c)]', 2, FORMAT)).toEqual([
-      { start: 0, end: 12, kind: 'image' }
-    ])
+  it('should highlight only references with an image of the prompt behind them', () => {
+    expect(
+      sentImageRefHighlightsOf('[Bild 1 (a)] [Bild 3 (c)]', ['data:1', 'data:2'], FORMAT)
+    ).toEqual([{ start: 0, end: 12, kind: 'image', n: 1, name: 'a', src: 'data:1' }])
   })
 })

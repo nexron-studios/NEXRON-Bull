@@ -4,7 +4,7 @@ import { Archive, Copy, OctagonX, SquareSlash } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/types/agentd.type'
 import { copyText } from '@/lib/clipboard'
-import { imageBlocksOf } from '@/utils/attachments'
+import { imageBlocksOf, toDataUrl } from '@/utils/attachments'
 import { sentImageRefHighlightsOf } from '@/utils/imageRefs'
 import { textPiecesOf } from '@/utils/textPieces'
 import type { ToolResultBlock } from '@/utils/toolPairs'
@@ -53,6 +53,9 @@ const replyText = computed(() =>
 
 // All images of a message go into one gallery, placed where the first of them stands.
 const imageBlocks = computed(() => imageBlocksOf(message.blocks))
+const imageSrcs = computed(() =>
+  imageBlocks.value.map((block) => toDataUrl(block.media_type, block.data))
+)
 const firstImageIndex = computed(() => message.blocks.findIndex((block) => block.type === 'image'))
 const texts = computed(() =>
   message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
@@ -60,7 +63,7 @@ const texts = computed(() =>
 
 /** A sent prompt's text with its image references highlighted like in the composer. */
 const promptPiecesOf = (text: string) =>
-  textPiecesOf(text, sentImageRefHighlightsOf(text, imageBlocks.value.length, imageRefFormat.value))
+  textPiecesOf(text, sentImageRefHighlightsOf(text, imageSrcs.value, imageRefFormat.value))
 
 // What the row under a sent prompt copies; a prompt of only images or a command gets no row.
 const promptText = computed(() => (message.role === 'user' ? texts.value.join('\n\n') : ''))

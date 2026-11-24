@@ -8,6 +8,10 @@ const FORMAT = imageRefFormatOf(`[Bild ${IMAGE_REF_SLOTS.n} (${IMAGE_REF_SLOTS.n
 
 const NOW = Date.parse('2026-11-15T20:00:00Z')
 
+/** As the composer renders a reference: no line break inside, so no-break spaces and hyphens. */
+const unbroken = (text: string) =>
+  text.replace(/\[[^\]]*\]/g, (token) => token.replaceAll(' ', '\u00a0').replaceAll('-', '\u2011'))
+
 const echo = (uuid: string, blocks: ChatMessage['blocks']): ChatMessage => ({
   uuid,
   role: 'user',
@@ -134,7 +138,7 @@ describe('draftWithUnsent', () => {
     const draft = { text: 'see [Bild 1 (later.png)]', images: [later] }
     const unsent = [{ text: '[Bild 1 (shot.png)] broken', images: [image] }]
     expect(draftWithUnsent(draft, unsent, FORMAT).text).toBe(
-      '[Bild 1 (shot.png)] broken\n\nsee [Bild 2 (later.png)]'
+      unbroken('[Bild 1 (shot.png)] broken\n\nsee [Bild 2 (later.png)]')
     )
   })
 })

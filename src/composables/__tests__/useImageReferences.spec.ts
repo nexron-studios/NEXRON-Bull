@@ -20,6 +20,10 @@ const imageOf = (id: string, name: string): PendingImage => ({
 const shot = imageOf('a', 'shot.png')
 const logo = imageOf('b', 'logo.png')
 
+/** As the composer renders a reference: no line break inside, so no-break spaces and hyphens. */
+const unbroken = (text: string) =>
+  text.replace(/\[[^\]]*\]/g, (token) => token.replaceAll(' ', '\u00a0').replaceAll('-', '\u2011'))
+
 // The composer's wiring: attachments tell the references when they rearrange.
 const setup = (text: string, attached: PendingImage[]) => {
   const draft = ref(text)
@@ -53,39 +57,48 @@ describe('useImageReferences', () => {
   it('should insert a reference at the selection and give the caret after it', () => {
     const { draft, references } = setup('see this', [shot])
     expect(references.insert([shot], { start: 4, end: 4 })).toBe(24)
-    expect(draft.value).toBe('see [Bild 1 (shot.png)] this')
+    expect(draft.value).toBe(unbroken('see [Bild 1 (shot.png)] this'))
   })
 
   it('should append the reference when the field never had the caret', () => {
     const { draft, references } = setup('see', [shot])
     references.insert([shot], null)
-    expect(draft.value).toBe('see [Bild 1 (shot.png)] ')
+    expect(draft.value).toBe(unbroken('see [Bild 1 (shot.png)] '))
   })
 
   it('should drop the reference when its chip is removed and renumber the others', () => {
     const { draft, attachments } = setup('[Bild 1 (shot.png)] vs [Bild 2 (logo.png)]', [shot, logo])
     attachments.remove('a')
-    expect(draft.value).toBe('vs [Bild 1 (logo.png)]')
+    expect(draft.value).toBe(unbroken('vs [Bild 1 (logo.png)]'))
   })
 
   it('should renumber references when the chips are dragged into a new order', () => {
     const { draft, attachments } = setup('[Bild 1 (shot.png)] vs [Bild 2 (logo.png)]', [shot, logo])
     attachments.reorder([logo, shot])
-    expect(draft.value).toBe('[Bild 2 (shot.png)] vs [Bild 1 (logo.png)]')
+    expect(draft.value).toBe(unbroken('[Bild 2 (shot.png)] vs [Bild 1 (logo.png)]'))
   })
 
   it('should point the reference at the marked copy that replaces its image', () => {
     const { draft, attachments } = setup('fix [Bild 1 (shot.png)]', [shot])
     const marked = { ...imageOf('m', 'shot.png'), isMarked: true }
     attachments.placeMarkedImages('a', [marked, shot])
-    expect(draft.value).toBe('fix [Bild 1 (shot.png)]')
+    expect(draft.value).toBe(unbroken('fix [Bild 1 (shot.png)]'))
     attachments.move('m', 1)
-    expect(draft.value).toBe('fix [Bild 2 (shot.png)]')
+    expect(draft.value).toBe(unbroken('fix [Bild 2 (shot.png)]'))
   })
 
   it('should highlight only references that name an attachment', () => {
     const { references } = setup('[Bild 1 (shot.png)] [Bild 2 (gone.png)]', [shot])
-    expect(references.highlights.value).toEqual([{ start: 0, end: 19, kind: 'image' }])
+    expect(references.highlights.value).toEqual([
+      {
+        start: 0,
+        end: 19,
+        kind: 'image',
+        n: 1,
+        name: 'shot.png',
+        src: 'data:image/png;base64,QUJD'
+      }
+    ])
   })
 
   it('should select the whole reference on Backspace so it goes as one unit', () => {

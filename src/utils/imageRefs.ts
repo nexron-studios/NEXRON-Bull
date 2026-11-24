@@ -38,21 +38,33 @@ export interface TextSelection {
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/**
+ * The composer draws a reference as one chip over its text, so the textarea must not wrap inside
+ * it: spaces become no-break spaces and hyphens no-break hyphens. Typed references with plain ones
+ * are still found.
+ */
+const NO_BREAK_SPACE = '\u00a0'
+const NO_BREAK_HYPHEN = '\u2011'
+const unbreakable = (text: string) =>
+  text.replaceAll(' ', NO_BREAK_SPACE).replaceAll('-', NO_BREAK_HYPHEN)
+
 // Brackets would end the token early, so a name keeps its meaning with round ones instead.
 const nameLabelOf = (name: string) =>
-  truncateName(name.replaceAll('[', '(').replaceAll(']', ')'), IMAGE_REF_NAME_MAX)
+  unbreakable(truncateName(name.replaceAll('[', '(').replaceAll(']', ')'), IMAGE_REF_NAME_MAX))
 
 /** The format for a template rendered with `IMAGE_REF_SLOTS` in place of number and name. */
 export const imageRefFormatOf = (template: string): ImageRefFormat => {
   // A group may be named once; a slot used again repeats it by backreference.
   const source = escapeRegExp(template)
+    .replaceAll(' ', `[ ${NO_BREAK_SPACE}]`)
+    .replaceAll('-', `[-${NO_BREAK_HYPHEN}]`)
     .replace(IMAGE_REF_SLOTS.n, '(?<n>\\d+)')
     .replaceAll(IMAGE_REF_SLOTS.n, '\\k<n>')
     .replace(IMAGE_REF_SLOTS.name, '(?<name>[^\\n\\[\\]]+?)')
     .replaceAll(IMAGE_REF_SLOTS.name, '\\k<name>')
   return {
     render: (n, name) =>
-      template
+      unbreakable(template)
         .replaceAll(IMAGE_REF_SLOTS.n, () => String(n))
         .replaceAll(IMAGE_REF_SLOTS.name, () => nameLabelOf(name)),
     pattern: new RegExp(source, 'g')
@@ -79,21 +91,23 @@ export const validImageRefsOf = <T extends RefImage>(
 ): (ImageRef & { image: T })[] =>
   imageRefsOf(text, format).flatMap((ref) => {
     const image = images[ref.n - 1]
-    return image && nameLabelOf(image.name) === ref.name ? [{ ...ref, image }] : []
+    return image && nameLabelOf(image.name) === unbreakable(ref.name) ? [{ ...ref, image }] : []
   })
 
 /**
- * The references of a sent prompt to highlight: those within its image count. Its file names are
- * not always known (the transcript has none), so the number decides.
+ * The references of a sent prompt to highlight: those with an image of the prompt behind their
+ * number (`srcs` in prompt order). Its file names are not always known (the transcript has none),
+ * so the number decides.
  */
 export const sentImageRefHighlightsOf = (
   text: string,
-  imageCount: number,
+  srcs: readonly string[],
   format: ImageRefFormat
 ): Highlight[] =>
-  imageRefsOf(text, format).flatMap(({ start, end, n }) =>
-    n >= 1 && n <= imageCount ? [{ start, end, kind: 'image' as const }] : []
-  )
+  imageRefsOf(text, format).flatMap(({ start, end, n, name }) => {
+    const src = srcs[n - 1]
+    return src ? [{ start, end, kind: 'image' as const, n, name, src }] : []
+  })
 
 /** Cuts `start`..`end` and one space next to it, so no double space is left behind. */
 const cutRange = (text: string, start: number, end: number) => {

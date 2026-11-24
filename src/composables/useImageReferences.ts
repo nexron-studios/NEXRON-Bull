@@ -26,7 +26,14 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
   const format = useImageRefFormat()
   const refs = computed(() => validImageRefsOf(draft.value, images.value, format.value))
   const highlights = computed<Highlight[]>(() =>
-    refs.value.map(({ start, end }) => ({ start, end, kind: 'image' }))
+    refs.value.map(({ start, end, n, name, image }) => ({
+      start,
+      end,
+      kind: 'image',
+      n,
+      name,
+      src: image.src
+    }))
   )
 
   /** The attachments changed from `before` to `after`; `successors` maps a replaced image on. */

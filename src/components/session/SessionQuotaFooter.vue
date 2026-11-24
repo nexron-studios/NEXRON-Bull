@@ -21,15 +21,16 @@ import {
   windowOf
 } from '@/utils/quota'
 
-// Bottom of the sidebar (Figma "10 · Fassung 5"): per account a line with its name, below it the
-// 5 hours and the week side by side, each with its reset underneath. Switching happens per
-// chat, so there is no account switch here.
+// Bottom of the sidebar (Figma "10 · Fassung 5"): per profile a line with its name, below it the
+// 5 hours and the week side by side, each with its reset underneath. Two profiles on one email
+// keep their own lines (same numbers), so every profile a chat can start on is visible.
+// Switching happens per chat, so there is no account switch here.
 
 const { t } = useI18n()
 const format = useUsageFormat()
 const now = useMinuteClock()
 const resetTextOf = useResetText()
-const { accounts, isPending } = useQuota()
+const { offeredProfiles, isPending } = useQuota()
 const chat = useChatStore()
 
 const meterOf = (used: number | null, reset: string | null, label: string, name: string) => ({
@@ -43,7 +44,7 @@ const meterOf = (used: number | null, reset: string | null, label: string, name:
 
 // An account without numbers (rate limited, logged out) keeps its line; the tooltip says why.
 const rows = computed(() =>
-  accounts.value.map((account) => {
+  offeredProfiles.value.map((account) => {
     const fiveHour = windowOf(account, 'five_hour')
     const week = windowOf(account, 'seven_day')
     const at = now.value.getTime()

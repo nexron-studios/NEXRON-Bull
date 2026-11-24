@@ -50,17 +50,31 @@ export const offeredAnswersOf = (
     accounts: accounts.filter((account) => isOffered(machine, account.profile))
   }))
 
+type QuotaKeyOf = (account: AccountQuotaProps, machine: string | null) => string
+
+const profileKeyOf = (account: AccountQuotaProps, machine: string | null): string =>
+  `${machine ?? ''}\u0000${account.profile}`
+
+/** Two profiles (or two machines) logged into the same email share one quota. */
+export const emailKeyOf: QuotaKeyOf = (account, machine) =>
+  account.email ?? profileKeyOf(account, machine)
+
+/** Same login under the same profile name on two machines is one row; other profiles stay apart. */
+export const loginKeyOf: QuotaKeyOf = (account, machine) =>
+  account.email ? `${account.email}\u0000${account.label}` : profileKeyOf(account, machine)
+
 /**
- * One entry per Claude account across machines. Two profiles (or two machines) logged into the
- * same email share one quota; the first with numbers wins, this computer first.
+ * One entry per key across machines, by default one per Claude account (`emailKeyOf`). The first
+ * with numbers wins, this computer first.
  */
 export const mergeQuotas = (
-  answers: { machine: string | null; accounts: AccountQuotaProps[] }[]
+  answers: { machine: string | null; accounts: AccountQuotaProps[] }[],
+  keyOf: QuotaKeyOf = emailKeyOf
 ): MachineQuota[] => {
   const byKey = new Map<string, MachineQuota>()
   for (const { machine, accounts } of answers) {
     for (const account of accounts) {
-      const key = account.email ?? `${machine ?? ''}\u0000${account.profile}`
+      const key = keyOf(account, machine)
       const known = byKey.get(key)
       if (known && (hasNumbers(known) || !hasNumbers(account))) continue
       byKey.set(key, { ...account, machine })

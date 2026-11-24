@@ -4,7 +4,7 @@ import { agentdService, type Machine } from '@/api/services/agentd.service'
 import { usePerMachineQueries } from '@/composables/usePerMachineQueries'
 import type { AccountQuotaProps } from '@/types/agentd.type'
 import { useAccountSettingsStore } from '@/stores/accountSettings'
-import { mergeQuotas, offeredAnswersOf, type MachineQuota } from '@/utils/quota'
+import { loginKeyOf, mergeQuotas, offeredAnswersOf, type MachineQuota } from '@/utils/quota'
 
 /** agentd asks Anthropic at most this often per account (`agentd/src/quota.rs`). */
 export const QUOTA_POLL_MS = 90 * 1000
@@ -45,9 +45,9 @@ export const useQuota = (isEnabled: MaybeRefOrGetter<boolean> = true) => {
   const profiles = computed<MachineQuota[]>(() =>
     byMachine.value.flatMap(({ machine, accounts }) => accounts.map((a) => ({ ...a, machine })))
   )
-  const accounts = computed(() =>
-    mergeQuotas(offeredAnswersOf(byMachine.value, accountSettings.isOfferedOn))
-  )
+  const offered = computed(() => offeredAnswersOf(byMachine.value, accountSettings.isOfferedOn))
+  const accounts = computed(() => mergeQuotas(offered.value))
+  const offeredProfiles = computed(() => mergeQuotas(offered.value, loginKeyOf))
 
   /**
    * Asks Anthropic again now (agentd allows it every 15 s), on every machine. A machine that does
@@ -64,5 +64,14 @@ export const useQuota = (isEnabled: MaybeRefOrGetter<boolean> = true) => {
       )
     )
 
-  return { accounts, profiles, isPending, isError, isFetching, failedMachines, refresh }
+  return {
+    accounts,
+    offeredProfiles,
+    profiles,
+    isPending,
+    isError,
+    isFetching,
+    failedMachines,
+    refresh
+  }
 }

@@ -3,6 +3,7 @@ import {
   accountKeyOf,
   accountToneOf,
   freePercentOf,
+  loginKeyOf,
   mergeQuotas,
   offeredAnswersOf,
   meterLevelOf,
@@ -71,6 +72,20 @@ describe('mergeQuotas', () => {
       { machine: 'server', accounts: [account('default', 'a@x')] }
     ])
     expect(merged.map((q) => [q.machine, q.label])).toEqual([['server', 'default']])
+  })
+
+  it('should keep two profiles on one email apart when folding by login', () => {
+    const merged = mergeQuotas(
+      [
+        { machine: null, accounts: [account('default', 'a@x'), account('mackone', 'a@x')] },
+        { machine: 'server', accounts: [account('default', 'a@x')] }
+      ],
+      loginKeyOf
+    )
+    expect(merged.map((q) => [q.machine, q.label])).toEqual([
+      [null, 'default'],
+      [null, 'mackone']
+    ])
   })
 
   it('should keep accounts without email apart per machine', () => {

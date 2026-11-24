@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, useTemplateRef } from 'vue'
+import { useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useClipped } from '@/composables/useClipped'
 import type { Connector, ConnectorStatus } from '@/utils/tabInsights'
 
 // One MCP server in "Konnektoren": a dot for its state, the name (full name in a tooltip once it
@@ -26,17 +27,10 @@ const LABEL_CLASS: Record<Exclude<ConnectorStatus, 'connected' | 'needs-auth'>, 
   unknown: 'text-muted-foreground'
 }
 
-const isClipped = ref(false)
 const nameEl = useTemplateRef<HTMLElement>('name')
 
 const { t } = useI18n()
-
-// Measured when the pointer arrives, not on every resize: only then can the tooltip open.
-const measureClip = () => {
-  const el = nameEl.value
-  if (!el) return
-  isClipped.value = el.scrollWidth > el.clientWidth
-}
+const { isClipped, measure: measureClip } = useClipped([nameEl])
 </script>
 
 <template>

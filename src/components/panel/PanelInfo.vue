@@ -30,7 +30,7 @@ const { hasMoreAbove } = useScrollEdges(scroller)
   <div class="relative flex min-h-0 min-w-0 flex-1 flex-col border-l border-border">
     <aside
       ref="scroller"
-      class="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+      class="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto select-none"
       :aria-label="t('panel.label')"
     >
       <div

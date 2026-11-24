@@ -1,129 +1,89 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import {
-  ArrowRight,
-  CircleAlert,
-  Clock,
-  Folder,
-  LoaderCircle,
-  MessageCircleQuestion,
-  Monitor
-} from '@lucide/vue'
+import { MessageSquareText } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui/button'
-import OverviewStatusPill from '@/components/overview/OverviewStatusPill.vue'
-import { useActivityLabel } from '@/composables/useActivityLabel'
-import { useAgeFormat } from '@/composables/useAgeFormat'
-import { useMachineLabel } from '@/composables/useMachineLabel'
-import { useUsageFormat } from '@/composables/useUsageFormat'
-import { openQuestionOf } from '@/utils/answerCallouts'
-import { isBusyStatus, type ChatTabState } from '@/utils/chatTab'
-import { modelFamilyOf } from '@/utils/overview'
-import { folderNameOf, rowActivityOf } from '@/utils/sessionList'
-import { contextOf } from '@/utils/tabInsights'
-import { TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
-import { toolInfoOf } from '@/utils/toolKind'
+import OverviewSessionCardContext from '@/components/overview/OverviewSessionCardContext.vue'
+import OverviewSessionCardFooter from '@/components/overview/OverviewSessionCardFooter.vue'
+import OverviewSessionCardHeader from '@/components/overview/OverviewSessionCardHeader.vue'
+import OverviewSessionCardMeta from '@/components/overview/OverviewSessionCardMeta.vue'
+import OverviewSessionCardStep from '@/components/overview/OverviewSessionCardStep.vue'
+import type { ChatTabState } from '@/utils/chatTab'
+import { cardPromptsOf, cardStatusOf, startPromptOf } from '@/utils/sessionCard'
 
-// A running session in the overview (Figma "12 Übersicht", "M14"): what it is, where it runs,
-// what it does right now, and the way into its chat.
+// A running session in the overview, built like the Agent Dashboard's SessionCard: who and its
+// status, the title with one info line, the context, what was asked and what Claude does, and the
+// buttons always in the same place. Every text area has a fixed number of lines, so a card keeps
+// its height while its text changes and a row of cards stays calm.
 const { tab, now } = defineProps<{ tab: ChatTabState; now: number }>()
 const emit = defineEmits<{ open: [] }>()
 
 const { t } = useI18n()
-const { labelOf: machineLabelOf } = useMachineLabel()
-const formatAge = useAgeFormat()
-const format = useUsageFormat()
-const activityLabel = useActivityLabel()
 
-// Busy tabs get a card, and finished ones whose answer ends on a question; a tab that just ended
-// keeps the work label until the list drops it.
-const hasQuestion = computed(() => !isBusyStatus(tab.status) && openQuestionOf(tab) !== null)
-const status = computed(() => {
-  if (hasQuestion.value) return 'question'
-  return tab.status === 'asking' || tab.status === 'starting' ? tab.status : 'working'
-})
+// The store replaces the tab on every streamed token but keeps these; the prompts are read again
+// only when one of them changes, not per token.
+const messages = computed(() => tab.messages)
+const pending = computed(() => tab.pending)
+const history = computed(() => tab.history)
+const hasMore = computed(() => tab.hasMore)
+
+const status = computed(() => cardStatusOf(tab))
 const title = computed(() => tab.title || t('chat.new_chat'))
-const elapsed = computed(() =>
-  tab.turn ? formatAge.value(Math.max(0, now - tab.turn.startedAt)) : ''
+const prompts = computed(() =>
+  cardPromptsOf({
+    messages: messages.value,
+    pending: pending.value,
+    history: history.value,
+    hasMore: hasMore.value
+  })
 )
-const activity = computed(() => rowActivityOf(tab))
-const activityIcon = computed(() => {
-  const current = activity.value
-  // Whatever waits for approval is the reason the card is red.
-  if (tab.permission) return { icon: CircleAlert, class: 'text-critical' }
-  if (hasQuestion.value) return { icon: MessageCircleQuestion, class: 'text-warning' }
-  if (!current || current.kind !== 'tool') return { icon: LoaderCircle, class: 'text-warning' }
-  const info = toolInfoOf(current.tool)
-  return { icon: TOOL_ICON[info.icon], class: TOOL_KIND_CLASS[info.kind] }
-})
-const context = computed(() => contextOf(tab.messages, tab.contextWindow))
-const model = computed(() => {
-  if (context.value) return t(`usage.models.${modelFamilyOf(context.value.model)}`)
-  return tab.model ? t(`chat.models.${tab.model}`) : ''
-})
+const startPrompt = computed(() => startPromptOf(tab.title, prompts.value))
+
+// A click anywhere on the card opens the chat, like a finished row; its own buttons handle their
+// clicks, and a click that ends a text selection was meant for the text.
+const openCard = (event: MouseEvent) => {
+  if (event.target instanceof Element && event.target.closest('button')) return
+  if (window.getSelection()?.toString()) return
+  emit('open')
+}
 </script>
 
 <template>
   <article
-    class="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4"
+    class="relative flex min-w-0 cursor-pointer flex-col rounded-xl border bg-card p-5 transition-colors duration-150 hover:bg-muted/30"
     :class="{
-      'border-critical/50': tab.status === 'asking',
-      'border-warning/50': hasQuestion,
-      'border-border': tab.status !== 'asking' && !hasQuestion
+      'border-critical/50': status === 'asking',
+      'border-warning/50': status === 'question',
+      'border-border hover:border-input': status !== 'asking' && status !== 'question'
     }"
+    @click="openCard"
   >
-    <div class="flex items-center gap-2">
-      <OverviewStatusPill :status />
-      <span
-        v-if="elapsed"
-        class="ml-auto flex items-center gap-1 text-meta text-muted-foreground tabular-nums"
-      >
-        <Clock class="size-3.5" aria-hidden="true" />
-        <span aria-hidden="true">{{ elapsed }}</span>
-        <span class="sr-only">{{ t('sidebar.age_running', { age: elapsed }) }}</span>
-      </span>
-    </div>
-    <h3 class="truncate text-body font-semibold">{{ title }}</h3>
-    <p class="flex min-w-0 items-center gap-1.5 text-small text-muted-foreground">
-      <template v-if="machineLabelOf(tab.machine)">
-        <Monitor class="size-3.5 shrink-0" aria-hidden="true" />
-        <span class="truncate">{{ machineLabelOf(tab.machine) }}</span>
-        <span aria-hidden="true">·</span>
+    <OverviewSessionCardHeader :tab :status />
+
+    <h3 class="mt-4 truncate text-title font-semibold tracking-tight">{{ title }}</h3>
+    <OverviewSessionCardMeta class="mt-1" :tab :now :prompt-count="prompts.count" />
+    <OverviewSessionCardContext :tab-id="tab.id" :model="tab.model" />
+    <p class="mt-1 h-5 truncate text-small text-muted-foreground">
+      <template v-if="startPrompt">
+        <span class="font-medium text-subtle">{{ t('overview.card.started_with') }}</span>
+        {{ startPrompt }}
       </template>
-      <Folder class="size-3.5 shrink-0" aria-hidden="true" />
-      <span class="truncate">{{ folderNameOf(tab.cwd) }}</span>
     </p>
-    <p
-      class="flex min-h-9 min-w-0 items-center gap-2 rounded-lg bg-muted px-3 py-2 font-mono text-meta"
-    >
-      <component
-        :is="activityIcon.icon"
-        class="size-3.5 shrink-0"
-        :class="activityIcon.class"
-        aria-hidden="true"
-      />
-      <span class="min-w-0 truncate">{{
-        activity ? activityLabel(activity) : t('chat.stream.activity.working')
-      }}</span>
-    </p>
-    <div class="mt-auto flex min-w-0 items-center gap-2 text-small text-muted-foreground">
-      <span v-if="model" class="truncate">{{ model }}</span>
-      <template v-if="context">
-        <span aria-hidden="true">·</span>
-        <span class="tabular-nums">{{
-          t('overview.context_tokens', { tokens: format.compact(context.tokens) })
-        }}</span>
-      </template>
-      <Button
-        variant="ghost"
-        size="sm"
-        class="motion-press -mr-2 ml-auto shrink-0 touch-manipulation"
-        :aria-label="t('overview.open_label', { title })"
-        @click="emit('open')"
-      >
-        {{ t('overview.open') }}
-        <ArrowRight class="size-4" aria-hidden="true" />
-      </Button>
+
+    <div class="mt-4 flex flex-col gap-2.5 border-t border-border pt-4">
+      <div class="flex gap-2.5 text-small">
+        <MessageSquareText
+          class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          :class="{ invisible: !prompts.last }"
+          aria-hidden="true"
+        />
+        <p class="line-clamp-2 h-10 [overflow-wrap:anywhere]">
+          <span v-if="prompts.last" class="sr-only">{{ t('overview.card.last_prompt') }}</span>
+          {{ prompts.last }}
+        </p>
+      </div>
+      <OverviewSessionCardStep :tab />
     </div>
+
+    <OverviewSessionCardFooter :tab :title @open="emit('open')" />
   </article>
 </template>

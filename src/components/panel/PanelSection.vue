@@ -11,7 +11,7 @@ const headingId = useId()
 
 <template>
   <section class="flex flex-col gap-3" :aria-labelledby="headingId">
-    <div class="flex min-h-5 items-center justify-between gap-2">
+    <div class="flex min-h-5 items-center justify-between gap-2 select-none">
       <h2 :id="headingId" class="flex min-w-0 items-center gap-2 text-small font-semibold">
         <component :is="icon" class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         {{ title }}

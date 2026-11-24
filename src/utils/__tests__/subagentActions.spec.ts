@@ -3,7 +3,6 @@ import {
   actionSummaryOf,
   historyRunsOf,
   MAX_LIVE_ACTIONS,
-  shownActionsOf,
   subagentActionsOf,
   withSubagentEvent,
   type LiveSubagent
@@ -18,6 +17,7 @@ const agent = (fields: Partial<Subagent> = {}): Subagent => ({
   agentType: 'Explore',
   isBackground: false,
   agentId: 'a1',
+  runId: 'toolu_a',
   status: 'running',
   startedAt: 1_000,
   finishedAt: null,
@@ -176,20 +176,6 @@ describe('subagentActionsOf', () => {
     const ended = subagentActionsOf(agent({ status: 'done', finishedAt: 9_000 }), calls)
     const going = subagentActionsOf(agent(), calls)
     expect([ended[0]?.status, going[0]?.status]).toEqual(['stopped', 'running'])
-  })
-})
-
-describe('shownActionsOf', () => {
-  const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => run(id))
-
-  it('should list the newest five and count the rest', () => {
-    const { shown, hiddenCount } = shownActionsOf(seven, false)
-    expect([shown.map((action) => action.id), hiddenCount]).toEqual([['c', 'd', 'e', 'f', 'g'], 2])
-  })
-
-  it('should list all once asked to', () => {
-    expect(shownActionsOf(seven, true).hiddenCount).toBe(0)
-    expect(shownActionsOf(seven, true).shown).toHaveLength(7)
   })
 })
 

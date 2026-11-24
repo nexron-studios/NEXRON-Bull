@@ -3,6 +3,7 @@ import { newTab, type ChatTabState } from '../chatTab'
 import {
   finishOrderOf,
   finishRanksOf,
+  finishSortedOf,
   isLookingAt,
   isSameFinishTimes,
   isSameRanks,
@@ -34,6 +35,32 @@ const answer = (uuid: string, text: string): ChatMessage => ({
   role: 'assistant',
   at: null,
   blocks: [{ type: 'text', text }]
+})
+
+describe('finishSortedOf', () => {
+  it('should put the finished tabs first as ① ② ③ and keep the rest in their order', () => {
+    const tabs = [
+      tab('d'),
+      tab('older', { unseenAt: 100 }),
+      tab('b'),
+      tab('newest', { unseenAt: 300 }),
+      tab('a'),
+      tab('failed', { unseenAt: 400, notice: 'Fehler' })
+    ]
+    expect(finishSortedOf(tabs).map((open) => open.id)).toEqual([
+      'newest',
+      'older',
+      'd',
+      'b',
+      'a',
+      'failed'
+    ])
+  })
+
+  it('should return the same list when the order already fits', () => {
+    const tabs = [tab('first', { unseenAt: 2 }), tab('second', { unseenAt: 1 }), tab('rest')]
+    expect(finishSortedOf(tabs)).toBe(tabs)
+  })
 })
 
 describe('finishOrderOf', () => {

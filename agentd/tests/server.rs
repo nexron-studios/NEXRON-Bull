@@ -2,7 +2,7 @@
 //! app attaches to it mid-turn. Run with `cargo test --features fake-claude`.
 #![cfg(feature = "fake-claude")]
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -189,9 +189,16 @@ fn refuses_a_client_without_the_token() {
     let mut server = setup.serve();
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", setup.port)).unwrap();
     writeln!(stream, "not-the-token").unwrap();
-    writeln!(stream, "{}", json!({ "id": 1, "op": "hello" })).unwrap();
+    // The server hangs up right after the wrong token. macOS may report the next write or the
+    // read as a broken pipe or a reset, Windows does not; either way no reply may arrive.
+    let is_hang_up = |kind| matches!(kind, ErrorKind::BrokenPipe | ErrorKind::ConnectionReset);
+    if let Err(error) = writeln!(stream, "{}", json!({ "id": 1, "op": "hello" })) {
+        assert!(is_hang_up(error.kind()), "write failed with {error}");
+    }
     let mut reply = String::new();
-    BufReader::new(stream).read_line(&mut reply).unwrap();
+    if let Err(error) = BufReader::new(stream).read_line(&mut reply) {
+        assert!(is_hang_up(error.kind()), "read failed with {error}");
+    }
     assert_eq!(reply, "");
     server.kill().unwrap();
 }

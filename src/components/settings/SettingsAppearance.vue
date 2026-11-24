@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import SettingsBrandPreview from '@/components/settings/SettingsBrandPreview.vue'
 import SettingsSchemeCard from '@/components/settings/SettingsSchemeCard.vue'
 import SettingsSectionHeader from '@/components/settings/SettingsSectionHeader.vue'
+import SettingsZoomChoice from '@/components/settings/SettingsZoomChoice.vue'
 import { useColorScheme } from '@/composables/useColorScheme'
 import { themeChoiceList, useThemeChoice, type ThemeChoice } from '@/composables/useThemeToggle'
 import {
@@ -12,8 +13,8 @@ import {
   type ColorSchemePreset
 } from '@/theme/colorSchemes'
 
-// Figma 22f: system, light or dark (the header button flips the same stored choice), then the
-// colour scheme: only the six presets, no own colour (20.11.2026).
+// Figma 22f: system, light or dark (the header button flips the same stored choice), the UI size,
+// then the colour scheme: only the six presets, no own colour (20.11.2026).
 const { isPhone = false } = defineProps<{ isPhone?: boolean }>()
 
 const { t } = useI18n()
@@ -60,6 +61,8 @@ const pickTheme = (event: MouseEvent, value: ThemeChoice) => void chooseTheme(ev
           </button>
         </div>
       </div>
+
+      <SettingsZoomChoice />
 
       <div class="flex flex-col gap-2">
         <h2 id="settings-scheme" class="text-small font-semibold">

@@ -2,14 +2,17 @@
 import { computed, ref, useId, type Component } from 'vue'
 import { Bot, ChevronDown, ChevronRight, CircleCheck, CircleX, LoaderCircle } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import PanelFoldedList from '@/components/panel/PanelFoldedList.vue'
 import PanelSubagentAction from '@/components/panel/PanelSubagentAction.vue'
+import { useFoldedRows } from '@/composables/useFoldedRows'
 import { formatElapsed } from '@/utils/elapsed'
-import { actionSummaryOf, shownActionsOf } from '@/utils/subagentActions'
+import { actionSummaryOf } from '@/utils/subagentActions'
 import type { ToolRun } from '@/utils/tabActivity'
 import { subagentDurationOf, type Subagent, type SubagentStatus } from '@/utils/tabInsights'
 
 // One subagent in the panel (Figma "10", `subagentRow`). A running one is open and lists its
-// newest actions; a finished one is closed and names how many it took. A click flips either.
+// actions, the newest on top and folded after five (24.11.2026: "+13 weitere" could not be shut
+// again); a finished one is closed and names how many it took. A click flips either.
 const { agent, actions, now } = defineProps<{
   agent: Subagent
   actions: ToolRun[]
@@ -24,7 +27,6 @@ const LOOK: Record<SubagentStatus, { icon: Component; class: string }> = {
 
 /** `null` follows the state: open while it runs. */
 const isOpenByUser = ref<boolean | null>(null)
-const showsAll = ref(false)
 
 const { t } = useI18n()
 const listId = useId()
@@ -36,7 +38,8 @@ const duration = computed(() => {
   const ms = subagentDurationOf(agent, now)
   return ms === null ? null : formatElapsed(ms)
 })
-const list = computed(() => shownActionsOf(actions, showsAll.value))
+const newestFirst = computed(() => actions.toReversed())
+const fold = useFoldedRows(newestFirst)
 const last = computed(() => actions.at(-1) ?? null)
 const summary = computed(() => actionSummaryOf(actions))
 
@@ -82,25 +85,27 @@ const toggle = () => {
       />
     </component>
 
-    <ul
+    <PanelFoldedList
       v-if="isOpen"
-      :id="listId"
-      class="ml-1.5 flex flex-col border-l border-border pl-3.5"
-      :aria-label="t('panel.subagent_actions', actions.length)"
+      class="ml-1.5 border-l border-border pl-3.5"
+      :is-expanded="fold.isExpanded.value"
+      :is-foldable="fold.isFoldable.value"
+      :hidden-count="fold.hiddenCount.value"
+      :controls="listId"
+      @toggle="fold.toggle"
     >
-      <li v-if="list.hiddenCount">
-        <button
-          type="button"
-          class="motion-press rounded-sm py-0.5 text-meta text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          @click="showsAll = true"
-        >
-          {{ t('panel.more_actions', { n: list.hiddenCount }) }}
-        </button>
-      </li>
-      <li v-for="run in list.shown" :key="run.id">
-        <PanelSubagentAction :run :now />
-      </li>
-    </ul>
+      <TransitionGroup
+        :id="listId"
+        tag="ul"
+        move-class="panel-row-move"
+        class="flex flex-col"
+        :aria-label="t('panel.subagent_actions', actions.length)"
+      >
+        <li v-for="run in fold.shown.value" :key="run.id">
+          <PanelSubagentAction :run :now />
+        </li>
+      </TransitionGroup>
+    </PanelFoldedList>
     <PanelSubagentAction v-else-if="isRunning && last" :run="last" :now class="pl-6" />
     <p v-else-if="hasActions" class="truncate pl-6 font-mono text-meta text-muted-foreground">
       {{ t('panel.subagent_actions', actions.length) }} · {{ summary }}

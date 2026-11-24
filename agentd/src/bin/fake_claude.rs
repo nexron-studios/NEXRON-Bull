@@ -5,7 +5,8 @@
 //! like a full account. `get_context_usage` answers with a token count, a control request of
 //! subtype "refuse" with an error. "stream" starts a streamed reply and leaves it unfinished
 //! ("Hallo ", the second part a moment later, so a test can detach in between); "finish" ends it
-//! with "Welt", the complete message and the result.
+//! with "Welt", the complete message and the result. Called with `--no-session-persistence` it
+//! is the title call and names a request containing "name me".
 
 use std::io::{self, BufRead, Write};
 use std::thread;
@@ -24,7 +25,21 @@ fn text_delta(text: &str) -> Value {
     stream_event(json!({ "type": "content_block_delta", "index": 1, "delta": { "type": "text_delta", "text": text } }))
 }
 
+/// What the one-shot title call (`agentd::titles`) gets back. Only a request that asks for it is
+/// named, so the other tests never write a title into the real home folder.
+const TITLE_MARKER: &str = "name me";
+
 fn main() {
+    // The title call: lean one-shot flags, the prompt as the last argument, nothing on stdin.
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|arg| arg == "--no-session-persistence") {
+        let prompt = args.last().map(String::as_str).unwrap_or_default();
+        if prompt.contains(TITLE_MARKER) {
+            let previous = prompt.lines().next().unwrap_or_default().trim_start_matches("Previous title: ");
+            println!("\"Titled after {previous}.\"");
+        }
+        return;
+    }
     let mut out = io::stdout().lock();
     let mut say = |value: Value| {
         writeln!(out, "{value}").and_then(|()| out.flush()).expect("stdout closed");
@@ -94,6 +109,13 @@ fn main() {
                         "message": { "role": "assistant", "content": [{ "type": "text", "text": "Hallo Welt" }] } }));
                     say(stream_event(json!({ "type": "message_delta", "usage": { "output_tokens": 5 } })));
                     say(json!({ "type": "result", "subtype": "success", "result": "Hallo Welt" }));
+                    continue;
+                }
+                // A shell left running in the background, as Claude Code lists it after the start.
+                if text == "background" {
+                    say(json!({ "type": "system", "subtype": "background_tasks_changed",
+                        "tasks": [{ "task_id": "b1", "task_type": "local_bash" }] }));
+                    say(json!({ "type": "result", "subtype": "success", "result": "started" }));
                     continue;
                 }
                 if text.contains("write") {

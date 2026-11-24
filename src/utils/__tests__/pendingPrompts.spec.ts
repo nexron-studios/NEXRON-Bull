@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { draftWithUnsent, pendingMessageOf, withoutEchoed } from '../pendingPrompts'
 import type { ChatMessage } from '@/types/agentd.type'
 import type { PendingImage } from '@/utils/content'
+import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
+
+const FORMAT = imageRefFormatOf(`[Bild ${IMAGE_REF_SLOTS.n} (${IMAGE_REF_SLOTS.name})]`)
 
 const NOW = Date.parse('2026-11-15T20:00:00Z')
+
+/** As the composer renders a reference: no line break inside, so no-break spaces and hyphens. */
+const unbroken = (text: string) =>
+  text.replace(/\[[^\]]*\]/g, (token) => token.replaceAll(' ', '\u00a0').replaceAll('-', '\u2011'))
 
 const echo = (uuid: string, blocks: ChatMessage['blocks']): ChatMessage => ({
   uuid,
@@ -120,9 +127,18 @@ describe('draftWithUnsent', () => {
       { text: 'first', images: [image] },
       { text: 'second', images: [] }
     ]
-    expect(draftWithUnsent(draft, unsent)).toEqual({
+    expect(draftWithUnsent(draft, unsent, FORMAT)).toEqual({
       text: 'first\n\nsecond\n\nnew idea',
       images: [image]
     })
+  })
+
+  it('should number the image references of every part after the images in front of it', () => {
+    const later = { ...image, id: 'i2', name: 'later.png' }
+    const draft = { text: 'see [Bild 1 (later.png)]', images: [later] }
+    const unsent = [{ text: '[Bild 1 (shot.png)] broken', images: [image] }]
+    expect(draftWithUnsent(draft, unsent, FORMAT).text).toBe(
+      unbroken('[Bild 1 (shot.png)] broken\n\nsee [Bild 2 (later.png)]')
+    )
   })
 })

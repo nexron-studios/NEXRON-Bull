@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mentionEntriesOf, mentionPiecesOf, mentionTextOf } from '../fileMentions'
+import { mentionEntriesOf, mentionRangesOf, mentionTextOf } from '../fileMentions'
 
 describe('mentionEntriesOf', () => {
   it('should add every folder above the files with its file count', () => {
@@ -19,17 +19,15 @@ describe('mentionTextOf', () => {
   })
 })
 
-describe('mentionPiecesOf', () => {
+describe('mentionRangesOf', () => {
   it('should mark only mentions of known files', () => {
     const known = new Set(['src/app.ts'])
-    expect(mentionPiecesOf('fix @src/app.ts like @other', known)).toEqual([
-      { text: 'fix ', isMention: false },
-      { text: '@src/app.ts', isMention: true },
-      { text: ' like @other', isMention: false }
+    expect(mentionRangesOf('fix @src/app.ts like @other', known)).toEqual([
+      { start: 4, end: 15, kind: 'mention' }
     ])
   })
 
-  it('should give back the whole text when nothing is mentioned', () => {
-    expect(mentionPiecesOf('plain', new Set())).toEqual([{ text: 'plain', isMention: false }])
+  it('should find nothing when nothing is mentioned', () => {
+    expect(mentionRangesOf('plain', new Set())).toEqual([])
   })
 })

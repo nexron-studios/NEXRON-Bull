@@ -772,11 +772,9 @@ export const useChatStore = defineStore(
     /** A muted tab never notifies; saved with the tabs. */
     const setMuted = (id: string, isMuted: boolean) => update(id, (tab) => ({ ...tab, isMuted }))
 
-    /** Claude's own word on the window, from the context report; it outranks a guess. */
-    const setContextWindow = (id: string, contextWindow: number) => {
-      if (tabOf(id)?.contextWindow === contextWindow) return
+    /** The window from the context report, or `null` to guess again after a model switch. */
+    const setContextWindow = (id: string, contextWindow: number | null) =>
       update(id, (tab) => ({ ...tab, contextWindow }))
-    }
 
     /** One place left or right, the keyboard way of dragging a tab. */
     const moveTab = (id: string, step: -1 | 1) => {

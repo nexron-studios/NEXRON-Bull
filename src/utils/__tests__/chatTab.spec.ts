@@ -70,6 +70,10 @@ describe('newTab', () => {
     expect(newTab(tab()).contextWindow).toBe(null)
   })
 
+  it('should not trust a saved window it cannot divide by', () => {
+    expect(newTab({ ...tab(), contextWindow: 0 }).contextWindow).toBe(null)
+  })
+
   it('should give a tab saved before the finish order no place in it', () => {
     expect(newTab(tab()).unseenAt).toBe(null)
   })

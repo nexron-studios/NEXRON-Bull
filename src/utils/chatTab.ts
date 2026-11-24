@@ -201,6 +201,10 @@ export const savedTabOf = ({
   contextWindow
 })
 
+/** A saved window is divided by; anything but a positive number counts as unknown. */
+const isWindowSize = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+
 export const newTab = (fields: SavedTab): ChatTabState => ({
   ...fields,
   isMuted: fields.isMuted ?? false,
@@ -225,7 +229,7 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   notice: null,
   hasMore: false,
   connectors: null,
-  contextWindow: fields.contextWindow ?? null,
+  contextWindow: isWindowSize(fields.contextWindow) ? fields.contextWindow : null,
   agentNotices: [],
   liveSubagents: {},
   backgroundTasks: null,

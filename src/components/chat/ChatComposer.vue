@@ -21,7 +21,7 @@ import { useDraftStore } from '@/stores/drafts'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
 import { useShellRunsStore } from '@/stores/shellRuns'
 import { useSlashCommandsStore } from '@/stores/slashCommands'
-import { prependLine, truncateName } from '@/utils/attachments'
+import { prependLine } from '@/utils/attachments'
 import { quoteOf } from '@/utils/callouts'
 import type { ChatTabState } from '@/utils/chatTab'
 import { imageTypeList, type PendingImage } from '@/utils/content'
@@ -91,7 +91,10 @@ const attachFiles = async (files: Iterable<File>) => {
   const added = await addFiles(files)
   if (isShell.value) return
   const isFocused = field.value?.isFocused() ?? false
-  const caretAfter = references.insert(added, field.value?.selection() ?? null)
+  const selection = field.value?.selection() ?? null
+  // Only a paste replaces selected text; a picked or dropped file lands after it.
+  const at = selection && !isFocused ? { start: selection.end, end: selection.end } : selection
+  const caretAfter = references.insert(added, at)
   if (caretAfter !== null && isFocused) setCaret(caretAfter)
 }
 
@@ -195,21 +198,18 @@ const quote = (question: string) => {
   setCaret(quoted.length)
 }
 
-/** The name only helps the user; Claude sees no file names, so the line counts the image. */
-const COMMENT_NAME_MAX = 24
-
-/** A marked image from the preview, its comment in front of the draft; nothing is sent. */
-const takeMarkup = ({ sourceId, images: incoming, name, comment }: MarkupResult) => {
+/**
+ * A marked image from the preview, its comment in front of the draft; nothing is sent. The comment
+ * names the image by a reference, so it follows the chips like any other.
+ */
+const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
   if (incoming.length && !placeMarkedImages(sourceId, incoming)) return false
   const anchorId = incoming[0]?.id ?? sourceId
-  const n = images.value.findIndex((image) => image.id === anchorId) + 1
-  if (comment) {
-    const line = t('images.comment_line', {
-      n,
-      name: truncateName(name, COMMENT_NAME_MAX),
-      comment
-    })
-    draft.value = prependLine(draft.value, line)
+  const at = images.value.findIndex((image) => image.id === anchorId)
+  const anchor = images.value[at]
+  if (comment && anchor) {
+    const ref = references.format.value.render(at + 1, anchor.name)
+    draft.value = prependLine(draft.value, t('images.comment_line', { ref, comment }))
   }
   focusField()
   return true

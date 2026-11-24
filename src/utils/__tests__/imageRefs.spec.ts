@@ -27,6 +27,16 @@ describe('imageRefFormatOf', () => {
     expect(FORMAT.render(1, 'shot [1].png')).toBe('[Bild 1 (shot (1).png)]')
   })
 
+  it('should fill and find a slot the template uses twice', () => {
+    const twice = imageRefFormatOf(
+      `[${IMAGE_REF_SLOTS.n}: Bild ${IMAGE_REF_SLOTS.n} (${IMAGE_REF_SLOTS.name})]`
+    )
+    expect(twice.render(2, 'a.png')).toBe('[2: Bild 2 (a.png)]')
+    expect(imageRefsOf('x [2: Bild 2 (a.png)]', twice)).toEqual([
+      { start: 2, end: 21, n: 2, name: 'a.png' }
+    ])
+  })
+
   it('should keep dollar signs in a name as they are', () => {
     expect(FORMAT.render(1, '$&.png')).toBe('[Bild 1 ($&.png)]')
   })

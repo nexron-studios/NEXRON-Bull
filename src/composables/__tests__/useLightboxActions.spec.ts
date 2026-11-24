@@ -58,7 +58,6 @@ describe('useLightboxActions', () => {
     expect(target).toHaveBeenCalledWith({
       sourceId: 'a',
       images: [],
-      name: 'shot.png',
       comment: 'make the button blue'
     })
     expect(flattenImage).not.toHaveBeenCalled()

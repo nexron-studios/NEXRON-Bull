@@ -61,10 +61,9 @@ const HISTORY_PAGE = 40
 const RECONNECT_FIRST_MS = 250
 const RECONNECT_MAX_MS = 30_000
 const DENIED_MESSAGE = 'The user denied this tool use.'
-/** What Claude reads when the user turned a call down and said why, as in the terminal. */
 /** How image references read in the app's language, for drafts that come back to the composer. */
 const imageRefFormat = () => imageRefFormatOf(i18n.global.t('images.reference', IMAGE_REF_SLOTS))
-
+/** What Claude reads when the user turned a call down and said why, as in the terminal. */
 const deniedWithReason = (reason: string) =>
   `The user denied this tool use and said what to do instead: ${reason}`
 // Said to Claude when the user turns down a plan to change it: stay in plan mode and wait for them.

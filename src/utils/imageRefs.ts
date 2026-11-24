@@ -44,14 +44,17 @@ const nameLabelOf = (name: string) =>
 
 /** The format for a template rendered with `IMAGE_REF_SLOTS` in place of number and name. */
 export const imageRefFormatOf = (template: string): ImageRefFormat => {
+  // A group may be named once; a slot used again repeats it by backreference.
   const source = escapeRegExp(template)
     .replace(IMAGE_REF_SLOTS.n, '(?<n>\\d+)')
+    .replaceAll(IMAGE_REF_SLOTS.n, '\\k<n>')
     .replace(IMAGE_REF_SLOTS.name, '(?<name>[^\\n\\[\\]]+?)')
+    .replaceAll(IMAGE_REF_SLOTS.name, '\\k<name>')
   return {
     render: (n, name) =>
       template
-        .replace(IMAGE_REF_SLOTS.n, () => String(n))
-        .replace(IMAGE_REF_SLOTS.name, () => nameLabelOf(name)),
+        .replaceAll(IMAGE_REF_SLOTS.n, () => String(n))
+        .replaceAll(IMAGE_REF_SLOTS.name, () => nameLabelOf(name)),
     pattern: new RegExp(source, 'g')
   }
 }

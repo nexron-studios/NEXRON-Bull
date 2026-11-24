@@ -332,7 +332,7 @@ export default {
     apply: 'Ins Eingabefeld',
     apply_phone_hint: 'Pfeil: markiertes Bild und Kommentar ins Eingabefeld',
     cancel: 'Abbrechen',
-    comment_line: 'Zu Bild {n} ({name}): {comment}',
+    comment_line: 'Zu {ref}: {comment}',
     reference: '[Bild {n} ({name})]',
     close_warning:
       'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',

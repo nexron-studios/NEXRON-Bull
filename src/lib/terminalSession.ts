@@ -308,8 +308,15 @@ export const createTerminalSession = (options: TerminalSessionOptions): Terminal
     if (ptyId !== null) void terminalService.resize(ptyId, cols, rows).catch(handleError)
   })
   // A mouse selection is copied on release, like everywhere else in the app (useCopyOnSelect).
+  // Only a press that began here: a drag from the chat ending over the terminal keeps its own.
+  let isPressedHere = false
+  host.addEventListener('pointerdown', () => {
+    isPressedHere = true
+  })
   host.addEventListener('pointerup', (event) => {
-    if (!isMainMouseRelease(event) || !term.hasSelection()) return
+    const wasPressedHere = isPressedHere
+    isPressedHere = false
+    if (!wasPressedHere || !isMainMouseRelease(event) || !term.hasSelection()) return
     const text = copyableTextOf(term.getSelection())
     if (!text) return
     void writeClipboard(text).then(

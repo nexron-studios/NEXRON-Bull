@@ -69,11 +69,20 @@ describe('ChatQuestionCard', () => {
     expect(sentAnswer(wrapper)).toEqual({ [QUESTION]: 'Läuft noch' })
   })
 
+  it('should keep the picked option when focus only passes through the empty own answer', async () => {
+    const wrapper = mountCard()
+    await optionInputs(wrapper)[1].setValue(true)
+
+    await otherField(wrapper).trigger('focus')
+    await submit(wrapper)
+
+    expect(sentAnswer(wrapper)).toEqual({ [QUESTION]: 'Läuft noch' })
+  })
+
   it('should not send an empty own answer', async () => {
     const wrapper = mountCard()
     await optionInputs(wrapper)[0].setValue(true)
 
-    await otherField(wrapper).trigger('focus')
     await otherField(wrapper).setValue('   ')
     await submit(wrapper)
 

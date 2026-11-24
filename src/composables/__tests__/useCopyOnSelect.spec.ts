@@ -14,7 +14,8 @@ const Page = defineComponent({
     return () =>
       h('div', [
         h('p', { id: 'answer' }, 'Claude sagt Hallo'),
-        h('div', { id: 'field', contenteditable: 'true' }, 'mein Entwurf')
+        h('div', { id: 'field', contenteditable: 'true' }, 'mein Entwurf'),
+        h('div', { id: 'composer' }, [h('textarea', { id: 'prompt' }, 'Neuer Prompt')])
       ])
   }
 })
@@ -61,7 +62,7 @@ describe('useCopyOnSelect', () => {
     wrapper.unmount()
   })
 
-  it('should leave the clipboard alone for touch, a blank selection and a field', async () => {
+  it('should leave the clipboard alone for touch, a blank selection and fields', async () => {
     const wrapper = mount(Page, { attachTo: document.body })
     const text = wrapper.get('#answer').element.firstChild as Node
     const draft = wrapper.get('#field').element.firstChild as Node
@@ -71,6 +72,11 @@ describe('useCopyOnSelect', () => {
     select(text, 6, 7)
     await release()
     select(draft, 0, 4)
+    await release()
+    // How Blink reports a selection inside a textarea: the field's parent plus an index.
+    const prompt = wrapper.get('#prompt').element as HTMLTextAreaElement
+    prompt.focus()
+    select(wrapper.get('#composer').element, 0, 1)
     await release()
 
     expect(writeText).not.toHaveBeenCalled()

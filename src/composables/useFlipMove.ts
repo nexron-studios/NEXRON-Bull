@@ -23,11 +23,11 @@ export const useFlipMove = (
 
   const skipNext = () => {
     isSkipping = true
-    // Cleared after the render, so an order change that did not happen skips nothing later.
-    void nextTick(() => {
-      isSkipping = false
-    })
   }
+
+  // Against the row's content, so the row scrolling to a new tab is no move of every tab.
+  const placeOf = (el: HTMLElement, item: HTMLElement) =>
+    item.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft
 
   const itemsOf = (el: HTMLElement) =>
     new Map(
@@ -40,11 +40,13 @@ export const useFlipMove = (
   watch(
     order,
     async () => {
+      if (isSkipping) {
+        isSkipping = false
+        return
+      }
       const el = row.value
-      if (!el || isSkipping || motion.value === 'reduce') return
-      const before = new Map(
-        [...itemsOf(el)].map(([key, item]) => [key, item.getBoundingClientRect().left])
-      )
+      if (!el || motion.value === 'reduce') return
+      const before = new Map([...itemsOf(el)].map(([key, item]) => [key, placeOf(el, item)]))
       await nextTick()
       const style = getComputedStyle(el)
       const duration =
@@ -54,7 +56,7 @@ export const useFlipMove = (
         const from = before.get(key)
         if (from === undefined) continue
         item.getAnimations().forEach((running) => running.cancel())
-        const distance = from - item.getBoundingClientRect().left
+        const distance = from - placeOf(el, item)
         if (!distance) continue
         item.animate([{ transform: `translateX(${distance}px)` }, { transform: 'none' }], {
           duration,

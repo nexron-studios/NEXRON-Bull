@@ -22,13 +22,16 @@ export const useCopyOnSelect = () => {
   const copySelection = async (event: PointerEvent) => {
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed) return
-    if (isInNoCopyArea(selection.anchorNode) || isInNoCopyArea(selection.focusNode)) return
+    // Blink and WebKit report a selection in an input or textarea as the field's parent plus an
+    // index, so the focused field is checked too.
+    const ends = [selection.anchorNode, selection.focusNode, document.activeElement]
+    if (ends.some(isInNoCopyArea)) return
     const text = copyableTextOf(selection.toString())
     if (!text) return
     // A click on a button leaves the selection as it was; that is no new selection.
-    const ends = selectionEndsOf(selection)
-    if (isSameSelection(lastCopied, ends)) return
-    lastCopied = ends
+    const copied = selectionEndsOf(selection)
+    if (isSameSelection(lastCopied, copied)) return
+    lastCopied = copied
     if (await writeClipboard(text)) hint.show(event.clientX, event.clientY)
   }
 

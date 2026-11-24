@@ -54,7 +54,8 @@ const toggle = (question: string, label: string, isMulti: boolean) => {
   }
 }
 
-// Focusing or typing in the own answer chooses it, so the card shows what "answer" sends.
+// Typing in the own answer chooses it, so the card shows what "answer" sends. Focus alone only
+// chooses text typed before: tabbing past the field must not drop the picked option.
 const chooseOther = (question: string, isMulti: boolean) => {
   chosen.value = {
     ...chosen.value,
@@ -158,7 +159,7 @@ useChoiceKeys(
             v-model="other[q.question]"
             :placeholder="t('chat.question_other')"
             :aria-label="t('chat.question_other')"
-            @focus="chooseOther(q.question, q.multiSelect)"
+            @focus="other[q.question]?.trim() && chooseOther(q.question, q.multiSelect)"
             @input="chooseOther(q.question, q.multiSelect)"
             class="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-small"
           />

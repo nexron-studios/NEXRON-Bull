@@ -1,9 +1,10 @@
-import { computed, watch } from 'vue'
+import { computed, markRaw, watch } from 'vue'
 import { tryOnScopeDispose, useStorage } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { agentdService } from '@/api/services/agentd.service'
+import BrandAppIcon from '@/components/brand/BrandAppIcon.vue'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
 import { useQuota } from '@/composables/useQuota'
 import { handleError } from '@/lib/error'
@@ -42,6 +43,9 @@ const QUEUE_SEND_ACTION = 'queueSend'
 const QUOTA_TOLD_KEY = 'bull.notifications.quota_told'
 /** A hint in the focused window stays this long (Figma "19b"), a little longer than a plain toast. */
 const IN_WINDOW_TOAST_MS = 6_000
+/** About the size macOS gives the app icon in a notification banner. Sonner's own sheet sizes the
+ * icon unlayered, so only `!` beats it. */
+const APP_ICON_CLASS = 'size-10! me-1!'
 
 /** What to tell, about a tab or not; `tabId` is the one the toast's "Open" goes to. */
 interface Message {
@@ -124,6 +128,9 @@ export const useTabNotifications = () => {
     // shortcut: in-window toasts play no sound; add one if the user misses it there.
     toast(title, {
       description: body,
+      // The system notification carries the app icon; its stand-in in the window does too.
+      icon: markRaw(BrandAppIcon),
+      classes: { icon: APP_ICON_CLASS },
       // Shown while the user is away: it waits until dismissed instead of expiring unseen.
       duration: isFocused ? IN_WINDOW_TOAST_MS : Number.POSITIVE_INFINITY,
       closeButton: !isFocused,

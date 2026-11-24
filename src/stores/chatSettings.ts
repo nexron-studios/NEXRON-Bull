@@ -73,7 +73,12 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
   const refusedModesOf = (id: string): PermissionMode[] => refusedModes.value[id] ?? []
 
   const setMode = (id: string, permissionMode: PermissionMode) => configure(id, { permissionMode })
-  const setModel = (id: string, model: ModelAlias) => configure(id, { model })
+  const setModel = (id: string, model: ModelAlias) => {
+    const chat = useChatStore()
+    // The old model's window would hold until the next turn ends, and across a restart.
+    if (chat.tabs.find((tab) => tab.id === id)?.model !== model) chat.setContextWindow(id, null)
+    return configure(id, { model })
+  }
   const setEffort = (id: string, effort: Effort) => configure(id, { effort })
 
   /** Opens the model and effort picker of a chat, e.g. for the slash command `/model`. */

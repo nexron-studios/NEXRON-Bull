@@ -11,6 +11,7 @@ import {
   subagentDurationOf,
   subagentsOf,
   turnSubagentsOf,
+  withKnownConnectors,
   type Subagent
 } from '../tabInsights'
 import type { Block, ChatMessage } from '@/types/agentd.type'
@@ -109,6 +110,41 @@ describe('connectorsOf', () => {
 
   it('should ignore other events', () => {
     expect(connectorsOf({ type: 'system', subtype: 'compact_boundary' })).toBe(null)
+  })
+
+  it("should ignore a subagent's init: it lists the subagent's servers, not the session's", () => {
+    const event = {
+      type: 'system',
+      subtype: 'init',
+      parent_tool_use_id: 'toolu_1',
+      mcp_servers: []
+    }
+    expect(connectorsOf(event)).toBe(null)
+  })
+})
+
+describe('withKnownConnectors', () => {
+  it('should keep the known state of a server Claude reports pending again', () => {
+    const known = [
+      { name: 'figma', status: 'connected' as const },
+      { name: 'zotero', status: 'needs-auth' as const }
+    ]
+    const reported = [
+      { name: 'figma', status: 'pending' as const },
+      { name: 'zotero', status: 'pending' as const },
+      { name: 'miro', status: 'pending' as const }
+    ]
+    expect(withKnownConnectors(known, reported)).toEqual([
+      { name: 'figma', status: 'connected' },
+      { name: 'zotero', status: 'needs-auth' },
+      { name: 'miro', status: 'pending' }
+    ])
+  })
+
+  it('should take a settled report as it is', () => {
+    const known = [{ name: 'figma', status: 'connected' as const }]
+    const reported = [{ name: 'figma', status: 'failed' as const }]
+    expect(withKnownConnectors(known, reported)).toEqual([{ name: 'figma', status: 'failed' }])
   })
 })
 
@@ -221,6 +257,7 @@ describe('subagentsOf', () => {
         agentType: 'Explore',
         isBackground: false,
         agentId: null,
+        runId: 'toolu_1',
         status: 'done',
         startedAt: Date.parse(started),
         finishedAt: Date.parse(ended)
@@ -286,6 +323,59 @@ describe('subagentsOf', () => {
     ])
   })
 
+  describe('a subagent woken again with SendMessage', () => {
+    const resumed = '2026-11-15T11:00:00Z'
+    const sendMessage = (id: string): Block => ({
+      type: 'tool_use',
+      id,
+      name: 'SendMessage',
+      input: { to: 'a7f', message: 'Go on' }
+    })
+    // A limit cut the agent off; the next turn resumes it (Claude Code 2.1.3xx answers in JSON).
+    const messages = [
+      message('a1', started, [agentCall('toolu_5', { run_in_background: true })]),
+      message('u1', started, [result('toolu_5', 'Async agent launched. agentId: a7f')]),
+      message('a2', resumed, [sendMessage('toolu_send')]),
+      message('u2', resumed, [
+        result(
+          'toolu_send',
+          '{"success":true,"message":"Resuming agent a7f","resumedAgentId":"a7f"}'
+        )
+      ])
+    ]
+    const firstEnd = { id: 'toolu_5', status: 'failed' as const, at: 10 }
+
+    it('should run again under the SendMessage call though its first run failed', () => {
+      const [agent] = subagentsOf(messages, [firstEnd], true, { ids: [], at: 10 })
+      expect([agent?.status, agent?.runId, agent?.startedAt]).toEqual([
+        'running',
+        'toolu_send',
+        Date.parse(resumed)
+      ])
+    })
+
+    it('should end with the notice of the resumed run', () => {
+      const secondEnd = { id: 'toolu_send', status: 'done' as const, at: Date.parse(resumed) + 5 }
+      const [agent] = subagentsOf(messages, [firstEnd, secondEnd], true)
+      expect([agent?.status, agent?.finishedAt]).toEqual(['done', Date.parse(resumed) + 5])
+    })
+
+    it('should list it under the turn that resumed it', () => {
+      const agents = subagentsOf(messages, [firstEnd], true)
+      const turn = { messages: messages.slice(2), startedAt: Date.parse(resumed) }
+      expect(turnSubagentsOf(agents, turn).map((agent) => agent.id)).toEqual(['toolu_5'])
+    })
+
+    it('should not take a message to a running agent for a resume', () => {
+      const queued = [
+        ...messages.slice(0, 3),
+        message('u2', resumed, [result('toolu_send', '{"success":true,"message":"Queued"}')])
+      ]
+      const [agent] = subagentsOf(queued, [firstEnd], true)
+      expect([agent?.status, agent?.runId]).toEqual(['failed', 'toolu_5'])
+    })
+  })
+
   it('should not show an agent as running once Claude has exited', () => {
     const messages = [message('a1', started, [agentCall('toolu_1', {})])]
     expect(subagentsOf(messages, [], false)[0]?.status).toBe('done')
@@ -315,6 +405,7 @@ describe('subagentDurationOf', () => {
     agentType: 'Explore',
     isBackground: false,
     agentId: null,
+    runId: 'a',
     status: finishedAt === null ? 'running' : 'done',
     startedAt,
     finishedAt
@@ -343,6 +434,7 @@ describe('turnSubagentsOf', () => {
     agentType: 'Explore',
     isBackground,
     agentId: null,
+    runId: id,
     status,
     startedAt: null,
     finishedAt

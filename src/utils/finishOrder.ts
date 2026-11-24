@@ -38,6 +38,22 @@ export const finishOrderOf = (tabs: RankedTab[]): string[] =>
 export const finishRanksOf = (tabs: RankedTab[]): Map<string, number> =>
   new Map(finishOrderOf(tabs).map((id, index) => [id, index + 1]))
 
+/**
+ * The tabs with the finish order up front, ① leftmost, so the header reads like the numbers. The
+ * others follow in the order they had, which keeps where the user dragged them. The same array
+ * when nothing moves.
+ */
+export const finishSortedOf = <T extends RankedTab>(tabs: T[]): T[] => {
+  const order = finishOrderOf(tabs)
+  const ranked = new Set(order)
+  const byId = new Map(tabs.map((tab) => [tab.id, tab]))
+  const sorted = [
+    ...order.flatMap((id) => byId.get(id) ?? []),
+    ...tabs.filter((tab) => !ranked.has(tab.id))
+  ]
+  return sorted.every((tab, index) => tab === tabs[index]) ? tabs : sorted
+}
+
 /** True when both maps give the same tabs the same numbers. */
 export const isSameRanks = (a: Map<string, number>, b: Map<string, number>): boolean =>
   a.size === b.size && [...a].every(([id, rank]) => b.get(id) === rank)

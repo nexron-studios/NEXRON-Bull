@@ -136,6 +136,7 @@ export default {
         thinking: 'Claude is thinking',
         writing: 'Claude is writing',
         working: 'Claude is working',
+        background: 'Still running in the background',
         reads: 'Claude is reading {target}',
         searches: 'Claude is searching {target}',
         edits: 'Claude is changing {target}',
@@ -334,14 +335,16 @@ export default {
     canvas: 'Drawing area: draw on the image with mouse, pen or finger',
     comment_title: 'Comment for Claude',
     comment_placeholder: 'What should Claude change here?',
-    comment_hint: 'Goes into your message with the marked image. You can still edit it there.',
+    comment_hint:
+      'Goes into your message with the image, marked if you drew on it. You can still edit it there.',
     keep_original: 'Also send the original',
     discard: 'Discard',
     apply: 'Add to message',
     apply_phone_hint: 'Arrow: marked image and comment into your message',
     cancel: 'Cancel',
-    comment_line: 'About image {n} ({name}): {comment}',
-    close_warning: 'The markup is not in your message yet. Do it again to discard it.',
+    comment_line: 'About {ref}: {comment}',
+    reference: '[Image {n} ({name})]',
+    close_warning: 'The comment or markup is not in your message yet. Do it again to discard it.',
     too_large: 'The marked image is too large for Claude.',
     marked_limit: 'At most {max} images per message. Remove an image first.'
   },
@@ -555,7 +558,6 @@ export default {
     subagents_empty: 'No subagents yet',
     subagents_empty_hint: 'When Claude hands off parts of the work, you see the helpers here live.',
     subagent_actions: '{n} action | {n} actions',
-    more_actions: '+{n} more',
     subagent_state: { running: 'running', done: 'done', failed: 'failed' },
     connectors: 'Connectors',
     connectors_count: '{connected} of {total} connected',
@@ -1034,6 +1036,11 @@ export default {
         'Light or dark, and the colour Bull accents with. The bull and the Claude mark follow it at once, in the browser tab and the taskbar too. The Start menu and desktop shortcut keep the blue icon.',
       theme: 'Theme',
       themes: { auto: 'System', light: 'Light', dark: 'Dark' },
+      zoom: 'Size',
+      zoom_auto: 'Automatic',
+      zoom_note_auto:
+        'Follows the window size, {zoom} right now. {larger} and {smaller} change the size, {reset} goes back to automatic.',
+      zoom_note: '{larger} and {smaller} change the size, {reset} goes back to automatic.',
       scheme: 'Colour scheme',
       presets: {
         'night-desk': 'Night Desk',
@@ -1124,9 +1131,18 @@ export default {
     done: 'Done',
     range_label: 'Range of finished sessions',
     ranges: { today: 'Today', week: 'Week', all: 'All' },
-    context_tokens: '{tokens} tokens',
-    open: 'Open',
     open_label: 'Open {title}',
+    card: {
+      finished_at: 'done {time}',
+      ago: '{age} ago',
+      prompts: '{n} prompt | {n} prompts',
+      context: '{tokens} of {window} tokens in context',
+      started_with: 'Started with:',
+      last_prompt: 'Last prompt:',
+      claude: 'Claude:',
+      asks_for: 'Asks for:',
+      to_chat: 'Go to chat'
+    },
     resume: 'Continue',
     resume_label: 'Continue {title}',
     running_empty_title: 'Nothing is running',
@@ -1241,6 +1257,11 @@ export default {
         confirm: 'Clear chat',
         note_asking: 'The open approval is denied.',
         note_working: 'The running step is interrupted.'
+      },
+      remove: {
+        title: 'Remove “{title}”?',
+        body: 'Bull closes the tab and removes the session from the list. The transcript stays on disk; “New session” › “Continue” brings it back.',
+        confirm: 'Remove'
       },
       stop_and_remove: {
         title: 'Claude is still working',

@@ -287,6 +287,8 @@ export type AgentdEvent =
   | { type: 'error'; id: number | null; tab: string | null; message: string }
   /** The slash commands and skills of the tab's Claude; again when the app attaches */
   | { type: 'commands'; tab: string; commands: SlashCommandProps[] }
+  /** What the chat is about now, named by Haiku after each message; sent again on attach. */
+  | { type: 'title'; tab: string; session_id: string; title: string }
   | { type: 'files'; id: number | null; files: string[]; is_truncated: boolean }
   /** `code` is `null` when the command was stopped at the timeout */
   | {

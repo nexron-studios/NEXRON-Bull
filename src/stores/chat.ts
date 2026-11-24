@@ -38,14 +38,22 @@ import {
   withoutPending,
   withPendingPrompt,
   withTurnClock,
+  withTurnCut,
   type ChatTabState,
   type PermissionAsk,
   type SavedTab
 } from '@/utils/chatTab'
 import { apiRetryOf } from '@/utils/apiRetry'
 import { buildContent, type PendingImage } from '@/utils/content'
-import { finishRanksOf, isSameRanks, withSeen, withUnseen } from '@/utils/finishOrder'
+import {
+  finishRanksOf,
+  finishSortedOf,
+  isSameRanks,
+  withSeen,
+  withUnseen
+} from '@/utils/finishOrder'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
+import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
 import { draftWithUnsent, pendingMessageOf, type SentDraft } from '@/utils/pendingPrompts'
@@ -63,6 +71,8 @@ const HISTORY_PAGE = 40
 const RECONNECT_FIRST_MS = 250
 const RECONNECT_MAX_MS = 30_000
 const DENIED_MESSAGE = 'The user denied this tool use.'
+/** How image references read in the app's language, for drafts that come back to the composer. */
+const imageRefFormat = () => imageRefFormatOf(i18n.global.t('images.reference', IMAGE_REF_SLOTS))
 /** What Claude reads when the user turned a call down and said why, as in the terminal. */
 const deniedWithReason = (reason: string) =>
   `The user denied this tool use and said what to do instead: ${reason}`
@@ -155,7 +165,7 @@ export const useChatStore = defineStore(
       if (!back.length) return
       const draft = useDraftStore().draftOf(id)
       const unsent = back.flatMap((prompt) => sentDrafts.get(prompt.uuid) ?? [])
-      Object.assign(draft, draftWithUnsent(draft, unsent))
+      Object.assign(draft, draftWithUnsent(draft, unsent, imageRefFormat()))
       back.forEach((prompt) => sentDrafts.delete(prompt.uuid))
       useShellRunsStore().putBack(
         id,
@@ -236,7 +246,7 @@ export const useChatStore = defineStore(
       const held = useHeldPromptsStore().takeAll(id)
       if (!held.length) return
       const draft = useDraftStore().draftOf(id)
-      Object.assign(draft, draftWithUnsent(draft, held))
+      Object.assign(draft, draftWithUnsent(draft, held, imageRefFormat()))
     }
 
     // Claude finished: what was typed meanwhile goes out now, one right after the other; Claude
@@ -255,7 +265,6 @@ export const useChatStore = defineStore(
         ? i18n.global.t('chat.disconnected', { machine })
         : i18n.global.t('chat.disconnected_local')
 
-    /** The tabs whose Claude still runs on the machine; a browser opens the ones it lacks. */
     /**
      * Opens the tabs another app started; a tab opened meanwhile by a second ask is left out, since
      * every answer was computed against the tabs from before its own wait.
@@ -409,7 +418,13 @@ export const useChatStore = defineStore(
       const notices = event.type === 'claude' ? agentNoticesOf(event.event, now) : []
       // Most events carry none; skip the second pass over all tabs for them.
       if (notices.length) update(id, (tab) => withAgentNotices(tab, notices))
-      const tasks = event.type === 'claude' ? backgroundTaskIdsOf(event.event) : null
+      // An exited Claude took its background agents and shells along; a restart lists none of them.
+      const tasks =
+        event.type === 'claude'
+          ? backgroundTaskIdsOf(event.event)
+          : event.type === 'exited'
+            ? []
+            : null
       if (tasks) update(id, (tab) => withBackgroundTasks(tab, tasks, now))
       const live =
         event.type === 'claude'
@@ -631,7 +646,7 @@ export const useChatStore = defineStore(
           .flatMap((block) => (block.type === 'text' ? [block.text] : []))
           .join('')
         const draft = useDraftStore().draftOf(id)
-        Object.assign(draft, draftWithUnsent(draft, [{ text, images: [] }]))
+        Object.assign(draft, draftWithUnsent(draft, [{ text, images: [] }], imageRefFormat()))
       }
       giveBack(id)
     }
@@ -705,6 +720,7 @@ export const useChatStore = defineStore(
     const switchAccount = async (id: string, profile: ProfileProps) => {
       const tab = tabOf(id)
       if (!tab?.sessionId || tab.profile === profile.dir || tab.statusBeforeMove) return
+      const wasBusy = isBusyStatus(tab.status)
       // Until Claude runs in the other account, lists show the chat as it will be (`listedTabOf`):
       // the stop interrupts a turn or an approval, so a busy chat is finished from here on.
       update(id, (t) => ({ ...t, statusBeforeMove: isBusyStatus(t.status) ? 'idle' : t.status }))
@@ -725,7 +741,14 @@ export const useChatStore = defineStore(
         update(id, (t) => ({ ...t, statusBeforeMove: null }))
         return
       }
-      update(id, (t) => ({ ...t, profile: profile.dir, account: profile.label, status: 'ended' }))
+      // A turn the move interrupted goes on in the other account: the panel keeps it. A finished
+      // one does not; the next prompt is something new.
+      update(id, (t) => ({
+        ...(wasBusy ? withTurnCut(t) : t),
+        profile: profile.dir,
+        account: profile.label,
+        status: 'ended'
+      }))
       const moved = tabOf(id)
       if (moved) start(moved)
     }
@@ -808,7 +831,11 @@ export const useChatStore = defineStore(
     }
 
     /** The turn that ended at `at` finished while the user looked elsewhere. */
-    const markUnseen = (id: string, at: number) => update(id, (tab) => withUnseen(tab, at))
+    const markUnseen = (id: string, at: number) => {
+      update(id, (tab) => withUnseen(tab, at))
+      // Only when a number appears: a drag afterwards stands until the next chat finishes.
+      if (tabOf(id)?.unseenAt === at) tabs.value = finishSortedOf(tabs.value)
+    }
 
     /** The user looked at the chat: it leaves the finish order. */
     const markSeen = (id: string) => {
@@ -826,6 +853,10 @@ export const useChatStore = defineStore(
 
     /** A muted tab never notifies; saved with the tabs. */
     const setMuted = (id: string, isMuted: boolean) => update(id, (tab) => ({ ...tab, isMuted }))
+
+    /** The window from the context report, or `null` to guess again after a model switch. */
+    const setContextWindow = (id: string, contextWindow: number | null) =>
+      update(id, (tab) => ({ ...tab, contextWindow }))
 
     /** One place left or right, the keyboard way of dragging a tab. */
     const moveTab = (id: string, step: -1 | 1) => {
@@ -873,6 +904,7 @@ export const useChatStore = defineStore(
       stopAndWait,
       clearChat,
       setMuted,
+      setContextWindow,
       restoreTabs,
       refreshRecent,
       close,

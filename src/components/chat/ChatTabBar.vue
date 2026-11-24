@@ -12,13 +12,14 @@ import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
 import TerminalNewMenu from '@/components/terminal/TerminalNewMenu.vue'
 import TerminalTabList from '@/components/terminal/TerminalTabList.vue'
 import { useDragOptions } from '@/composables/useDragOptions'
+import { useFlipMove } from '@/composables/useFlipMove'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { useChatStore } from '@/stores/chat'
 import type { TerminalRequest } from '@/stores/terminalRequests'
 import { useTerminalStore } from '@/stores/terminals'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import { isEmptyChat } from '@/utils/sessionList'
-import type { ChatTabState } from '@/utils/chatTab'
+import { shownStatusOf, type ChatTabState } from '@/utils/chatTab'
 import { targetOfTab } from '@/utils/sessionActions'
 import { nearestScrollOf } from '@/utils/nearestScroll'
 import { MOVE_CHORD, moveStepOf } from '@/utils/shortcuts'
@@ -48,6 +49,18 @@ const { ariaOf } = useShortcutLabels()
 const dragOptions = useDragOptions('x')
 const { finishRanks } = storeToRefs(useChatStore())
 const { tabs: terminalTabs } = storeToRefs(useTerminalStore())
+// A chat that finishes moves to its place in the finish order; the tabs slide there.
+const { skipNext: skipNextMove } = useFlipMove(bar, 'data-tab-cell', () =>
+  tabs.map((tab) => tab.id).join('|')
+)
+
+const handleDrop = (moved: ChatTabState[]) => {
+  skipNextMove()
+  emit(
+    'reorder',
+    moved.map((tab) => tab.id)
+  )
+}
 // Any tab that changes width (a title, a status icon, the font arriving) resizes the whole list,
 // and only a tab left of the active one can move it.
 useResizeObserver(list, () => measureUnderline())
@@ -122,13 +135,7 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
       :model-value="tabs"
       class="flex shrink-0 items-center gap-1"
       v-bind="dragOptions"
-      @update:model-value="
-        (moved: ChatTabState[]) =>
-          emit(
-            'reorder',
-            moved.map((tab) => tab.id)
-          )
-      "
+      @update:model-value="handleDrop"
     >
       <!-- Right click: mute the chat, and what its "…" offers. -->
       <SessionContextMenu
@@ -152,7 +159,7 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
           @keydown="handleKeydown($event, tab.id)"
         >
           <ChatStatusIcon
-            :status="tab.status"
+            :status="shownStatusOf(tab)"
             :is-empty="isEmptyChat(tab)"
             :rank="finishRanks.get(tab.id) ?? null"
             :is-failed="tab.notice !== null"

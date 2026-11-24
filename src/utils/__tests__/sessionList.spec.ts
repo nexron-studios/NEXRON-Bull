@@ -348,6 +348,32 @@ describe('rowActivityOf', () => {
   it('should say nothing once the tab is idle', () => {
     expect(rowActivityOf(tab('i', { status: 'idle' }))).toBe(null)
   })
+
+  it('should say that something still runs in the background after the turn', () => {
+    const idle = tab('b', { status: 'idle', backgroundTasks: { ids: ['a7f'], at: NOON } })
+    expect(rowActivityOf(idle)).toEqual({ kind: 'state', state: 'background' })
+  })
+})
+
+describe('a chat whose turn ended while something runs in the background', () => {
+  // Task ids as Claude Code lists them: a background shell (`local_bash`) and an agent.
+  it.each([
+    ['a background shell', 'b3vtm9fpi'],
+    ['a background agent', 'a472665f67fbbf6fa']
+  ])('should stay under "running" while %s runs', (_, taskId) => {
+    const idle = tab('b', {
+      status: 'idle',
+      finishedAt: null,
+      backgroundTasks: { ids: [taskId], at: NOON }
+    })
+    const [row] = sessionRowsOf([idle], [], NOON)
+    expect([row?.group, row?.status]).toEqual(['running', 'working'])
+  })
+
+  it('should light the machine dot as running', () => {
+    const idle = tab('b', { status: 'idle', backgroundTasks: { ids: ['b3vtm9fpi'], at: NOON } })
+    expect(machineStateOf([idle], NOON)).toBe('running')
+  })
 })
 
 describe('searchableOf', () => {

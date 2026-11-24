@@ -12,11 +12,18 @@ type Detail = 'full' | 'summary'
 
 const fetchReport = async (tabId: string, detail: Detail) => {
   const chat = useChatStore()
+  const tabNow = () => chat.tabs.find((tab) => tab.id === tabId)
   await chat.ensureStarted(tabId)
+  const asked = tabNow()
   const report = contextReportOf(
     await chat.askClaude(tabId, { subtype: 'get_context_usage', detail })
   )
   if (!report) throw new Error('get_context_usage gave no usable answer')
+  const answered = tabNow()
+  // The ring and the panel read the window from the tab, so they agree with this report. After a
+  // `/clear` or a model switch meanwhile the window belongs to what the tab left.
+  if (answered?.sessionId === asked?.sessionId && answered?.model === asked?.model)
+    chat.setContextWindow(tabId, report.window)
   return report
 }
 

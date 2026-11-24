@@ -19,6 +19,7 @@ const buildInsights = (tabId: string) => {
   const turn = computed(() => tab.value?.turn ?? null)
   const status = computed(() => tab.value?.status ?? 'ended')
   const pending = computed(() => tab.value?.pending ?? [])
+  const cutTurn = computed(() => tab.value?.cutTurn ?? null)
 
   const subagents = computed(() =>
     subagentsOf(messages.value, agentNotices.value, isLive.value, backgroundTasks.value)
@@ -37,7 +38,8 @@ const buildInsights = (tabId: string) => {
     messages: messages.value,
     turn: turn.value,
     status: status.value,
-    pending: pending.value
+    pending: pending.value,
+    cutTurn: cutTurn.value
   }))
   const turnTools = computed(() => turnToolsOf(turnSource.value))
   // The panel's per-prompt lists ("Offen", subagents) read this; token-stable like turnTools.

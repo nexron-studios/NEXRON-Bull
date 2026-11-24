@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answersOf, questionsOf, toggledChoice } from '../questions'
+import { OTHER_CHOICE, answersOf, questionsOf, toggledChoice, withOtherChoice } from '../questions'
 
 const input = {
   questions: [
@@ -31,14 +31,32 @@ describe('questionsOf', () => {
 })
 
 describe('answersOf', () => {
-  it('should join multiple choices and prefer free text', () => {
-    const questions = questionsOf(input)
+  it('should send the chosen own answer alone and add it to several choices', () => {
     const answers = answersOf(
-      questions,
-      { 'Rot oder Blau?': ['Blau'], 'Welche Sprachen?': ['de', 'en'] },
-      { 'Rot oder Blau?': '  Grün  ' }
+      questionsOf(input),
+      { 'Rot oder Blau?': [OTHER_CHOICE], 'Welche Sprachen?': ['de', 'en', OTHER_CHOICE] },
+      { 'Rot oder Blau?': '  Grün  ', 'Welche Sprachen?': 'fr' }
     )
-    expect(answers).toEqual({ 'Rot oder Blau?': 'Grün', 'Welche Sprachen?': 'de, en' })
+    expect(answers).toEqual({ 'Rot oder Blau?': 'Grün', 'Welche Sprachen?': 'de, en, fr' })
+  })
+
+  it('should ignore typed text that is not chosen and answer nothing for an empty own answer', () => {
+    const answers = answersOf(
+      questionsOf(input),
+      { 'Rot oder Blau?': ['Blau'], 'Welche Sprachen?': [OTHER_CHOICE] },
+      { 'Rot oder Blau?': 'Grün', 'Welche Sprachen?': '  ' }
+    )
+    expect(answers).toEqual({ 'Rot oder Blau?': 'Blau', 'Welche Sprachen?': '' })
+  })
+})
+
+describe('withOtherChoice', () => {
+  it('should replace a single choice and add to several once', () => {
+    expect([
+      withOtherChoice(['Rot'], false),
+      withOtherChoice(['de'], true),
+      withOtherChoice(['de', OTHER_CHOICE], true)
+    ]).toEqual([[OTHER_CHOICE], ['de', OTHER_CHOICE], ['de', OTHER_CHOICE]])
   })
 })
 

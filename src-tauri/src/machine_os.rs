@@ -26,16 +26,19 @@ pub struct Platform {
     pub release_target: Option<&'static str>,
 }
 
+/// Kernels `uname -s` names on Windows when Git's or Cygwin's tools are on the PATH.
+const WINDOWS_KERNEL_PREFIXES: [&str; 3] = ["MINGW", "MSYS", "CYGWIN"];
+
 /// `None` for a system Bull does not run on (FreeBSD, a router). A failed `uname` is Windows:
 /// cmd and PowerShell answer it with an error, and whatever else refuses it (a Git host without
-/// shell access) fails the Windows check that follows.
+/// shell access) fails the Windows check that follows. Lines a shell profile prints before the
+/// answer (conda, nvm, a greeting) are skipped.
 pub fn platform_of(code: Option<i32>, stdout: &str) -> Option<Platform> {
     let windows = Platform { os: MachineOs::Windows, release_target: Some(WINDOWS_TARGET) };
     if code != Some(0) {
         return Some(windows);
     }
-    let mut words = stdout.lines().next().unwrap_or_default().split_whitespace();
-    let (kernel, machine) = (words.next().unwrap_or_default(), words.next().unwrap_or_default());
+    let (kernel, machine) = stdout.lines().find_map(uname_words)?;
     let is_arm = matches!(machine, "arm64" | "aarch64");
     match kernel {
         "Darwin" => Some(Platform {
@@ -50,9 +53,21 @@ pub fn platform_of(code: Option<i32>, stdout: &str) -> Option<Platform> {
                 _ => None,
             },
         }),
-        _ if ["MINGW", "MSYS", "CYGWIN"].iter().any(|prefix| kernel.starts_with(prefix)) => Some(windows),
+        _ if is_windows_kernel(kernel) => Some(windows),
         _ => None,
     }
+}
+
+fn is_windows_kernel(kernel: &str) -> bool {
+    WINDOWS_KERNEL_PREFIXES.iter().any(|prefix| kernel.starts_with(prefix))
+}
+
+/// Kernel and processor of a line `uname -sm` printed; `None` for any other line.
+fn uname_words(line: &str) -> Option<(&str, &str)> {
+    let mut words = line.split_whitespace();
+    let (kernel, machine) = (words.next()?, words.next()?);
+    let is_uname = matches!(kernel, "Darwin" | "Linux") || is_windows_kernel(kernel);
+    (is_uname && words.next().is_none()).then_some((kernel, machine))
 }
 
 impl MachineOs {
@@ -127,6 +142,14 @@ mod tests {
         let cmd = "'uname' is not recognized as an internal or external command";
         assert_eq!(target_of(1, cmd), Some((MachineOs::Windows, Some("x86_64-pc-windows-msvc"))));
         assert_eq!(target_of(0, "MINGW64_NT-10.0-26100 x86_64\n"), Some((MachineOs::Windows, Some("x86_64-pc-windows-msvc"))));
+    }
+
+    #[test]
+    fn skips_what_a_shell_profile_prints_first() {
+        let noisy = "(base) conda activated\nnvm: using node v22\nLinux x86_64\n";
+        assert_eq!(target_of(0, noisy), Some((MachineOs::Linux, Some("x86_64-unknown-linux-musl"))));
+        let greeting = "Welcome, Linux user\nDarwin arm64\n";
+        assert_eq!(target_of(0, greeting), Some((MachineOs::Macos, Some("aarch64-apple-darwin"))));
     }
 
     #[test]

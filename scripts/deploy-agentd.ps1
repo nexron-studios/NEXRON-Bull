@@ -16,10 +16,16 @@ $scp = Join-Path $env:SystemRoot 'System32\OpenSSH\scp.exe'
 $releases = 'https://github.com/nexron-studios/NEXRON-Bull/releases/download'
 
 # cmd and PowerShell do not know uname; macOS and Linux answer "Darwin arm64", "Linux x86_64".
-$uname = (& $ssh -o BatchMode=yes $Target 'uname -sm' 2>$null | Select-Object -First 1)
-if ($LASTEXITCODE -eq 255) { throw "cannot reach $Target" }
+# Their complaint on stderr would stop the script under 'Stop' in Windows PowerShell 5.1, so
+# only the exit code and the output decide. A shell profile may print lines before the answer.
+$ErrorActionPreference = 'Continue'
+$unameLines = @(& $ssh -o BatchMode=yes $Target 'uname -sm' 2>$null)
+$unameExit = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+if ($unameExit -eq 255) { throw "cannot reach $Target" }
+$uname = $unameLines | Where-Object { $_ -match '^(Darwin|Linux) \S+$' } | Select-Object -First 1
 
-if ($LASTEXITCODE -eq 0 -and $uname -match '^(Darwin|Linux) (\S+)') {
+if ($unameExit -eq 0 -and $uname -match '^(Darwin|Linux) (\S+)$') {
   $arch = if ($Matches[2] -match '^(arm64|aarch64)$') { 'aarch64' } else { $Matches[2] }
   $system = if ($Matches[1] -eq 'Darwin') { 'apple-darwin' } else { 'unknown-linux-musl' }
   # No double quotes in these lines: PowerShell 5.1 strips nested ones on the way to ssh.

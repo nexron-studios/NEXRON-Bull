@@ -720,10 +720,14 @@ fn names_a_chat_after_each_message_and_tells_an_app_that_attaches() {
     agentd.send(start);
     agentd.expect(|e| e["type"] == "started");
     let replayed = agentd.expect(|e| e["type"] == "title");
+    // A browser that did not start the tab learns its name from `tabs`.
+    agentd.send(json!({ "id": 1, "op": "tabs" }));
+    let listed = agentd.expect(|e| e["type"] == "tabs");
 
     assert_eq!((&first["tab"], &first["session_id"], &first["title"]), (&json!("t1"), &session_id, &json!("Titled after (none)")));
     assert_eq!(second["title"], "Titled after Titled after (none)");
     assert_eq!(replayed["title"], "Titled after Titled after (none)");
+    assert_eq!(listed["tabs"][0]["title"], "Titled after Titled after (none)");
     agentd.send(json!({ "op": "stop", "tab": "t1" }));
     std::fs::remove_dir_all(&home).ok();
 }

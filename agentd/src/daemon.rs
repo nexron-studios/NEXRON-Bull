@@ -463,7 +463,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
             .map(|(tab, session_id, working, asks, params)| {
                 // The profile as the app started it (`None` for the default), as `start` takes it again.
                 let (_, account) = Self::account_of(params.profile.clone());
-                let title = find_transcript(params.profile.clone(), &session_id).ok().flatten().and_then(|path| catalog::title_of(&path));
+                // Haiku's title first, as `recent` names the session; else the transcript's.
+                let title = self.titles.get(&session_id).or_else(|| {
+                    find_transcript(params.profile.clone(), &session_id).ok().flatten().and_then(|path| catalog::title_of(&path))
+                });
                 let StartParams { cwd, profile, model, permission_mode, effort, is_fresh, .. } = params;
                 TabInfo { tab, session_id, title, cwd, profile, account, working, asks, model, permission_mode, effort, is_fresh }
             })

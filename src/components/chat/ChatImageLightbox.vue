@@ -18,7 +18,7 @@ import type { Size } from '@/utils/markup'
 import { historyStepOf } from '@/utils/shortcuts'
 
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
-// "M20"): view and page, or draw on it and hand the result with a comment to the composer.
+// "M20"): view and page, or draw on it; either way a comment can go with it to the composer.
 const { images } = defineProps<{ images: LightboxImage[] }>()
 
 const isOpen = defineModel<boolean>('open', { required: true })
@@ -46,9 +46,8 @@ const counter = computed(() =>
     : null
 )
 
-const { isApplying, mayLeave, apply, copy, download } = useLightboxActions({
+const { isApplying, mayLeave, mayStopMarking, apply, copy, download } = useLightboxActions({
   current,
-  isMarking,
   target,
   markup,
   onApplied: () => {
@@ -59,7 +58,10 @@ const { isApplying, mayLeave, apply, copy, download } = useLightboxActions({
 
 const KEY_STEPS: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1 }
 
+// A comment belongs to the image it was written for, so paging asks about it like closing.
 const step = (delta: number) => {
+  if (!mayLeave()) return
+  markup.reset()
   index.value = stepIndex(index.value, delta, images.length)
 }
 
@@ -68,9 +70,10 @@ const setOpen = (next: boolean) => {
   if (next || mayLeave()) isOpen.value = next
 }
 
+// Back to viewing hides the drawing tools and drops the strokes; the comment stays.
 const setMode = (next: LightboxMode) => {
-  if (next === 'view' && !mayLeave()) return
-  if (next === 'view') markup.reset()
+  if (next === 'view' && !mayStopMarking()) return
+  if (next === 'view') markup.clearStrokes()
   mode.value = next
 }
 
@@ -85,10 +88,11 @@ const focusStage = (event: Event) => {
   stage.value?.focus()
 }
 
-// The comment field keeps its own text undo; everywhere else Ctrl Z belongs to the drawing.
+// The comment field keeps its own keys: text undo, and arrows that move the caret, not the image.
+const isTextField = (target: EventTarget | null) =>
+  target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
+
 const handleMarkKey = (event: KeyboardEvent) => {
-  const field = event.target
-  if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) return
   const action = historyStepOf(event)
   if (!action) return
   event.preventDefault()
@@ -96,6 +100,7 @@ const handleMarkKey = (event: KeyboardEvent) => {
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
+  if (isTextField(event.target)) return
   if (isMarking.value) return handleMarkKey(event)
   const delta = KEY_STEPS[event.key]
   if (!delta || !hasSeveral.value) return
@@ -155,9 +160,11 @@ watch(isOpen, (open) => {
             :index
             :total="images.length"
             :can-mark="!!target"
+            :is-applying
             @step="step"
             @copy="copy"
             @mark="setMode('mark')"
+            @apply="apply"
           />
         </template>
 
@@ -185,8 +192,9 @@ watch(isOpen, (open) => {
             @download="download"
           />
           <ChatMarkupComment
-            v-if="isMarking"
+            v-if="target"
             class="w-full max-w-180 shrink-0"
+            :is-marking
             :is-applying
             @discard="discard"
             @apply="apply"

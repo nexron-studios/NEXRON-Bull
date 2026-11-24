@@ -326,7 +326,7 @@ export default {
     comment_title: 'Kommentar für Claude',
     comment_placeholder: 'Was soll Claude hier ändern?',
     comment_hint:
-      'Geht mit dem markierten Bild in dein Eingabefeld, du kannst ihn dort noch ändern.',
+      'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern.',
     keep_original: 'Original zusätzlich mitschicken',
     discard: 'Verwerfen',
     apply: 'Ins Eingabefeld',
@@ -334,7 +334,7 @@ export default {
     cancel: 'Abbrechen',
     comment_line: 'Zu Bild {n} ({name}): {comment}',
     close_warning:
-      'Die Markierung ist noch nicht im Eingabefeld. Beim zweiten Mal wird sie verworfen.',
+      'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',
     too_large: 'Das markierte Bild ist zu groß für Claude.',
     marked_limit: 'Höchstens {max} Bilder pro Nachricht. Entferne erst ein Bild.'
   },

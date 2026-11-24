@@ -323,14 +323,15 @@ export default {
     canvas: 'Drawing area: draw on the image with mouse, pen or finger',
     comment_title: 'Comment for Claude',
     comment_placeholder: 'What should Claude change here?',
-    comment_hint: 'Goes into your message with the marked image. You can still edit it there.',
+    comment_hint:
+      'Goes into your message with the image, marked if you drew on it. You can still edit it there.',
     keep_original: 'Also send the original',
     discard: 'Discard',
     apply: 'Add to message',
     apply_phone_hint: 'Arrow: marked image and comment into your message',
     cancel: 'Cancel',
     comment_line: 'About image {n} ({name}): {comment}',
-    close_warning: 'The markup is not in your message yet. Do it again to discard it.',
+    close_warning: 'The comment or markup is not in your message yet. Do it again to discard it.',
     too_large: 'The marked image is too large for Claude.',
     marked_limit: 'At most {max} images per message. Remove an image first.'
   },

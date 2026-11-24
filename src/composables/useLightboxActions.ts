@@ -11,7 +11,6 @@ import { markedCopyOf, parseDataUrl, toPendingImage } from '@/utils/lightbox'
 
 interface LightboxActionsOptions {
   current: Ref<LightboxImage | null>
-  isMarking: Ref<boolean>
   target: ReturnType<typeof useMarkupTarget>
   markup: ReturnType<typeof useMarkup>
   /** The result is in the composer; the preview can go */
@@ -23,7 +22,6 @@ const newId = () => crypto.randomUUID()
 /** What the preview does with an image: copy, download, and hand the markup to the composer. */
 export const useLightboxActions = ({
   current,
-  isMarking,
   target,
   markup,
   onApplied
@@ -34,14 +32,19 @@ export const useLightboxActions = ({
 
   const { t } = useI18n()
 
-  /** Unsaved markup holds the first attempt to leave it with a warning; an export in flight all. */
-  const mayLeave = () => {
+  /** Unsaved work holds the first attempt to drop it with a warning; an export in flight all. */
+  const mayDrop = (hasWork: boolean) => {
     if (isApplying.value) return false
-    if (!isMarking.value || !markup.isDirty.value || hasWarned.value) return true
+    if (!hasWork || hasWarned.value) return true
     hasWarned.value = true
     toast.warning(t('images.close_warning'))
     return false
   }
+
+  /** Closing or paging drops strokes and comment. */
+  const mayLeave = () => mayDrop(markup.isDirty.value)
+  /** Back to viewing drops only the strokes. */
+  const mayStopMarking = () => mayDrop(markup.strokes.value.length > 0)
 
   // A comment alone on a history image brings a copy along, so Claude sees what it is about.
   const imagesFor = async (image: LightboxImage): Promise<PendingImage[]> => {
@@ -100,5 +103,5 @@ export const useLightboxActions = ({
     hasWarned.value = false
   })
 
-  return { isApplying, mayLeave, apply, copy, download }
+  return { isApplying, mayLeave, mayStopMarking, apply, copy, download }
 }

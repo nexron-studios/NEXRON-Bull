@@ -24,8 +24,11 @@ const NOTE_KEY: Record<ReviewSource, string | null> = {
   binary: null,
   loading: null,
   no_repo: 'review.source.no_repo',
+  no_git: 'review.source.no_git',
   unchanged: 'review.source.unchanged',
   ignored: 'review.source.ignored',
+  missing: 'review.source.missing',
+  too_big: 'review.source.too_big',
   failed: 'review.source.failed'
 }
 /** Only a file that is new or gone gets a word; a changed one is what the review is about. */
@@ -35,7 +38,8 @@ const STATUS_KEY: Record<FileStatus, string | null> = {
   deleted: 'review.status.deleted',
   modified: null,
   unchanged: null,
-  ignored: null
+  ignored: null,
+  missing: null
 }
 
 const { t } = useI18n()

@@ -1370,10 +1370,16 @@ export default {
     source: {
       no_repo:
         'Kein git-Repository. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      no_git:
+        'Auf diesem Rechner fehlt git. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
       unchanged:
         'Die Datei gleicht dem letzten Commit. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
       ignored:
         'git ignoriert diese Datei. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      missing:
+        'Die Datei gibt es nicht mehr. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      too_big:
+        'Die Datei ist zu groß für einen Vergleich. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
       failed:
         'Der Rechner hat den Stand der Datei nicht geschickt. Du siehst die Änderungen aus dem Chat.'
     },

@@ -1,4 +1,4 @@
-import type { FileDiffProps, FileStatus } from '@/types/agentd.type'
+import type { FileDiffAnswer, FileDiffProps, FileStatus } from '@/types/agentd.type'
 import { hunksOfPatch, type DiffHunk, type DiffLineRow, type DiffRow } from '@/utils/diffRows'
 
 /**
@@ -121,8 +121,11 @@ export const reviewSourceList = [
   'binary',
   'loading',
   'no_repo',
+  'no_git',
   'unchanged',
   'ignored',
+  'missing',
+  'too_big',
   'failed'
 ] as const
 export type ReviewSource = (typeof reviewSourceList)[number]
@@ -135,33 +138,27 @@ export interface Review {
   isTruncated: boolean
 }
 
-/** Git's answer when it has one worth showing, else the chat's own edits. */
-export const reviewOf = (
-  answer: { diff: FileDiffProps | null } | undefined,
-  isError: boolean,
-  chatHunks: DiffHunk[]
-): Review => {
-  const fromChat = (source: ReviewSource): Review => ({
-    source,
-    status: null,
-    hunks: chatHunks,
-    isTruncated: false
-  })
-  if (isError) return fromChat('failed')
-  if (!answer) return fromChat('loading')
-  const { diff } = answer
-  if (!diff) return fromChat('no_repo')
+const fromChat = (source: ReviewSource, chatHunks: DiffHunk[]): Review => ({
+  source,
+  status: null,
+  hunks: chatHunks,
+  isTruncated: false
+})
+
+const reviewOfDiff = (diff: FileDiffProps, chatHunks: DiffHunk[]): Review => {
   if (diff.is_binary)
     return { source: 'binary', status: diff.status, hunks: [], isTruncated: false }
   switch (diff.status) {
     case 'unchanged':
-      return fromChat('unchanged')
     case 'ignored':
-      return fromChat('ignored')
+    case 'missing':
+      return fromChat(diff.status, chatHunks)
     case 'modified':
     case 'added':
     case 'untracked':
     case 'deleted':
+      // Too big for agentd to send any lines: the chat's edits say more than an empty diff.
+      if (diff.is_truncated && !diff.hunks.length) return fromChat('too_big', chatHunks)
       return {
         source: 'git',
         status: diff.status,
@@ -171,6 +168,31 @@ export const reviewOf = (
     default: {
       const unhandled: never = diff.status
       throw new Error(`Unhandled file status: ${unhandled}`)
+    }
+  }
+}
+
+/** Git's answer when it has one worth showing, else the chat's own edits. */
+export const reviewOf = (
+  reply: { answer: FileDiffAnswer } | undefined,
+  isError: boolean,
+  chatHunks: DiffHunk[]
+): Review => {
+  if (isError) return fromChat('failed', chatHunks)
+  if (!reply) return fromChat('loading', chatHunks)
+  const { answer } = reply
+  switch (answer.state) {
+    case 'diff':
+      return reviewOfDiff(answer, chatHunks)
+    case 'not_in_repository':
+      return fromChat('no_repo', chatHunks)
+    case 'git_missing':
+      return fromChat('no_git', chatHunks)
+    case 'failed':
+      return fromChat('failed', chatHunks)
+    default: {
+      const unhandled: never = answer
+      throw new Error(`Unhandled file_diff answer: ${JSON.stringify(unhandled)}`)
     }
   }
 }

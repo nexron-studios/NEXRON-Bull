@@ -51,7 +51,9 @@ export const fileStatusList = [
   'untracked',
   'deleted',
   'unchanged',
-  'ignored'
+  'ignored',
+  /** Neither on disk nor in `HEAD`: created and removed again */
+  'missing'
 ] as const
 export type FileStatus = (typeof fileStatusList)[number]
 
@@ -59,9 +61,16 @@ export interface FileDiffProps {
   status: FileStatus
   hunks: PatchHunk[]
   is_binary: boolean
-  /** Only the lines around each change came, or the file was cut at agentd's size limit */
+  /** Only the lines around each change came, the file was cut, or (no hunks) it was too big */
   is_truncated: boolean
 }
+
+/** agentd's answer to `file_diff`: the diff, or why there is none */
+export type FileDiffAnswer =
+  | ({ state: 'diff' } & FileDiffProps)
+  | { state: 'not_in_repository' }
+  | { state: 'git_missing' }
+  | { state: 'failed'; message: string }
 
 export const hookOutcomeList = ['blocked', 'failed', 'output'] as const
 export type HookOutcome = (typeof hookOutcomeList)[number]
@@ -276,8 +285,8 @@ export type AgentdEvent =
     }
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
   | { type: 'branch'; id: number | null; branch: string | null }
-  /** `null` outside a repository or without git: the chat's own edits count then */
-  | { type: 'file_diff'; id: number | null; diff: FileDiffProps | null }
+  /** Without a diff, the review shows the chat's own edits and says why */
+  | { type: 'file_diff'; id: number | null; answer: FileDiffAnswer }
   /** Empty while the session has no transcript or never started a subagent */
   | { type: 'subagent_history'; id: number | null; agents: SubagentTranscript[] }
   /** Sent by the app, not agentd: the connection to a machine ended; `null` is this computer. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FileDiffProps } from '@/types/agentd.type'
+import type { FileDiffAnswer, FileDiffProps } from '@/types/agentd.type'
 import {
   displayPathOf,
   foldRows,
@@ -111,8 +111,9 @@ describe('displayPathOf', () => {
 
 describe('reviewOf', () => {
   const chat = [{ old_start: 1, new_start: 1, lines: [{ sign: '+' as const, text: 'chat' }] }]
-  const diff = (status: FileDiffProps['status'], isBinary = false): { diff: FileDiffProps } => ({
-    diff: {
+  const diff = (status: FileDiffProps['status'], isBinary = false): { answer: FileDiffAnswer } => ({
+    answer: {
+      state: 'diff',
       status,
       hunks: [{ old_start: 1, new_start: 1, lines: ['+git'] }],
       is_binary: isBinary,
@@ -129,7 +130,7 @@ describe('reviewOf', () => {
   })
 
   it('should fall back to the chat outside a repository and for a committed file', () => {
-    expect(reviewOf({ diff: null }, false, chat)).toEqual({
+    expect(reviewOf({ answer: { state: 'not_in_repository' } }, false, chat)).toEqual({
       source: 'no_repo',
       status: null,
       hunks: chat,
@@ -144,6 +145,28 @@ describe('reviewOf', () => {
 
   it('should fall back to the chat when agentd failed', () => {
     expect(reviewOf(undefined, true, chat).source).toBe('failed')
+    expect(reviewOf({ answer: { state: 'failed', message: 'x' } }, false, chat).source).toBe(
+      'failed'
+    )
+  })
+
+  it('should say why the chat stands in without git or without the file', () => {
+    expect(reviewOf({ answer: { state: 'git_missing' } }, false, chat).source).toBe('no_git')
+    expect(reviewOf(diff('missing'), false, chat)).toMatchObject({ source: 'missing', hunks: chat })
+  })
+
+  it('should take the chat for a file too big to send any lines', () => {
+    const tooBig = {
+      answer: {
+        state: 'diff' as const,
+        status: 'modified' as const,
+        hunks: [],
+        is_binary: false,
+        is_truncated: true
+      }
+    }
+
+    expect(reviewOf(tooBig, false, chat)).toMatchObject({ source: 'too_big', hunks: chat })
   })
 
   it('should show no lines for a binary file', () => {

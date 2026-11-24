@@ -1346,9 +1346,12 @@ export default {
     status: { added: 'new', deleted: 'deleted' },
     source: {
       no_repo: 'Not a git repository. These are the changes Claude made in this chat.',
+      no_git: 'git is missing on this machine. These are the changes Claude made in this chat.',
       unchanged:
         'The file matches the last commit. These are the changes Claude made in this chat.',
       ignored: 'git ignores this file. These are the changes Claude made in this chat.',
+      missing: 'The file is gone. These are the changes Claude made in this chat.',
+      too_big: 'The file is too large to compare. These are the changes Claude made in this chat.',
       failed: "The machine didn't send the file. These are the changes from the chat."
     },
     truncated: 'The file is very large. Only the lines around the changes are shown.',

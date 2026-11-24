@@ -9,7 +9,9 @@ useColorSchemeApply()
 
 <template>
   <TooltipProvider :delay-duration="300">
-    <div class="flex h-dvh min-h-0 flex-col">
+    <!-- The shell has a fixed height and scrolls inside its panes, never as a document. `relative`
+         makes the clip hold for absolutely positioned descendants too (`sr-only` labels). -->
+    <div class="relative flex h-dvh min-h-0 flex-col overflow-hidden">
       <RouterView />
     </div>
     <Toaster />

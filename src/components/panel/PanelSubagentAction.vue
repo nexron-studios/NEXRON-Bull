@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useClippedTooltip } from '@/composables/useClippedTooltip'
 import { formatElapsed } from '@/utils/elapsed'
 import type { ToolRun } from '@/utils/tabActivity'
-import { TOOL_ICON, TOOL_KIND_CLASS, TOOL_RUN_LOOK } from '@/utils/toolIcons'
+import { TOOL_ICON, TOOL_RUN_LOOK } from '@/utils/toolIcons'
 import { toolInfoOf } from '@/utils/toolKind'
 
 // One tool call of a subagent (Figma "10", `.subact`). It has no card in the chat, so it only
@@ -43,8 +43,7 @@ const duration = computed(() => {
         <span class="sr-only">{{ t(`activity.tool_state.${run.status}`) }}</span>
         <component
           :is="TOOL_ICON[info.icon]"
-          class="size-3 shrink-0"
-          :class="TOOL_KIND_CLASS[info.kind]"
+          class="size-3 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
         <span ref="name" class="max-w-3/5 shrink-0 truncate font-semibold text-foreground">{{

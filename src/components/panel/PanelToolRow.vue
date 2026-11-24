@@ -5,12 +5,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useClippedTooltip } from '@/composables/useClippedTooltip'
 import { formatElapsed } from '@/utils/elapsed'
 import type { ToolRun } from '@/utils/tabActivity'
-import { TOOL_ICON, TOOL_KIND_CLASS, TOOL_RUN_LOOK } from '@/utils/toolIcons'
+import { TOOL_ICON, TOOL_RUN_LOOK } from '@/utils/toolIcons'
 import { toolInfoOf } from '@/utils/toolKind'
 
 // One tool call in the panel; clicking it scrolls the chat to its card. `now`: the call still
 // runs, its time counts up to this. A long name (MCP tools) or target is cut off, the tooltip then
-// shows both in full.
+// shows both in full. Only the state icon has colour; the tool icon stays grey, so several calls
+// at once do not turn the panel colourful (same in subagent actions and ghost rows).
 const { run, now = null } = defineProps<{ run: ToolRun; now?: number | null }>()
 const emit = defineEmits<{ open: [] }>()
 
@@ -44,8 +45,7 @@ const duration = computed(() => {
         <span class="sr-only">{{ t(`activity.tool_state.${run.status}`) }}</span>
         <component
           :is="TOOL_ICON[info.icon]"
-          class="size-3.5 shrink-0"
-          :class="TOOL_KIND_CLASS[info.kind]"
+          class="size-3.5 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
         <!-- The name keeps at most three fifths, so a long MCP name leaves room for the target. -->

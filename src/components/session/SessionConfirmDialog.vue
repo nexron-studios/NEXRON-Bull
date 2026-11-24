@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Eraser, FolderX, LoaderCircle, Square, Trash2 } from '@lucide/vue'
+import { Eraser, FolderX, LoaderCircle, Square, Trash2, X } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'
@@ -28,6 +28,7 @@ const { confirmation, confirmationTarget, isWorking } = storeToRefs(actions)
 
 const ICONS = {
   clear: Eraser,
+  remove: X,
   stop_and_remove: Square,
   delete: Trash2,
   remove_worktree: FolderX

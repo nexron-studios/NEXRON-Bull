@@ -125,6 +125,7 @@ export default {
         thinking: 'Claude denkt nach',
         writing: 'Claude schreibt',
         working: 'Claude arbeitet',
+        background: 'Im Hintergrund läuft noch etwas',
         reads: 'Claude liest {target}',
         searches: 'Claude sucht {target}',
         edits: 'Claude ändert {target}',
@@ -326,15 +327,16 @@ export default {
     comment_title: 'Kommentar für Claude',
     comment_placeholder: 'Was soll Claude hier ändern?',
     comment_hint:
-      'Geht mit dem markierten Bild in dein Eingabefeld, du kannst ihn dort noch ändern.',
+      'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern.',
     keep_original: 'Original zusätzlich mitschicken',
     discard: 'Verwerfen',
     apply: 'Ins Eingabefeld',
     apply_phone_hint: 'Pfeil: markiertes Bild und Kommentar ins Eingabefeld',
     cancel: 'Abbrechen',
-    comment_line: 'Zu Bild {n} ({name}): {comment}',
+    comment_line: 'Zu {ref}: {comment}',
+    reference: '[Bild {n} ({name})]',
     close_warning:
-      'Die Markierung ist noch nicht im Eingabefeld. Beim zweiten Mal wird sie verworfen.',
+      'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',
     too_large: 'Das markierte Bild ist zu groß für Claude.',
     marked_limit: 'Höchstens {max} Bilder pro Nachricht. Entferne erst ein Bild.'
   },
@@ -556,7 +558,6 @@ export default {
     subagents_empty: 'Noch keine Subagents',
     subagents_empty_hint: 'Gibt Claude Teilaufgaben ab, siehst du die Helfer hier live.',
     subagent_actions: '{n} Aktion | {n} Aktionen',
-    more_actions: '+{n} weitere',
     subagent_state: { running: 'läuft', done: 'fertig', failed: 'fehlgeschlagen' },
     connectors: 'Konnektoren',
     connectors_count: '{connected} von {total} verbunden',
@@ -1061,6 +1062,11 @@ export default {
         'Hell oder dunkel, und die Farbe, in der Bull akzentuiert. Die Bulle und die Claude-Marke färben sich sofort mit, auch im Browser-Tab und in der Taskleiste. Startmenü und Desktop-Verknüpfung behalten das blaue Icon.',
       theme: 'Design',
       themes: { auto: 'System', light: 'Hell', dark: 'Dunkel' },
+      zoom: 'Größe',
+      zoom_auto: 'Automatisch',
+      zoom_note_auto:
+        'Passt sich der Fenstergröße an, gerade {zoom}. {larger} und {smaller} ändern die Größe, {reset} stellt Automatisch wieder her.',
+      zoom_note: '{larger} und {smaller} ändern die Größe, {reset} stellt Automatisch wieder her.',
       scheme: 'Farbschema',
       presets: {
         'night-desk': 'Night Desk',
@@ -1151,9 +1157,18 @@ export default {
     done: 'Fertig',
     range_label: 'Zeitraum der fertigen Sessions',
     ranges: { today: 'Heute', week: 'Woche', all: 'Alle' },
-    context_tokens: '{tokens} Tokens',
-    open: 'Öffnen',
     open_label: '{title} öffnen',
+    card: {
+      finished_at: 'fertig {time}',
+      ago: 'vor {age}',
+      prompts: '{n} Anfrage | {n} Anfragen',
+      context: '{tokens} von {window} Tokens im Kontext',
+      started_with: 'Gestartet mit:',
+      last_prompt: 'Letzte Anfrage:',
+      claude: 'Claude:',
+      asks_for: 'Fragt nach:',
+      to_chat: 'Zum Chat'
+    },
     resume: 'Fortsetzen',
     resume_label: '{title} fortsetzen',
     running_empty_title: 'Gerade läuft nichts',
@@ -1305,6 +1320,11 @@ export default {
         confirm: 'Chat leeren',
         note_asking: 'Die offene Freigabe wird dabei abgelehnt.',
         note_working: 'Der laufende Schritt wird dabei abgebrochen.'
+      },
+      remove: {
+        title: '„{title}“ entfernen?',
+        body: 'Bull schließt den Tab und nimmt die Session aus der Liste. Der Verlauf bleibt gespeichert, „Neue Session“ › „Fortsetzen“ holt sie zurück.',
+        confirm: 'Entfernen'
       },
       stop_and_remove: {
         title: 'Claude arbeitet noch',

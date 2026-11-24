@@ -42,7 +42,7 @@ const state = computed(() => readStateOf(steps, results, isRunning))
 
 <template>
   <!-- The panel asks for one of the cards inside: the line opens first. -->
-  <section class="flex w-full max-w-[72ch] flex-col gap-2" @nch-reveal="isOpen = true">
+  <section class="flex w-full flex-col gap-2" @nch-reveal="isOpen = true">
     <button
       type="button"
       class="flex w-fit max-w-full items-center gap-2 rounded-sm text-small text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"

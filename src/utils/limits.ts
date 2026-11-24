@@ -1,5 +1,5 @@
 import type { ChatMessage, LimitState, WaitReason } from '@/types/agentd.type'
-import type { ChatTabState } from '@/utils/chatTab'
+import { withTurnCut, type ChatTabState } from '@/utils/chatTab'
 import { MS_PER_MINUTE, formatHoursMinutes } from '@/utils/elapsed'
 
 /** The tab after agentd's limit card. A move also shows in the chat, at the point it happened. */
@@ -9,7 +9,7 @@ export const withLimit = (tab: ChatTabState, state: LimitState, now: number): Ch
       // agentd sends the card again to an app that attaches later; the chat shows it once.
       if (isSameMove(tab.limit, state)) return { ...tab, limit: state }
       return {
-        ...tab,
+        ...withTurnCut(tab),
         limit: state,
         notice: null,
         profile: state.to.profile,
@@ -17,8 +17,14 @@ export const withLimit = (tab: ChatTabState, state: LimitState, now: number): Ch
         messages: [...tab.messages, movedMessageOf(state, now)]
       }
     case 'waiting':
-      // The card says it better than Claude's raw limit message, and a planned move is moot.
-      return { ...tab, limit: state, notice: null, moveAfterTurn: null }
+      // The card says it better than Claude's raw limit message, and a planned move is moot. The
+      // turn it cut goes on with the reset.
+      return {
+        ...(tab.limit.kind === 'waiting' ? tab : withTurnCut(tab)),
+        limit: state,
+        notice: null,
+        moveAfterTurn: null
+      }
     case 'warning':
     case 'none':
       return { ...tab, limit: state }

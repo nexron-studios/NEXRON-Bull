@@ -8,6 +8,7 @@ import type { LiveSubagents } from '@/utils/subagentActions'
 import {
   connectorsOf,
   contextWindowOf,
+  withKnownConnectors,
   type AgentNotice,
   type BackgroundTasks,
   type Connector
@@ -42,6 +43,14 @@ export interface RunningTurn {
    * by `withTurnClock`; absent until a report started a turn.
    */
   isAgentReply?: boolean
+}
+
+/** A turn a limit or an account move cut off, which the next prompt continues. */
+export interface CutTurn {
+  /** The prompt that opened it */
+  promptUuid: string
+  /** Prompts that opened a turn after it when it was cut; the next one continues it */
+  promptsAfter: number
 }
 
 export interface PermissionAsk {
@@ -84,6 +93,18 @@ export interface ChatTabState {
   /** When the last turn ended here (ms); `null` until one did in this run of the app */
   finishedAt: number | null
   /**
+   * An answer to the user ended while background agents or shells still ran. The chat is not
+   * finished yet: the next turn that ends with nothing left running sets `finishedAt` for it.
+   */
+  isFinishHeld: boolean
+  /**
+   * The turn a limit or an account move cut off, in this run of the app. The prompt after the cut
+   * (agentd's "go on", or the user's) continues it, so the panel keeps listing its subagents and
+   * "Offen" instead of starting over (Jonas, 24.11.2026). "Aktivität" shows what runs now and
+   * follows the continuation. `null` without a cut.
+   */
+  cutTurn: CutTurn | null
+  /**
    * When the last turn ended while nobody looked at this chat; `null` once it was seen or a new
    * turn started. Gives the tab its place in the finish order.
    */
@@ -112,7 +133,10 @@ export interface ChatTabState {
   hasMore: boolean
   /** MCP servers of the session, from Claude's `system/init`; `null` until it reported them once */
   connectors: Connector[] | null
-  /** Context window Claude reported with the last result; `null` until a turn ended */
+  /**
+   * Context window Claude last reported, with a result or the context report; saved, because a
+   * reopened tab has no result yet and a guessed window would make the ring wrong
+   */
   contextWindow: number | null
   /** Background agents that finished while the app listened */
   agentNotices: AgentNotice[]
@@ -152,8 +176,8 @@ export type PermissionMode = OfferedMode | (typeof otherPermissionModeList)[numb
 
 /** What reopens a tab after a restart; everything else comes back from the transcript. */
 export type SavedTab = SavedTabFields &
-  // Optional: tabs saved before muting or effort existed have neither.
-  Partial<Pick<ChatTabState, 'isMuted' | 'effort' | 'worktreeFrom'>>
+  // Optional: tabs saved before muting, effort, the window or worktrees existed have none of these.
+  Partial<Pick<ChatTabState, 'isMuted' | 'effort' | 'contextWindow' | 'worktreeFrom'>>
 
 type SavedTabFields = Pick<
   ChatTabState,
@@ -185,6 +209,7 @@ export const savedTabOf = ({
   effort,
   isFresh,
   unseenAt,
+  contextWindow,
   worktreeFrom
 }: ChatTabState): SavedTab => ({
   id,
@@ -200,8 +225,13 @@ export const savedTabOf = ({
   effort,
   isFresh,
   unseenAt,
+  contextWindow,
   worktreeFrom
 })
+
+/** A saved window is divided by; anything but a positive number counts as unknown. */
+const isWindowSize = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
 
 export const newTab = (fields: SavedTab): ChatTabState => ({
   ...fields,
@@ -223,13 +253,15 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   thinking: null,
   turn: null,
   finishedAt: null,
+  isFinishHeld: false,
+  cutTurn: null,
   pending: [],
   history: fields.sessionId ? 'none' : 'loaded',
   permission: null,
   notice: null,
   hasMore: false,
   connectors: null,
-  contextWindow: null,
+  contextWindow: isWindowSize(fields.contextWindow) ? fields.contextWindow : null,
   agentNotices: [],
   liveSubagents: {},
   backgroundTasks: null,
@@ -248,6 +280,39 @@ export const turnMessagesOf = (tab: Pick<ChatTabState, 'messages' | 'turn'>): Ch
   if (!tab.turn) return []
   const start = tab.messages.findIndex((message) => message.uuid === tab.turn?.afterUuid)
   return tab.messages.slice(start + 1)
+}
+
+/** A prompt that opened a turn; one typed while Claude worked joined the running one instead. */
+export const isOpeningPrompt = (message: ChatMessage): boolean =>
+  isPromptEcho(message) && !message.is_mid_turn
+
+/** Prompts that opened a turn after the message at `index`, those not echoed yet included. */
+export const openingPromptsAfter = (
+  tab: Pick<ChatTabState, 'messages' | 'pending'>,
+  index: number
+): number =>
+  tab.messages.filter((message, at) => at > index && isOpeningPrompt(message)).length +
+  tab.pending.filter((prompt) => !prompt.is_mid_turn).length
+
+/**
+ * A limit or an account move cut the shown turn off. A second cut before the turn went on in
+ * earnest (Claude hit the limit again while continuing) keeps the turn of the first.
+ */
+export const withTurnCut = (tab: ChatTabState): ChatTabState => {
+  const known = tab.cutTurn
+  const knownStart = known ? tab.messages.findIndex((m) => m.uuid === known.promptUuid) : -1
+  if (known && knownStart >= 0) {
+    const promptsAfter = openingPromptsAfter(tab, knownStart)
+    if (promptsAfter <= known.promptsAfter + 1)
+      return { ...tab, cutTurn: { ...known, promptsAfter } }
+  }
+  const start = tab.messages.findLastIndex(isOpeningPrompt)
+  const prompt = tab.messages[start]
+  if (!prompt) return tab
+  return {
+    ...tab,
+    cutTurn: { promptUuid: prompt.uuid, promptsAfter: openingPromptsAfter(tab, start) }
+  }
 }
 
 /** Claude has written, thought or called a tool in the running turn. */
@@ -355,6 +420,8 @@ const withEmptyChat = (tab: ChatTabState): ChatTabState => ({
   hasMore: false,
   history: 'loaded',
   finishedAt: null,
+  isFinishHeld: false,
+  cutTurn: null,
   unseenAt: null,
   contextWindow: null,
   agentNotices: [],
@@ -380,7 +447,8 @@ export const withNewSession = (tab: ChatTabState, sessionId: string): ChatTabSta
 const withClaude = (tab: ChatTabState, event: ClaudeEvent): ChatTabState => {
   switch (event.type) {
     case 'system': {
-      const connectors = connectorsOf(event)
+      const reported = connectorsOf(event)
+      const connectors = reported && withKnownConnectors(tab.connectors, reported)
       const withConnectors = withReportedSettings(connectors ? { ...tab, connectors } : tab, event)
       // After `/clear` Claude goes on under a new session id; resuming must find that one.
       const sessionId = sessionIdOfInit(event)
@@ -449,9 +517,26 @@ const movedAccountOf = (
     ? { profile: event.profile, account: event.account }
     : { profile: tab.profile, account: tab.account }
 
+/**
+ * Claude still runs background agents or shells. The stream's task list (`background_tasks_changed`)
+ * names them; an exited Claude runs none.
+ */
+export const hasBackgroundWork = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): boolean =>
+  tab.status !== 'ended' && !!tab.backgroundTasks?.ids.length
+
+/**
+ * The status the user sees: a chat whose turn ended while its background agents or shells still
+ * run is not done, it works on (Jonas, 24.11.2026). Status icons, sidebar, overview and
+ * notifications read this, never `status` alone.
+ */
+export const shownStatusOf = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): TabStatus =>
+  tab.status === 'idle' && hasBackgroundWork(tab) ? 'working' : tab.status
+
 /** The tab as lists show it: during a move to another account, with its status from before. */
-export const listedTabOf = (tab: ChatTabState): ChatTabState =>
-  tab.statusBeforeMove ? { ...tab, status: tab.statusBeforeMove } : tab
+export const listedTabOf = (tab: ChatTabState): ChatTabState => {
+  const status = tab.statusBeforeMove ?? shownStatusOf(tab)
+  return status === tab.status ? tab : { ...tab, status }
+}
 
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
@@ -467,6 +552,9 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
       }
     case 'message':
       return withMessage(tab, event.message)
+    // A title asked for before `/clear` names the old session; the new one starts untitled.
+    case 'title':
+      return event.session_id === tab.sessionId ? { ...tab, title: event.title } : tab
     case 'claude':
       return withClaude(tab, event.event)
     case 'exited':
@@ -551,13 +639,24 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
     // Claude took up a subagent's report on its own: the last answer is still news.
     if (isAgentReplyOf(tab, turn)) return { ...tab, turn: { ...turn, isAgentReply: true } }
     // A new turn makes the last answer old news: the tab leaves the finish order.
-    return { ...tab, turn, unseenAt: null }
+    return { ...tab, turn, unseenAt: null, isFinishHeld: false }
   }
-  // Only an answer to the user counts as finished; a crash, an exit, an error result mid-turn or
-  // the reply to an agent's message does not.
-  const isAnswered =
-    tab.status === 'idle' && !tab.notice && !(tab.turn && isAgentReplyOf(tab, tab.turn))
-  return { ...tab, turn: null, finishedAt: isAnswered ? now : tab.finishedAt }
+  return { ...withTurnEnd(tab, now), turn: null }
+}
+
+/**
+ * Only an answer to the user counts as finished; a crash, an exit, an error result mid-turn or the
+ * reply to an agent's message does not. While background work still runs the answer waits
+ * (`isFinishHeld`): the chat is finished once a turn ends with nothing left running, usually
+ * Claude's reply to the last report.
+ */
+const withTurnEnd = (tab: ChatTabState, now: number): ChatTabState => {
+  const hasEndedWell = tab.status === 'idle' && !tab.notice
+  const isAnswered = hasEndedWell && !(tab.turn && isAgentReplyOf(tab, tab.turn))
+  if (hasBackgroundWork(tab)) return { ...tab, isFinishHeld: tab.isFinishHeld || isAnswered }
+  if (isAnswered || (hasEndedWell && tab.isFinishHeld))
+    return { ...tab, finishedAt: now, isFinishHeld: false }
+  return tab
 }
 
 /**

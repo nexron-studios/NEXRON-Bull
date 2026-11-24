@@ -25,6 +25,7 @@ export type SessionAction = (typeof sessionActionList)[number]
  */
 export const confirmationKindList = [
   'clear',
+  'remove',
   'stop_and_remove',
   'delete',
   'remove_worktree'
@@ -110,6 +111,7 @@ const runningNotesOf = (kind: ConfirmationKind, target: SessionTarget): string[]
     case 'clear':
       if (status === 'asking') return ['session_actions.confirm.clear.note_asking']
       return status === 'working' ? ['session_actions.confirm.clear.note_working'] : []
+    case 'remove':
     case 'stop_and_remove':
       return []
     case 'delete':

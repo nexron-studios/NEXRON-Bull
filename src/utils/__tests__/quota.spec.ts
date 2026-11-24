@@ -3,6 +3,7 @@ import {
   accountKeyOf,
   accountToneOf,
   freePercentOf,
+  loginQuotasOf,
   mergeQuotas,
   offeredAnswersOf,
   meterLevelOf,
@@ -50,6 +51,38 @@ describe('offeredAnswersOf', () => {
       (machine, dir) => !removed.has(`${machine ?? ''}\u0000${dir}`)
     )
     expect(mergeQuotas(offered).map((q) => q.label)).toEqual(['gmail'])
+  })
+})
+
+describe('loginQuotasOf', () => {
+  it('should show two profiles on one email as one account that names both', () => {
+    const logins = loginQuotasOf([
+      { machine: null, accounts: [account('default', 'a@x'), account('mackone', 'a@x')] },
+      { machine: 'server', accounts: [account('default', 'a@x'), account('home', 'b@x')] }
+    ])
+    expect(logins.map((login) => [login.machine, login.names, login.members])).toEqual([
+      [
+        null,
+        'default · mackone',
+        [
+          { machine: null, label: 'default' },
+          { machine: null, label: 'mackone' },
+          { machine: 'server', label: 'default' }
+        ]
+      ],
+      ['server', 'home', [{ machine: 'server', label: 'home' }]]
+    ])
+  })
+
+  it('should keep profiles without email apart per machine', () => {
+    const logins = loginQuotasOf([
+      { machine: null, accounts: [account('default', null)] },
+      { machine: 'server', accounts: [account('default', null)] }
+    ])
+    expect(logins.map((login) => [login.machine, login.names])).toEqual([
+      [null, 'default'],
+      ['server', 'default']
+    ])
   })
 })
 
@@ -166,15 +199,23 @@ describe('planLabelOf', () => {
   it('should capitalise the plan name', () => {
     expect([planLabelOf('max'), planLabelOf(null)]).toEqual(['Max', null])
   })
+
+  it('should show a plan Bull does not know by its own name', () => {
+    expect(planLabelOf('team')).toBe('Team')
+  })
 })
 
 describe('planToneOf', () => {
-  it('should give Pro and Max their own tone, whatever the case', () => {
-    expect([planToneOf('Pro'), planToneOf('max')]).toEqual(['pro', 'max'])
+  it('should give Pro, Max and Ultra their own tone, whatever the case', () => {
+    expect([planToneOf('Pro'), planToneOf('max'), planToneOf('Ultra')]).toEqual([
+      'pro',
+      'max',
+      'ultra'
+    ])
   })
 
   it('should keep a plan without its own colour neutral', () => {
-    expect(planToneOf('Free')).toBe('neutral')
+    expect([planToneOf('Free'), planToneOf('neutral')]).toEqual(['neutral', 'neutral'])
   })
 })
 

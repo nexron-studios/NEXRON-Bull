@@ -1,5 +1,6 @@
 import type { Block, ChatMessage, PromptBlock } from '@/types/agentd.type'
 import type { PendingImage } from '@/utils/content'
+import { remapImageRefs, type ImageRefFormat } from '@/utils/imageRefs'
 import { shellBlockOf } from '@/utils/shellBlocks'
 
 const PENDING_PREFIX = 'pending:'
@@ -88,8 +89,22 @@ export const withoutEchoed = (pending: ChatMessage[], echo: ChatMessage): ChatMe
   return range ? pending.slice(range[1]) : pending
 }
 
-/** The draft with prompts that never reached Claude put back in front, oldest first. */
-export const draftWithUnsent = (draft: SentDraft, unsent: SentDraft[]): SentDraft => ({
-  text: [...unsent.map((sent) => sent.text), draft.text].filter(Boolean).join('\n\n'),
-  images: [...unsent.flatMap((sent) => sent.images), ...draft.images]
-})
+/**
+ * The draft with prompts that never reached Claude put back in front, oldest first. Their image
+ * references are numbered anew, since all their images now share one message.
+ */
+export const draftWithUnsent = (
+  draft: SentDraft,
+  unsent: SentDraft[],
+  format: ImageRefFormat
+): SentDraft => {
+  const parts = [...unsent, draft]
+  const images = parts.flatMap((part) => part.images)
+  return {
+    text: parts
+      .map((part) => remapImageRefs(part.text, part.images, images, format))
+      .filter(Boolean)
+      .join('\n\n'),
+    images
+  }
+}

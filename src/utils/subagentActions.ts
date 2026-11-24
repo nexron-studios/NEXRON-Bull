@@ -4,8 +4,6 @@ import type { Subagent } from '@/utils/tabInsights'
 import { isTaskTool } from '@/utils/toolKind'
 import { summarizeToolInput } from '@/utils/toolSummary'
 
-/** An open subagent lists its newest actions; more would push the rest of the panel away. */
-export const SHOWN_ACTIONS = 5
 /** A collapsed finished subagent names its first few actions. */
 export const SUMMARY_ACTIONS = 2
 /** Per subagent and run; a long one would otherwise keep every call it ever made. */
@@ -156,15 +154,6 @@ export const subagentActionsOf = (
   if (agent.status === 'running') return runs
   return runs.map((run) => (run.status === 'running' ? { ...run, status: 'stopped' } : run))
 }
-
-/** The newest actions an open subagent lists, and how many older ones it leaves out. */
-export const shownActionsOf = (
-  actions: ToolRun[],
-  showsAll: boolean
-): { shown: ToolRun[]; hiddenCount: number } =>
-  showsAll || actions.length <= SHOWN_ACTIONS
-    ? { shown: actions, hiddenCount: 0 }
-    : { shown: actions.slice(-SHOWN_ACTIONS), hiddenCount: actions.length - SHOWN_ACTIONS }
 
 /** `Read tokens.css, Grep --brand`: the first actions of a collapsed subagent. */
 export const actionSummaryOf = (actions: ToolRun[]): string =>

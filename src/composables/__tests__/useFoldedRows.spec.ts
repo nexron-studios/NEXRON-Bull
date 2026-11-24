@@ -21,6 +21,26 @@ describe('useFoldedRows', () => {
     expect(fold.shown.value.length).toBe(7)
   })
 
+  it('should fold again with "Weniger anzeigen"', () => {
+    const fold = useFoldedRows(SEVEN, KEY)
+
+    fold.toggle()
+    fold.toggle()
+
+    expect(fold.shown.value).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
+  it('should keep a list without storage key folded on its own', () => {
+    const own = useFoldedRows(SEVEN)
+    const other = useFoldedRows(SEVEN)
+
+    own.toggle()
+
+    expect([own.shown.value.length, other.shown.value.length, localStorage.length]).toEqual([
+      7, 5, 0
+    ])
+  })
+
   it('should show a single hidden row instead of folding it', () => {
     const fold = useFoldedRows(['a', 'b', 'c', 'd', 'e', 'f'], KEY)
 

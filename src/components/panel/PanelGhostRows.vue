@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
+import { TOOL_ICON } from '@/utils/toolIcons'
 import { toolInfoOf } from '@/utils/toolKind'
 
 // What the activity list will look like before the first tool ran (Figma 42e): three faint rows
@@ -34,11 +34,7 @@ const rows = computed(() =>
       class="flex items-center gap-2 py-1.5"
       :class="row.opacity"
     >
-      <component
-        :is="TOOL_ICON[row.info.icon]"
-        class="size-3.5 shrink-0"
-        :class="TOOL_KIND_CLASS[row.info.kind]"
-      />
+      <component :is="TOOL_ICON[row.info.icon]" class="size-3.5 shrink-0 text-muted-foreground" />
       <span class="relative h-1.5 overflow-hidden rounded-full bg-accent" :class="row.width">
         <span
           v-if="row.isSweeping"

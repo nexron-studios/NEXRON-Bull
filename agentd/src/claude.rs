@@ -150,11 +150,18 @@ pub fn command(program: &Path, params: &StartParams, session_id: &str, generatio
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    scrub_env(&mut command);
+    account_env(&mut command, program, params.profile.as_deref());
     // Headless Claude Code leaves out its task tools; with them Claude keeps a plan the app
     // shows as steps, like the interactive todo list.
     command.env(TODO_TOOLS_VAR, "1");
     command.env(CHECKPOINTING_VAR, "true");
+    command
+}
+
+/// What every Claude agentd starts needs: a clean environment, the account's profile and no
+/// console window. A tab's Claude and the one-shot title call share it.
+pub(crate) fn account_env(command: &mut Command, program: &Path, profile: Option<&Path>) {
+    scrub_env(command);
     // A copy updating itself would grow a second install beside the real one; the real one
     // updates from the terminal, and the next tab start copies the new version.
     if claude_copy::is_copy(program) {
@@ -162,11 +169,10 @@ pub fn command(program: &Path, params: &StartParams, session_id: &str, generatio
     }
     // The default profile keeps its .claude.json next to ~/.claude, not inside; pointing
     // CLAUDE_CONFIG_DIR at it would make Claude look inside and start from a blank state.
-    if let Some(profile) = params.profile.as_deref().filter(|dir| !is_default_profile(dir)) {
+    if let Some(profile) = profile.filter(|dir| !is_default_profile(dir)) {
         command.env(CONFIG_DIR_VAR, profile);
     }
-    hide_console(&mut command);
-    command
+    hide_console(command);
 }
 
 /// agentd may itself run inside a Claude session or a herdr pane. Inherited CLAUDE* variables

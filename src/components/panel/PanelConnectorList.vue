@@ -2,7 +2,7 @@
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PanelConnectorRow from '@/components/panel/PanelConnectorRow.vue'
-import PanelFoldButton from '@/components/panel/PanelFoldButton.vue'
+import PanelFoldedList from '@/components/panel/PanelFoldedList.vue'
 import { useFoldedRows } from '@/composables/useFoldedRows'
 import { useRowArrivals } from '@/composables/useRowArrivals'
 import { connectorsInOrderOf } from '@/utils/panelStates'
@@ -43,7 +43,13 @@ const toggle = () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1">
+  <PanelFoldedList
+    :is-expanded="fold.isExpanded.value"
+    :is-foldable="fold.isFoldable.value"
+    :hidden-count="fold.hiddenCount.value"
+    :controls="listId"
+    @toggle="toggle"
+  >
     <ul :id="listId" class="flex flex-col">
       <PanelConnectorRow
         v-for="connector in fold.shown.value"
@@ -54,12 +60,5 @@ const toggle = () => {
         @sign-in="emit('signIn', $event)"
       />
     </ul>
-    <PanelFoldButton
-      v-if="fold.isFoldable.value"
-      :is-expanded="fold.isExpanded.value"
-      :hidden-count="fold.hiddenCount.value"
-      :controls="listId"
-      @toggle="toggle"
-    />
-  </div>
+  </PanelFoldedList>
 </template>

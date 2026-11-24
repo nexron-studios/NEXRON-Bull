@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newTab, type ChatTabState } from '../chatTab'
+import { newTab, withTurnCut, type ChatTabState } from '../chatTab'
 import {
   backgroundShellsOf,
   promptTurnOf,
@@ -100,6 +100,29 @@ describe('promptTurnOf', () => {
     )
     expect(turn.messages.map((message) => message.uuid)).toEqual(['a1', 'a2'])
     expect(turn.startedAt).toBe(ms(0))
+  })
+
+  describe('after a limit or an account move cut the turn off', () => {
+    // p1 started subagents, the move cut it; p2 is the "go on" after it.
+    const cut = withTurnCut(tab({ messages: [prompt('p1', 0), said('a1', 1)] }))
+    const continued = [...cut.messages, prompt('p2', 5), said('a2', 6)]
+
+    it('should keep the cut turn while the prompt after the cut continues it', () => {
+      const turn = promptTurnOf({ ...cut, messages: continued })
+      expect(turn.messages.map((message) => message.uuid)).toEqual(['a1', 'p2', 'a2'])
+      expect(turn.startedAt).toBe(ms(0))
+    })
+
+    it('should start over with the next prompt', () => {
+      const turn = promptTurnOf({ ...cut, messages: [...continued, prompt('p3', 9)] })
+      expect([turn.messages, turn.startedAt]).toEqual([[], ms(9)])
+    })
+
+    it('should keep the first cut turn when the limit cuts its continuation again', () => {
+      const again = withTurnCut({ ...cut, messages: continued })
+      const turn = promptTurnOf({ ...again, messages: [...continued, prompt('p3', 9)] })
+      expect(turn.startedAt).toBe(ms(0))
+    })
   })
 })
 

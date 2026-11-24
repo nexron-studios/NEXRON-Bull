@@ -35,7 +35,8 @@ const delegatedProps = reactiveOmit(props, 'class', 'toastOptions')
       props.toastOptions ?? {
         classes: {
           toast: 'rounded-2xl',
-          // Sonner colours the description for its own light theme; on our dark popover it vanished.
+          // Sonner paints the description #3f3f3f unless its own theme is dark, which ours never
+          // sets: grey on the dark popover. Its sheet is unlayered, so only `!` beats it.
           description: 'text-muted-foreground!'
         }
       }

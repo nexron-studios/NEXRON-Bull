@@ -16,6 +16,8 @@ const OPEN_STORAGE_KEY = 'bull.panel.open'
 const WIDTH_STORAGE_KEY = 'bull.panel.width'
 /** On `<html>` while the panel slides in or out: only then do chat and panel carry a name. */
 const SNAP_ATTRIBUTE = 'data-panel-snap'
+/** The header button that shows the panel; the focus returns there once its edge shut it. */
+export const INFO_PANEL_TOGGLE_ID = 'info-panel-toggle'
 
 /**
  * The panel right of the chat: open or closed and its width survive a restart, and it gives way

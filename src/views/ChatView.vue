@@ -17,8 +17,7 @@ import ChatPhoneScreen from '@/components/chat/ChatPhoneScreen.vue'
 import ChatTabBar from '@/components/chat/ChatTabBar.vue'
 import NavBottomBar from '@/components/nav/NavBottomBar.vue'
 import NavRoutePage from '@/components/nav/NavRoutePage.vue'
-import PanelInfo from '@/components/panel/PanelInfo.vue'
-import PanelResizeHandle from '@/components/panel/PanelResizeHandle.vue'
+import PanelColumn from '@/components/panel/PanelColumn.vue'
 import PreviewColumn from '@/components/preview/PreviewColumn.vue'
 import PreviewSheet from '@/components/preview/PreviewSheet.vue'
 import PreviewToggle from '@/components/preview/PreviewToggle.vue'
@@ -33,7 +32,7 @@ import TerminalTabPane from '@/components/terminal/TerminalTabPane.vue'
 import { useBullSlashCommands } from '@/composables/useBullSlashCommands'
 import { useChatNavigation } from '@/composables/useChatNavigation'
 import { useFinishTracking } from '@/composables/useFinishTracking'
-import { useInfoPanel } from '@/composables/useInfoPanel'
+import { INFO_PANEL_TOGGLE_ID, useInfoPanel } from '@/composables/useInfoPanel'
 import { useLimitPolicySync } from '@/composables/useLimitPolicySync'
 import { usePhoneChatHistory } from '@/composables/usePhoneChatHistory'
 import { usePreviewPane } from '@/composables/usePreviewPane'
@@ -56,9 +55,6 @@ import {
   isTerminalDrawerShortcut
 } from '@/utils/shortcuts'
 import { RAIL_WIDTH } from '@/utils/sidebarLayout'
-
-/** Where the focus goes once Enter on the panel's edge shut the panel */
-const INFO_PANEL_TOGGLE_ID = 'info-panel-toggle'
 
 const isNewOpen = ref(false)
 const isDrawerOpen = ref(false)
@@ -151,13 +147,6 @@ const removeTab = (id: string) => {
 const showTerminal = (id: string) => {
   shownTerminalId.value = id
   if (!isChatRoute.value) void router.push({ name: 'chat' })
-}
-// Enter on the panel's edge shut it: the focus goes to the button that brings it back.
-// Focus moves once the panel is gone, so the toggle is announced as no longer pressed.
-const closeInfoPanelFromEdge = async () => {
-  await infoPanel.resize({ isOpen: false })
-  await nextTick()
-  document.getElementById(INFO_PANEL_TOGGLE_ID)?.focus()
 }
 const searchFromRail = async () => {
   hasSearchOnOpen.value = true
@@ -387,28 +376,11 @@ watch(
           :tab="activeTab"
           :pane="previewPane"
         />
-        <div
+        <PanelColumn
           v-if="isChatRoute && activeTab && !shownTerminal && infoPanel.isShown.value"
-          class="relative flex min-h-0 shrink-0"
-          :style="{ width: `${infoPanel.width.value}px` }"
-          data-snap-panel
-        >
-          <PanelInfo
-            :key="activeTab.id"
-            :tab="activeTab"
-            class="transition-opacity duration-150"
-            :class="{ 'opacity-40': infoPanel.isClosing.value }"
-          />
-          <PanelResizeHandle
-            :width="infoPanel.width.value"
-            :max-width="infoPanel.maxWidth.value"
-            :is-closing="infoPanel.isClosing.value"
-            @preview="infoPanel.preview"
-            @resize="infoPanel.resize"
-            @reset="infoPanel.resetWidth"
-            @close="closeInfoPanelFromEdge"
-          />
-        </div>
+          :tab="activeTab"
+          :panel="infoPanel"
+        />
       </div>
     </div>
 

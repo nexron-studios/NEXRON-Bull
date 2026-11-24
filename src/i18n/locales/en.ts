@@ -1336,7 +1336,7 @@ export default {
     title: 'Review changes',
     description: 'Pick lines and comment on them. The comments go into the message box together.',
     all: 'All changes',
-    open_file: 'Review changes to {name}, {added} lines added, {removed} removed',
+    open_file: 'Review changes to {name}, {added} added, {removed} removed',
     show_in_chat: 'Show in chat',
     show_in_chat_of: 'Show {name} in the chat',
     files: 'Changed files',

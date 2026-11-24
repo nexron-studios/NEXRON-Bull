@@ -1359,7 +1359,7 @@ export default {
     description:
       'Wähle Zeilen und schreib einen Kommentar dazu. Die Kommentare gehen gesammelt ins Eingabefeld.',
     all: 'Alle Änderungen',
-    open_file: 'Änderungen an {name} ansehen, {added} Zeilen hinzu, {removed} entfernt',
+    open_file: 'Änderungen an {name} ansehen, {added} hinzugefügt, {removed} entfernt',
     show_in_chat: 'Im Chat zeigen',
     show_in_chat_of: '{name} im Chat zeigen',
     files: 'Geänderte Dateien',

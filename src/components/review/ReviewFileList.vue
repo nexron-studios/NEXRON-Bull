@@ -21,7 +21,7 @@ const { t } = useI18n()
       <li v-for="file in files" :key="file.key">
         <button
           type="button"
-          class="motion-press flex w-full min-w-0 flex-col rounded-md px-2 py-1 text-left text-small outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-muted"
+          class="motion-press flex w-full min-w-0 flex-col rounded-md px-2 py-1 text-left text-small outline-none hover:bg-brand/10 focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-brand/15"
           :aria-current="file.key === currentKey"
           @click="emit('pick', file.key)"
         >

@@ -66,14 +66,18 @@ describe('activityOfTab', () => {
   })
 
   it('should prefer thinking over writing', () => {
-    expect(activityOfTab(tab({ thinking: '', streaming: 'Hal' }), noResults)).toEqual({
+    expect(
+      activityOfTab(tab({ live: { kind: 'live', text: 'Hal', thinking: '' } }), noResults)
+    ).toEqual({
       kind: 'thinking'
     })
   })
 
   it('should report a pending approval first', () => {
     const permission = { requestId: 'r1', toolName: 'Bash', input: {}, suggestions: [] }
-    expect(activityOfTab(tab({ permission, thinking: '' }), noResults)).toEqual({ kind: 'asking' })
+    expect(
+      activityOfTab(tab({ permission, live: { kind: 'live', text: '', thinking: '' } }), noResults)
+    ).toEqual({ kind: 'asking' })
   })
 })
 

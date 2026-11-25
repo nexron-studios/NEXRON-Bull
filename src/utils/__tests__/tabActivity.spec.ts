@@ -205,7 +205,9 @@ describe('tabActivityOf', () => {
   })
 
   it('should say Claude thinks when no call is running', () => {
-    const view = tabActivityOf(working([prompt('p1', 0)], { thinking: '' }))
+    const view = tabActivityOf(
+      working([prompt('p1', 0)], { live: { kind: 'live', text: '', thinking: '' } })
+    )
     expect(view.state).toEqual({ kind: 'running', current: null, phase: 'thinking' })
   })
 

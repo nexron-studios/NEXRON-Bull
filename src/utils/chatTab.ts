@@ -61,6 +61,27 @@ export interface PermissionAsk {
   suggestions: PermissionUpdate[]
 }
 
+/**
+ * The block Claude is streaming. `live`: its text and reasoning so far; `thinking` is `null` while
+ * Claude is not thinking. `cut`: too long for agentd to replay on attach, so its further deltas
+ * are dropped until its finished message and the reply never shows starting mid-way.
+ */
+export type LiveBlock =
+  { kind: 'none' } | { kind: 'live'; text: string; thinking: string | null } | { kind: 'cut' }
+
+export const NO_LIVE_BLOCK: LiveBlock = { kind: 'none' }
+
+/** Text Claude is writing right now; empty while none streams. */
+export const liveTextOf = (tab: Pick<ChatTabState, 'live'>): string =>
+  tab.live.kind === 'live' ? tab.live.text : ''
+
+/** Reasoning Claude is streaming right now; `null` while it is not thinking. */
+export const liveThinkingOf = (tab: Pick<ChatTabState, 'live'>): string | null =>
+  tab.live.kind === 'live' ? tab.live.thinking : null
+
+const liveBlockOf = (text: string, thinking: string | null): LiveBlock =>
+  text === '' && thinking === null ? NO_LIVE_BLOCK : { kind: 'live', text, thinking }
+
 export interface ChatTabState {
   id: string
   title: string
@@ -84,15 +105,8 @@ export interface ChatTabState {
    */
   statusBeforeMove: TabStatus | null
   messages: ChatMessage[]
-  /** Text Claude is writing right now, before its message is complete */
-  streaming: string
-  /** Reasoning Claude is streaming right now; `null` while it is not thinking */
-  thinking: string | null
-  /**
-   * The block Claude is writing was too long for agentd to replay on attach: its further deltas
-   * are dropped until its finished message, so the reply never shows starting mid-way. Live only.
-   */
-  isStreamCut: boolean
+  /** What Claude is streaming right now, before its message is complete */
+  live: LiveBlock
   /** The turn Claude is working on; `null` while idle */
   turn: RunningTurn | null
   /** When the last turn ended here (ms); `null` until one did in this run of the app */
@@ -245,9 +259,7 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   status: fields.sessionId ? 'ended' : 'starting',
   statusBeforeMove: null,
   messages: [],
-  streaming: '',
-  thinking: null,
-  isStreamCut: false,
+  live: NO_LIVE_BLOCK,
   turn: null,
   finishedAt: null,
   isFinishHeld: false,
@@ -318,9 +330,7 @@ export const hasRepliedThisTurn = (tab: ChatTabState): boolean =>
 
 /** The tab once the block Claude streamed is finished; unchanged when nothing was live. */
 const withoutLiveText = (tab: ChatTabState): ChatTabState =>
-  tab.streaming === '' && tab.thinking === null && !tab.isStreamCut
-    ? tab
-    : { ...tab, streaming: '', thinking: null, isStreamCut: false }
+  tab.live.kind === 'none' ? tab : { ...tab, live: NO_LIVE_BLOCK }
 
 const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => {
   if (tab.messages.some((known) => known.uuid === received.uuid))
@@ -345,9 +355,7 @@ const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => 
     messages: [...tab.messages, message],
     pending: withoutEchoed(tab.pending, message),
     isFresh: tab.isFresh && !isPrompt,
-    streaming: message.role === 'assistant' ? '' : tab.streaming,
-    thinking: message.role === 'assistant' ? null : tab.thinking,
-    isStreamCut: message.role === 'assistant' ? false : tab.isStreamCut,
+    live: message.role === 'assistant' ? NO_LIVE_BLOCK : tab.live,
     title: tab.title || (prompt ?? '').slice(0, TITLE_CHARS)
   }
 }
@@ -389,22 +397,29 @@ const withStream = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
 const withStreamText = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
   switch (inner.type) {
     case 'message_start':
-      return { ...tab, streaming: '', thinking: null, isStreamCut: false, status: 'working' }
+      return { ...tab, live: NO_LIVE_BLOCK, status: 'working' }
     case 'content_block_start': {
       const block = inner.content_block as { type?: string } | undefined
-      return block?.type === 'thinking' ? { ...tab, thinking: '', status: 'working' } : tab
+      if (block?.type !== 'thinking' || tab.live.kind === 'cut') return tab
+      const live: LiveBlock = { kind: 'live', text: liveTextOf(tab), thinking: '' }
+      return { ...tab, live, status: 'working' }
     }
     case 'content_block_delta': {
-      if (tab.isStreamCut) return tab
+      if (tab.live.kind === 'cut') return tab
       const delta = inner.delta as { type?: string; text?: string; thinking?: string } | undefined
+      const [text, thinking] = [liveTextOf(tab), liveThinkingOf(tab)]
       if (delta?.type === 'thinking_delta')
         return {
           ...tab,
-          thinking: (tab.thinking ?? '') + (delta.thinking ?? ''),
+          live: { kind: 'live', text, thinking: (thinking ?? '') + (delta.thinking ?? '') },
           status: 'working'
         }
       if (delta?.type !== 'text_delta') return tab
-      return { ...tab, streaming: tab.streaming + (delta.text ?? ''), status: 'working' }
+      return {
+        ...tab,
+        live: { kind: 'live', text: text + (delta.text ?? ''), thinking },
+        status: 'working'
+      }
     }
     default:
       return tab
@@ -421,9 +436,7 @@ const withEmptyChat = (tab: ChatTabState): ChatTabState => ({
   ...tab,
   title: '',
   messages: [],
-  streaming: '',
-  thinking: null,
-  isStreamCut: false,
+  live: NO_LIVE_BLOCK,
   permission: null,
   notice: null,
   hasMore: false,
@@ -493,9 +506,7 @@ const withClaude = (tab: ChatTabState, event: ClaudeEvent): ChatTabState => {
       return {
         ...tab,
         status: 'idle',
-        streaming: '',
-        thinking: null,
-        isStreamCut: false,
+        live: NO_LIVE_BLOCK,
         notice: event.is_error && text ? text : null,
         retry: null,
         contextWindow: contextWindowOf(event) ?? tab.contextWindow
@@ -548,8 +559,28 @@ export const listedTabOf = (tab: ChatTabState): ChatTabState => {
   return status === tab.status ? tab : { ...tab, status }
 }
 
-const isStreamingReply = (event: Extract<AgentdEvent, { type: 'streaming' }>): boolean =>
-  event.text !== '' || event.thinking !== null || event.is_truncated
+/**
+ * agentd's own copy of the stream so far, replayed when an app attaches. It replaces the live text
+ * rather than adding to it. Every connected app gets it: one that already shows this call live
+ * holds all its deltas, more than a cut replay carries, and keeps what it shows. A lost connection
+ * clears the live text, so an app attaching again never keeps a stale copy.
+ */
+const withReplay = (
+  tab: ChatTabState,
+  event: Extract<AgentdEvent, { type: 'streaming' }>
+): ChatTabState => {
+  if (tab.live.kind !== 'none' && tab.streamUsage.messageId === event.message_id) return tab
+  const live: LiveBlock = event.is_truncated
+    ? { kind: 'cut' }
+    : liveBlockOf(event.text, event.thinking)
+  return {
+    ...tab,
+    live,
+    streamUsage: { messageId: event.message_id, chars: event.chars },
+    // Text on its way means a turn runs, also one Claude started by itself, as a live delta says.
+    status: live.kind === 'none' ? tab.status : 'working'
+  }
+}
 
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
@@ -571,26 +602,14 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
     case 'claude':
       return withClaude(tab, event.event)
     case 'streaming':
-      // agentd's own copy of the stream so far: it replaces the live text rather than adding to it,
-      // so a replay to an app that already shows it changes nothing.
-      return {
-        ...tab,
-        streaming: event.text,
-        thinking: event.thinking,
-        isStreamCut: event.is_truncated,
-        streamUsage: { messageId: event.message_id, chars: event.chars },
-        // Text on its way means a turn runs, also one Claude started by itself, as a live delta says.
-        status: isStreamingReply(event) ? 'working' : tab.status
-      }
+      return withReplay(tab, event)
     case 'exited':
       return {
         ...tab,
         status: 'ended',
         // The stop before a move ends the old Claude; the new one exiting before it started ends it.
         statusBeforeMove: tab.status === 'starting' ? null : tab.statusBeforeMove,
-        streaming: '',
-        thinking: null,
-        isStreamCut: false,
+        live: NO_LIVE_BLOCK,
         permission: null,
         retry: null
       }

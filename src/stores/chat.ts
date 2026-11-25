@@ -26,6 +26,7 @@ import {
   hasRepliedThisTurn,
   isBusyStatus,
   newTab,
+  NO_LIVE_BLOCK,
   savedTabOf,
   stampArrival,
   withAgentNotices,
@@ -325,9 +326,7 @@ export const useChatStore = defineStore(
               ...tab,
               status: 'ended',
               statusBeforeMove: null,
-              streaming: '',
-              thinking: null,
-              isStreamCut: false,
+              live: NO_LIVE_BLOCK,
               turn: null,
               permission: null,
               notice

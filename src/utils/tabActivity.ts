@@ -1,6 +1,8 @@
 import type { ChatMessage } from '@/types/agentd.type'
 import {
   isOpeningPrompt,
+  liveTextOf,
+  liveThinkingOf,
   openingPromptsAfter,
   turnMessagesOf,
   type ChatTabState
@@ -220,8 +222,8 @@ export const activityStateOf = (tab: ChatTabState, turn: TurnTools): ActivitySta
   }
   if (isStartingTurn(tab)) return { kind: 'running', current: null, phase: 'thinking' }
   if (tab.status !== 'working') return { kind: 'idle', summary: turn.summary }
-  if (tab.thinking !== null) return { kind: 'running', current: null, phase: 'thinking' }
-  if (tab.streaming) return { kind: 'running', current: null, phase: 'writing' }
+  if (liveThinkingOf(tab) !== null) return { kind: 'running', current: null, phase: 'thinking' }
+  if (liveTextOf(tab)) return { kind: 'running', current: null, phase: 'writing' }
   const current = turn.tools.findLast((tool) => tool.status === 'running') ?? null
   return { kind: 'running', current, phase: 'working' }
 }

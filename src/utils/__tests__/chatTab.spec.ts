@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   applyEvent,
   listedTabOf,
+  liveTextOf,
+  liveThinkingOf,
   newTab,
   savedTabOf,
   stampArrival,
@@ -158,14 +160,14 @@ describe('applyEvent', () => {
 
   it('should collect streamed text and drop it when the full message arrives', () => {
     const streaming = applyEvent(applyEvent(tab(), delta('Hal')), delta('lo'))
-    expect([streaming.streaming, streaming.status]).toEqual(['Hallo', 'working'])
+    expect([liveTextOf(streaming), streaming.status]).toEqual(['Hallo', 'working'])
 
     const done = applyEvent(streaming, {
       type: 'message',
       tab: 't1',
       message: message('a1', 'assistant', 'Hallo')
     })
-    expect([done.streaming, done.messages.length]).toEqual(['', 1])
+    expect([liveTextOf(done), done.messages.length]).toEqual(['', 1])
   })
 
   it('should title the tab after the first prompt and ignore a repeated message', () => {
@@ -262,7 +264,11 @@ describe('applyEvent', () => {
         blocks: [{ type: 'thinking', text: 'Erst lesen' }]
       }
     })
-    expect([started.thinking, stopped.thinking, landed.thinking]).toEqual(['', 'Erst lesen', null])
+    expect([liveThinkingOf(started), liveThinkingOf(stopped), liveThinkingOf(landed)]).toEqual([
+      '',
+      'Erst lesen',
+      null
+    ])
   })
 
   it('should mark a prompt that arrives after Claude answered in the running turn', () => {
@@ -358,7 +364,7 @@ describe('applyEvent with a subagent', () => {
       tab: 't1',
       event: { ...delta('intern').event, parent_tool_use_id: 'toolu_1' }
     })
-    expect(next.streaming).toBe('')
+    expect(liveTextOf(next)).toBe('')
   })
 })
 
@@ -745,7 +751,7 @@ describe('a reply agentd replays on attach', () => {
 
   it('should show what Claude streamed while the app was away', () => {
     const next = applyEvent(tab(), replay('Hallo ', 'Erst lesen.'))
-    expect([next.streaming, next.thinking, next.streamUsage]).toEqual([
+    expect([liveTextOf(next), liveThinkingOf(next), next.streamUsage]).toEqual([
       'Hallo ',
       'Erst lesen.',
       { messageId: 'msg_1', chars: 17 }
@@ -766,7 +772,22 @@ describe('a reply agentd replays on attach', () => {
     next = applyEvent(next, delta('lo '))
     next = applyEvent(next, replay('Hallo '))
     next = applyEvent(next, delta('Welt'))
-    expect(next.streaming).toBe('Hallo Welt')
+    expect(liveTextOf(next)).toBe('Hallo Welt')
+  })
+
+  it('should keep its text when another app attaching gets a block too long to replay', () => {
+    const start = {
+      type: 'stream_event',
+      event: { type: 'message_start', message: { id: 'msg_1' } }
+    }
+    let next = applyEvent(tab(), { type: 'claude', tab: 't1', event: start })
+    next = applyEvent(next, delta('Hallo '))
+    next = applyEvent(next, { ...replay(''), is_truncated: true })
+    next = applyEvent(next, delta('Welt'))
+    expect([next.live, next.streamUsage.chars]).toEqual([
+      { kind: 'live', text: 'Hallo Welt', thinking: null },
+      10
+    ])
   })
 
   it('should show the reply once when its finished message arrives', () => {
@@ -777,7 +798,7 @@ describe('a reply agentd replays on attach', () => {
       tab: 't1',
       message: message('a1', 'assistant', 'Hallo Welt')
     })
-    expect([next.streaming, next.messages.map((known) => known.uuid)]).toEqual(['', ['a1']])
+    expect([liveTextOf(next), next.messages.map((known) => known.uuid)]).toEqual(['', ['a1']])
   })
 
   it('should drop the replayed text when the history already brought its finished message', () => {
@@ -788,11 +809,11 @@ describe('a reply agentd replays on attach', () => {
       tab: 't1',
       message: message('a1', 'assistant', 'Hallo Welt')
     })
-    expect([next.streaming, next.thinking, next.messages.map((known) => known.uuid)]).toEqual([
-      '',
-      null,
-      ['a1']
-    ])
+    expect([
+      liveTextOf(next),
+      liveThinkingOf(next),
+      next.messages.map((known) => known.uuid)
+    ]).toEqual(['', null, ['a1']])
   })
 
   it('should keep the tab as it is when a known message comes again with nothing live', () => {
@@ -813,13 +834,13 @@ describe('a reply agentd replays on attach', () => {
     const cut = { ...replay(''), chars: 2_000_000, is_truncated: true }
     let next = applyEvent(tab(), cut)
     next = applyEvent(next, delta('mitten im Satz'))
-    const whileCut = [next.streaming, next.streamUsage.chars]
+    const whileCut = [next.live, next.streamUsage.chars]
     next = applyEvent(next, {
       type: 'message',
       tab: 't1',
       message: message('a1', 'assistant', 'Ganzer Text')
     })
     next = applyEvent(next, delta('Neu'))
-    expect([...whileCut, next.streaming]).toEqual(['', 2_000_014, 'Neu'])
+    expect([...whileCut, liveTextOf(next)]).toEqual([{ kind: 'cut' }, 2_000_014, 'Neu'])
   })
 })

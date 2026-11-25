@@ -18,6 +18,7 @@ const key = (fields: Partial<KeyboardEvent> & { key: string }) => ({
   shiftKey: false,
   altKey: false,
   repeat: false,
+  isComposing: false,
   ...fields
 })
 
@@ -84,6 +85,10 @@ describe('isSendShortcut', () => {
       isSendShortcut(key({ key: 'Enter' })),
       isSendShortcut(key({ key: 'Enter', ctrlKey: true, shiftKey: true }))
     ]).toEqual([false, false])
+  })
+
+  it('should leave Enter to an IME that is still composing', () => {
+    expect(isSendShortcut(key({ key: 'Enter', metaKey: true, isComposing: true }))).toBe(false)
   })
 })
 

@@ -94,8 +94,9 @@ export const historyStepOf = (event: KeyInfo): 'undo' | 'redo' | null => {
 
 /** Ctrl/Cmd+Enter sends where a plain Enter already means something else (a new line, a note). */
 export const SEND_CHORD: KeyChord = { modifier: 'command', keys: ['Enter'] }
-export const isSendShortcut = (event: KeyInfo) =>
-  hasCommandKey(event) && !event.shiftKey && event.key === 'Enter'
+/** An IME still composing owns its Enter: it commits the word, nothing is sent. */
+export const isSendShortcut = (event: KeyInfo & Pick<KeyboardEvent, 'isComposing'>) =>
+  hasCommandKey(event) && !event.shiftKey && !event.isComposing && event.key === 'Enter'
 
 /**
  * Backspace or Delete alone, as on a field that is empty already: the thing itself should go. Not

@@ -1,19 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import type { Point, Stroke } from '../markup'
+import type { LineStroke, Point, Stroke } from '../markup'
 import { cutPolyline, eraseAlong, eraseStroke, outlinesOf } from '../markupEraser'
 
 const at = (x: number, y: number): Point => ({ x, y })
 
-const pen = (points: [number, number][], width = 2): Stroke => ({
+const pen = (points: [number, number][], width = 2): LineStroke => ({
+  id: 'pen',
   tool: 'pen',
   color: '#f00',
+  badge: 10,
   width,
   points: points.map(([x, y]) => at(x, y))
 })
 
-const shape = (tool: 'arrow' | 'rect', from: [number, number], to: [number, number]): Stroke => ({
+const shape = (
+  tool: 'arrow' | 'rect',
+  from: [number, number],
+  to: [number, number]
+): LineStroke => ({
+  id: tool,
   tool,
   color: '#00f',
+  badge: 10,
   width: 2,
   points: [at(...from), at(...to)]
 })
@@ -156,5 +164,34 @@ describe('eraseAlong', () => {
     const kept = pen([[100, 100]])
 
     expect(eraseAlong([dot, kept], at(0, 10), at(20, 10), 2)).toEqual([kept])
+  })
+})
+
+describe('eraseStroke on pins and text', () => {
+  const pin: Stroke = { id: 'pin', tool: 'pin', color: '#00f', badge: 10, points: [at(50, 50)] }
+  const text: Stroke = {
+    id: 'text',
+    tool: 'text',
+    color: '#00f',
+    badge: 10,
+    size: 20,
+    text: 'abcde',
+    points: [at(0, 0)]
+  }
+
+  it('should remove a pin as a whole when the eraser touches its badge', () => {
+    expect(eraseStroke(pin, at(65, 50), at(65, 50), 6)).toEqual([])
+  })
+
+  it('should keep a pin the eraser passes by', () => {
+    expect(eraseStroke(pin, at(70, 50), at(70, 50), 6)).toEqual([pin])
+  })
+
+  it('should remove a text when the eraser wipes through its middle', () => {
+    expect(eraseStroke(text, at(30, 10), at(30, 10), 2)).toEqual([])
+  })
+
+  it('should keep a text the eraser stays away from', () => {
+    expect(eraseStroke(text, at(30, 40), at(30, 40), 2)).toEqual([text])
   })
 })

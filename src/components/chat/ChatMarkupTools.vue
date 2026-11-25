@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { Eraser, Highlighter, MoveUpRight, Pencil, Square } from '@lucide/vue'
+import { Eraser, Highlighter, MapPin, MoveUpRight, Pencil, Square, Type } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import { useMarkup } from '@/composables/useMarkup'
@@ -22,6 +22,8 @@ const TOOL_ICONS: Record<MarkupTool, Component> = {
   highlighter: Highlighter,
   arrow: MoveUpRight,
   rect: Square,
+  pin: MapPin,
+  text: Type,
   eraser: Eraser
 }
 

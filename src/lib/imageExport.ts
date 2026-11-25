@@ -15,8 +15,12 @@ export interface EncodedImage {
   bytes: number
 }
 
-/** The image at its natural resolution with the strokes painted over it. */
-const paint = async (src: string, strokes: readonly Stroke[]) => {
+/** The image at its natural resolution with the strokes and their numbers painted over it. */
+const paint = async (
+  src: string,
+  strokes: readonly Stroke[],
+  numbers: ReadonlyMap<string, number> = new Map()
+) => {
   const image = new Image()
   image.src = src
   await image.decode()
@@ -26,7 +30,7 @@ const paint = async (src: string, strokes: readonly Stroke[]) => {
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas 2d context unavailable')
   ctx.drawImage(image, 0, 0)
-  drawStrokes(ctx, strokes)
+  drawStrokes(ctx, strokes, numbers)
   return canvas
 }
 
@@ -79,9 +83,10 @@ const onBackdrop = (canvas: HTMLCanvasElement) => {
  */
 export const flattenImage = async (
   src: string,
-  strokes: readonly Stroke[]
+  strokes: readonly Stroke[],
+  numbers: ReadonlyMap<string, number>
 ): Promise<EncodedImage> => {
-  const canvas = await paint(src, strokes)
+  const canvas = await paint(src, strokes, numbers)
   const png = await encode(canvas, 'image/png')
   if (png.data.length <= MAX_IMAGE_BYTES) return png
   const jpeg = await encode(onBackdrop(canvas), 'image/jpeg', FALLBACK_JPEG_QUALITY)

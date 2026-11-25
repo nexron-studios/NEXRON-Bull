@@ -52,7 +52,7 @@ export const useLightboxActions = ({
       const copy = image.id ? null : toPendingImage(image, newId)
       return copy ? [copy] : []
     }
-    const encoded = await flattenImage(image.src, markup.strokes.value)
+    const encoded = await flattenImage(image.src, markup.strokes.value, markup.numbers.value)
     const marked = markedCopyOf(image.name, encoded, newId())
     const original = markup.isKeepingOriginal.value ? toPendingImage(image, newId) : null
     return original ? [marked, original] : [marked]
@@ -67,7 +67,7 @@ export const useLightboxActions = ({
       // Discarded while the image was being encoded: the result is no longer wanted.
       if (!markup.isDirty.value) return
       const result = { sourceId: image.id ?? null, images }
-      if (!target({ ...result, comment: markup.comment.value.trim() })) return
+      if (!target({ ...result, comment: markup.fullComment.value })) return
       markup.reset()
       onApplied()
     } catch (error) {
@@ -99,7 +99,7 @@ export const useLightboxActions = ({
   }
 
   // New strokes after the warning deserve a warning of their own.
-  watch([markup.strokes, markup.comment], () => {
+  watch([markup.strokes, markup.comment, markup.notes], () => {
     hasWarned.value = false
   })
 

@@ -6,8 +6,10 @@ import {
   arrowHead,
   arrowHeadLengthOf,
   distanceToSegment,
+  type LineStroke,
   type Point,
-  type Stroke
+  type Stroke,
+  type TextStroke
 } from '@/utils/markup'
 
 /** Search steps per segment; they narrow it to (2/3)^32 of its length, far below a pixel. */
@@ -19,7 +21,7 @@ const pointAlong = (from: Point, to: Point, at: number): Point => ({
 })
 
 /** The lines the eye sees of a mark: the path, the frame as a closed line, or shaft and head. */
-export const outlinesOf = (stroke: Stroke): Point[][] => {
+export const outlinesOf = (stroke: LineStroke): Point[][] => {
   const first = stroke.points[0]
   const last = stroke.points.at(-1)
   if (!first || !last) return []
@@ -111,14 +113,42 @@ export const cutPolyline = (
   return isTouched ? pieces : null
 }
 
-/**
- * What is left of one mark after the eraser of `radius` swept from `from` to `to`. An untouched
- * mark comes back as it is; a cut arrow or frame becomes pen lines along its outline.
- */
-export const eraseStroke = (stroke: Stroke, from: Point, to: Point, radius: number): Stroke[] => {
+/** Average glyph width per font size; close enough to find a word under the eraser. */
+const GLYPH_WIDTH_PER_SIZE = 0.6
+
+/** A written text as its box and the line through its middle, so wiping across it hits too. */
+const textLinesOf = (stroke: TextStroke): Point[][] => {
+  const [{ x, y }] = stroke.points
+  const right = x + stroke.text.length * stroke.size * GLYPH_WIDTH_PER_SIZE
+  const bottom = y + stroke.size
+  const middle = y + stroke.size / 2
+  const box = [
+    { x, y },
+    { x: right, y },
+    { x: right, y: bottom },
+    { x, y: bottom },
+    { x, y }
+  ]
+  return [
+    box,
+    [
+      { x, y: middle },
+      { x: right, y: middle }
+    ]
+  ]
+}
+
+/** A pin or a text is one thing: touched anywhere, it goes as a whole. */
+const isTouched = (lines: Point[][], distance: (point: Point) => number, reach: number) =>
+  lines.some((line) => cutPolyline(line, distance, reach) !== null)
+
+const eraseLine = (
+  stroke: LineStroke,
+  distance: (point: Point) => number,
+  radius: number
+): Stroke[] => {
   // Half the line width on top, so the ink ends at the eraser's edge, not just its centre line.
   const reach = radius + stroke.width / 2
-  const distance = (point: Point) => distanceToSegment(point, from, to)
   const outlines = outlinesOf(stroke)
   const cuts = outlines.map((line) => cutPolyline(line, distance, reach))
   if (cuts.every((cut) => cut === null)) return [stroke]
@@ -126,6 +156,21 @@ export const eraseStroke = (stroke: Stroke, from: Point, to: Point, radius: numb
   return cuts
     .flatMap((cut, at) => cut ?? [outlines[at] ?? []])
     .map((points) => ({ ...stroke, tool, points }))
+}
+
+/**
+ * What is left of one mark after the eraser of `radius` swept from `from` to `to`. An untouched
+ * mark comes back as it is; a cut arrow or frame becomes pen lines along its outline.
+ */
+export const eraseStroke = (stroke: Stroke, from: Point, to: Point, radius: number): Stroke[] => {
+  const distance = (point: Point) => distanceToSegment(point, from, to)
+  if (stroke.tool === 'pin') {
+    return isTouched([stroke.points], distance, radius + stroke.badge) ? [] : [stroke]
+  }
+  if (stroke.tool === 'text') {
+    return isTouched(textLinesOf(stroke), distance, radius) ? [] : [stroke]
+  }
+  return eraseLine(stroke, distance, radius)
 }
 
 /** The marks after one stretch of an eraser drag; the same array when nothing was touched. */

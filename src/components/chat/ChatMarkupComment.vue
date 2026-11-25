@@ -1,20 +1,33 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ArrowDown } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMarkup } from '@/composables/useMarkup'
 
 // Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
 // composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
-// Nothing is sent from here.
+// While marking, each numbered mark has its note here as well as on the image, so the text and
+// the spot it is about stay one thing; the field below is then for anything else. Nothing is sent
+// from here.
 const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
 const emit = defineEmits<{ discard: []; apply: [] }>()
 
 const { t } = useI18n()
 const markup = useMarkup()
+
+const rows = computed(() =>
+  [...markup.numbers.value].map(([id, number]) => ({
+    id,
+    number,
+    color: markup.strokes.value.find((stroke) => stroke.id === id)?.color ?? 'transparent'
+  }))
+)
+const hasNotes = computed(() => isMarking && rows.value.length > 0)
 </script>
 
 <template>
@@ -25,10 +38,31 @@ const markup = useMarkup()
     <Label id="markup-comment-title" for="markup-comment" class="sr-only">
       {{ t('images.comment_title') }}
     </Label>
+    <ol v-if="hasNotes" :aria-label="t('images.notes_title')" class="flex flex-col gap-1">
+      <li v-for="row in rows" :key="row.id" class="flex items-center gap-2">
+        <span
+          class="grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"
+          :style="{ backgroundColor: row.color }"
+          aria-hidden="true"
+        >
+          {{ row.number }}
+        </span>
+        <Input
+          :model-value="markup.notes.value[row.id] ?? ''"
+          :aria-label="`${t('images.note_label')} ${row.number}`"
+          :placeholder="t('images.note_placeholder')"
+          class="h-7 text-small"
+          @update:model-value="markup.setNote(row.id, String($event))"
+          @blur="markup.settleNote(row.id)"
+        />
+      </li>
+    </ol>
     <Textarea
       id="markup-comment"
       v-model="markup.comment.value"
-      :placeholder="t('images.comment_placeholder')"
+      :placeholder="
+        t(hasNotes ? 'images.comment_placeholder_general' : 'images.comment_placeholder')
+      "
       aria-describedby="markup-comment-hint"
       class="max-h-28 min-h-13 resize-none text-small"
     />

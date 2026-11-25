@@ -317,6 +317,8 @@ export default {
       highlighter: 'Marker',
       arrow: 'Pfeil',
       rect: 'Rahmen',
+      pin: 'Stecknadel',
+      text: 'Text',
       eraser: 'Radierer'
     },
     colors: 'Farben',
@@ -339,6 +341,12 @@ export default {
     canvas: 'Zeichenfläche: mit Maus, Stift oder Finger auf das Bild zeichnen',
     comment_title: 'Kommentar für Claude',
     comment_placeholder: 'Was soll Claude hier ändern?',
+    comment_placeholder_general: 'Sonst noch etwas? (optional)',
+    notes_title: 'Notizen zu den Markierungen',
+    note_label: 'Notiz zu dieser Stelle',
+    note_placeholder: 'Was soll hier anders sein?',
+    text_label: 'Text im Bild',
+    text_placeholder: 'Text, Enter setzt ihn',
     comment_hint:
       'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern.',
     keep_original: 'Original zusätzlich mitschicken',

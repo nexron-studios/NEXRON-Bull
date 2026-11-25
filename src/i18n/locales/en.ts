@@ -314,6 +314,8 @@ export default {
       highlighter: 'Highlighter',
       arrow: 'Arrow',
       rect: 'Frame',
+      pin: 'Pin',
+      text: 'Text',
       eraser: 'Eraser'
     },
     colors: 'Colours',
@@ -336,6 +338,12 @@ export default {
     canvas: 'Drawing area: draw on the image with mouse, pen or finger',
     comment_title: 'Comment for Claude',
     comment_placeholder: 'What should Claude change here?',
+    comment_placeholder_general: 'Anything else? (optional)',
+    notes_title: 'Notes on the marks',
+    note_label: 'Note on this spot',
+    note_placeholder: 'What should change here?',
+    text_label: 'Text in the image',
+    text_placeholder: 'Text, Enter places it',
     comment_hint:
       'Goes into your message with the image, marked if you drew on it. You can still edit it there.',
     keep_original: 'Also send the original',

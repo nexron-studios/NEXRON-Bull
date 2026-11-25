@@ -1,22 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
   arrowHead,
+  badgeAnchorOf,
+  circledNumberOf,
   commitStrokes,
   distanceToSegment,
   emptyHistory,
   eraserRadiusOf,
   fitSize,
+  markNumbersOf,
+  markupCommentOf,
   redoHistory,
   stepZoom,
   strokeWidthOf,
   toImagePoint,
   undoHistory,
+  type LineStroke,
   type Stroke
 } from '../markup'
 
-const pen = (points: [number, number][], width = 2): Stroke => ({
+const pen = (points: [number, number][], width = 2): LineStroke => ({
+  id: 'pen',
   tool: 'pen',
   color: '#f00',
+  badge: 10,
   width,
   points: points.map(([x, y]) => ({ x, y }))
 })
@@ -130,5 +137,83 @@ describe('stepZoom', () => {
   it('should stop at the ends', () => {
     expect(stepZoom(4, 1)).toBe(4)
     expect(stepZoom(0.5, -1)).toBe(0.5)
+  })
+})
+
+describe('numbered marks', () => {
+  const mark = (id: string, tool: 'pen' | 'rect' = 'pen'): Stroke => ({
+    ...pen([[1, 2]]),
+    id,
+    tool
+  })
+  const pin = (id: string): Stroke => ({
+    id,
+    tool: 'pin',
+    color: '#f00',
+    badge: 10,
+    points: [{ x: 0, y: 0 }]
+  })
+  const text: Stroke = {
+    id: 'text',
+    tool: 'text',
+    color: '#f00',
+    badge: 10,
+    size: 18,
+    text: 'hi',
+    points: [{ x: 0, y: 0 }]
+  }
+
+  it('should number pins and marks with a note, in the order they were made', () => {
+    const strokes = [mark('a'), pin('p'), mark('b'), mark('c')]
+
+    expect([...markNumbersOf(strokes, { c: 'zu klein', a: 'weg' })]).toEqual([
+      ['a', 1],
+      ['p', 2],
+      ['c', 3]
+    ])
+  })
+
+  it('should keep a number while its note is being edited empty', () => {
+    expect([...markNumbersOf([mark('a')], { a: '' })]).toEqual([['a', 1]])
+  })
+
+  it('should number a mark cut in pieces once', () => {
+    expect([...markNumbersOf([mark('a'), mark('a')], { a: 'x' })]).toEqual([['a', 1]])
+  })
+
+  it('should never number a text', () => {
+    expect(markNumbersOf([text], { text: 'x' }).size).toBe(0)
+  })
+
+  it('should forget the note of a mark that is gone', () => {
+    expect(markupCommentOf('', [mark('a')], { a: 'bleibt', gone: 'weg' })).toBe('① bleibt')
+  })
+
+  it('should put the general comment first and each note behind its number', () => {
+    const strokes = [mark('a'), pin('p'), mark('b')]
+
+    expect(
+      markupCommentOf('  Bitte prüfen ', strokes, { a: 'zu weit\nlinks', b: 'Scrollleiste weg' })
+    ).toBe('Bitte prüfen ① zu weit links ③ Scrollleiste weg')
+  })
+
+  it('should leave a pin without a note out of the comment', () => {
+    expect(markupCommentOf('', [pin('p')], {})).toBe('')
+  })
+
+  it('should anchor a frame at its top-left corner whichever way it was drawn', () => {
+    const frame = {
+      ...pen([
+        [40, 60],
+        [10, 20]
+      ]),
+      tool: 'rect'
+    } as const
+
+    expect(badgeAnchorOf(frame)).toEqual({ x: 10, y: 20 })
+  })
+
+  it('should write ① to ⑳ and bracket the numbers after', () => {
+    expect([1, 20, 21].map(circledNumberOf)).toEqual(['①', '⑳', '(21)'])
   })
 })

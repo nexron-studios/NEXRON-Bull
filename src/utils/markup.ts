@@ -1,9 +1,19 @@
 /** Drawing on an image in the preview: tools, strokes, undo history and sizes. */
 
-export const markupToolList = ['pen', 'highlighter', 'arrow', 'rect', 'eraser'] as const
+export const markupToolList = [
+  'pen',
+  'highlighter',
+  'arrow',
+  'rect',
+  'pin',
+  'text',
+  'eraser'
+] as const
 export type MarkupTool = (typeof markupToolList)[number]
-/** The tools that leave a stroke; the eraser only removes them. */
+/** The tools that leave a mark; the eraser only removes them. */
 export type DrawTool = Exclude<MarkupTool, 'eraser'>
+/** The tools drawn by dragging; a pin or a text is placed with one click. */
+export type LineTool = Exclude<DrawTool, 'pin' | 'text'>
 
 /** Status and brand tokens, so markings read like the rest of the app. */
 export const markupColorList = ['critical', 'warning', 'good', 'brand', 'white'] as const
@@ -37,15 +47,40 @@ export interface Size {
   height: number
 }
 
-/** One mark in the image's own pixels, so it lands at the natural resolution when flattened. */
-export interface Stroke {
-  tool: DrawTool
+interface MarkBase {
+  /** Shared by the pieces the eraser cuts a mark into, so they keep one note and one number */
+  id: string
   /** Resolved CSS colour, so a theme switch does not repaint finished marks */
   color: string
+  /** Radius of the number badge in image pixels, fixed when the mark is made */
+  badge: number
+}
+
+/** A dragged mark. `width` is the line width. */
+export interface LineStroke extends MarkBase {
+  tool: LineTool
   width: number
   /** Freehand tools: the whole path. Arrow and frame: start and end. */
   points: Point[]
 }
+
+/** Only a number badge at its point, to name a spot without drawing on it. */
+export interface PinStroke extends MarkBase {
+  tool: 'pin'
+  points: [Point]
+}
+
+/** A word written into the image, top left at its point. */
+export interface TextStroke extends MarkBase {
+  tool: 'text'
+  /** Font size in image pixels */
+  size: number
+  text: string
+  points: [Point]
+}
+
+/** One mark in the image's own pixels, so it lands at the natural resolution when flattened. */
+export type Stroke = LineStroke | PinStroke | TextStroke
 
 export interface MarkupHistory {
   past: Stroke[][]
@@ -79,7 +114,7 @@ export const redoHistory = (history: MarkupHistory): MarkupHistory => {
 }
 
 /** Width of a new stroke in image pixels, so it looks as wide as chosen on screen. */
-export const strokeWidthOf = (tool: DrawTool, size: MarkupSize, imageToScreen: number) => {
+export const strokeWidthOf = (tool: LineTool, size: MarkupSize, imageToScreen: number) => {
   const factor = tool === 'highlighter' ? HIGHLIGHTER_WIDTH_FACTOR : 1
   return (MARKUP_SIZE_PX[size] * factor) / imageToScreen
 }
@@ -156,4 +191,58 @@ export const stepZoom = (zoom: number, direction: -1 | 1) => {
       ? ZOOM_STEPS.find((step) => step > zoom)
       : [...ZOOM_STEPS].reverse().find((step) => step < zoom)
   return next ?? zoom
+}
+
+/** Number badges and written text in screen pixels per size; converted like the line width. */
+export const BADGE_RADIUS_PX: Record<MarkupSize, number> = { s: 9, m: 11, l: 14 }
+export const TEXT_SIZE_PX: Record<MarkupSize, number> = { s: 14, m: 18, l: 26 }
+
+/** Where a mark's number sits: a frame's top-left corner, an arrow's tail, a line's start. */
+export const badgeAnchorOf = (stroke: Stroke): Point | null => {
+  const first = stroke.points[0]
+  if (!first) return null
+  if (stroke.tool !== 'rect') return first
+  const last = stroke.points.at(-1) ?? first
+  return { x: Math.min(first.x, last.x), y: Math.min(first.y, last.y) }
+}
+
+/** Notes per mark id. A key with an empty note keeps the number while the note is being edited. */
+export type MarkupNotes = Readonly<Record<string, string>>
+
+/**
+ * The number of every mark that has one, in the order the marks were made: pins always, other
+ * marks once a note belongs to them. Text needs none, it says what it means itself.
+ */
+export const markNumbersOf = (strokes: readonly Stroke[], notes: MarkupNotes) => {
+  const numbers = new Map<string, number>()
+  for (const stroke of strokes) {
+    if (numbers.has(stroke.id) || stroke.tool === 'text') continue
+    if (stroke.tool === 'pin' || stroke.id in notes) numbers.set(stroke.id, numbers.size + 1)
+  }
+  return numbers
+}
+
+const CIRCLED_ONE = 0x2460
+const MAX_CIRCLED = 20
+
+/** ① to ⑳ as in the badges, beyond that a number in brackets. */
+export const circledNumberOf = (number: number) =>
+  number >= 1 && number <= MAX_CIRCLED
+    ? String.fromCodePoint(CIRCLED_ONE + number - 1)
+    : `(${number})`
+
+/**
+ * What goes into the composer for one image: the general comment, then each note behind the
+ * number it has in the image. One line, so a note's own line breaks become spaces.
+ */
+export const markupCommentOf = (
+  general: string,
+  strokes: readonly Stroke[],
+  notes: MarkupNotes
+) => {
+  const numbered = [...markNumbersOf(strokes, notes)].flatMap(([id, number]) => {
+    const note = (notes[id] ?? '').trim().replace(/\s*\n\s*/g, ' ')
+    return note ? [`${circledNumberOf(number)} ${note}`] : []
+  })
+  return [general.trim(), ...numbered].filter(Boolean).join(' ')
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isFullPath, mergeToastOf, refusalToastOf, removalToastOf } from '../worktree'
+import { isFullPathOn, mergeToastOf, refusalToastOf, removalToastOf } from '../worktree'
 
 const merged = (outcome: Parameters<typeof mergeToastOf>[0]['outcome'], extra = {}) => ({
   type: 'preview_merged' as const,
@@ -80,16 +80,29 @@ describe('removalToastOf', () => {
   })
 })
 
-describe('isFullPath', () => {
-  it('should take drive, share and root paths', () => {
+describe('isFullPathOn', () => {
+  const onWindows = (path: string) => isFullPathOn('windows', path)
+  const onMac = (path: string) => isFullPathOn('macos', path)
+
+  it('should take drive, share and Git Bash paths on Windows', () => {
     expect(
-      ['C:\\dev\\worktrees', 'd:/trees', '\\\\server\\trees', '/Users/me/trees'].map(isFullPath)
+      ['C:\\dev\\worktrees', 'd:/trees', '\\\\server\\trees', '/c/dev/trees'].map(onWindows)
     ).toEqual([true, true, true, true])
   })
 
-  it('should refuse relative and home paths', () => {
-    expect(['trees', '..\\trees', '~/trees', ''].map(isFullPath)).toEqual([
+  it('should refuse paths without a drive on Windows', () => {
+    expect(['/dev/worktrees', '\\dev\\worktrees', 'trees', '~/trees', ''].map(onWindows)).toEqual([
       false,
+      false,
+      false,
+      false,
+      false
+    ])
+  })
+
+  it('should take only paths from the root elsewhere', () => {
+    expect(['/Users/me/trees', 'C:\\dev\\trees', '~/trees', 'trees'].map(onMac)).toEqual([
+      true,
       false,
       false,
       false

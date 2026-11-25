@@ -1292,6 +1292,9 @@ export default {
     uncommitted_left: 'The worktree still has uncommitted changes. Only commits are merged.',
     main_elsewhere: 'Not merged: the main folder is on {branch}, not on preview.',
     main_elsewhere_hint: 'Switch it to preview first, then merge again.',
+    main_merging:
+      'Not merged: another merge is still open in the main folder. Finish or abort it there first.',
+    removable: 'The worktree of {branch} can be removed.',
     main_dirty:
       'Not merged: preview is missing and the main folder has uncommitted changes. Bull only creates preview once it is clean.',
     removed: 'Worktree removed, branch {branch} deleted.',

@@ -1,4 +1,5 @@
 import type { AgentdEvent, WorktreeRefusalKind, WorktreeRemoval } from '@/types/agentd.type'
+import type { MachineOs } from '@/types/machine.type'
 
 /** A toast is long enough for a handful of paths; the rest is counted. */
 const MAX_LISTED_FILES = 5
@@ -38,10 +39,15 @@ const filesPhrase = (files: string[]): Phrase => {
 }
 
 /**
- * A folder agentd can take as it is: a drive (`C:\x`), a network share (`\\server`) or a root
- * (`/x`). A relative one would be looked up from agentd's own folder, `~` is never expanded.
+ * A folder agentd on a machine with `os` can take as it is. Windows: a drive (`C:\x`, `C:/x`),
+ * a network share (`\\server`) or Git Bash's `/c/x`; elsewhere a path from the root. A relative
+ * one would be looked up from agentd's own folder, and `~` is never expanded.
  */
-export const isFullPath = (path: string): boolean => /^([a-zA-Z]:[\\/]|[\\/])/.test(path.trim())
+export const isFullPathOn = (os: MachineOs, path: string): boolean => {
+  const text = path.trim()
+  if (os !== 'windows') return text.startsWith('/')
+  return /^([a-zA-Z]:[\\/]|\\\\[^\\]|\/[a-zA-Z]\/)/.test(text)
+}
 
 /** Why agentd made, merged or removed no worktree; only `failed` needs agentd's own words. */
 export const refusalPhraseOf = ({
@@ -88,6 +94,8 @@ export const mergeToastOf = (merge: PreviewMerged): WorktreeToast => {
       }
     case 'main_dirty':
       return { tone: 'error', title: phrase('worktree.main_dirty'), notes }
+    case 'main_merging':
+      return { tone: 'error', title: phrase('worktree.main_merging'), notes }
     default: {
       const unhandled: never = outcome
       throw new Error(`Unhandled merge outcome: ${JSON.stringify(unhandled)}`)
@@ -101,6 +109,12 @@ export const removalToastOf = (outcome: WorktreeRemoval): WorktreeToast => {
       return {
         tone: 'success',
         title: phrase('worktree.removed', { branch: outcome.branch }),
+        notes: []
+      }
+    case 'removable':
+      return {
+        tone: 'info',
+        title: phrase('worktree.removable', { branch: outcome.branch }),
         notes: []
       }
     case 'uncommitted':

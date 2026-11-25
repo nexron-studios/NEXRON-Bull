@@ -13,8 +13,8 @@ import { mergeToastOf, refusalToastOf, removalToastOf, type WorktreeToast } from
 const RESULT_TOAST_MS = 10_000
 
 /**
- * "In preview mergen" and "Worktree entfernen" for a chat that runs in a linked worktree. The
- * work happens in agentd on the chat's machine, where the repository is.
+ * "Merge into preview" and "Remove worktree" for a chat that runs in a linked worktree. The work
+ * happens in agentd on the chat's machine, where the repository is.
  */
 export const useWorktreeActionsStore = defineStore('worktreeActions', () => {
   /** Tabs whose merge is on its way, so the menu shows it and a second click waits. */
@@ -61,23 +61,32 @@ export const useWorktreeActionsStore = defineStore('worktreeActions', () => {
     }
   }
 
-  /**
-   * Stops the chat's Claude (agentd refuses while it runs in the folder), then removes the
-   * worktree whose top folder is `root`. True once it is gone; a refusal leaves the tab as it is,
-   * its Claude starts again with the next message. Failures go to the confirmation.
-   */
-  const remove = async (tab: ChatTabState, root: string): Promise<boolean> => {
-    await useChatStore().stopAndWait(tab.id)
+  /** The answer to a removal, shown; true when it went (or, in a dry run, would go) through. */
+  const askRemoval = async (tab: ChatTabState, root: string, isDryRun: boolean) => {
     const answer = await agentdService.ask<'worktree_removed' | 'worktree_refused'>(
-      { op: 'remove_worktree', worktree: root },
+      { op: 'remove_worktree', worktree: root, dry_run: isDryRun },
       tab.machine
     )
     if (answer.type === 'worktree_refused') {
       show(refusalToastOf(answer))
       return false
     }
-    show(removalToastOf(answer.outcome))
-    return answer.outcome.kind === 'removed'
+    const { outcome } = answer
+    if (outcome.kind === 'removable') return true
+    show(removalToastOf(outcome))
+    return outcome.kind === 'removed'
+  }
+
+  /**
+   * Removes the worktree whose top folder is `root`. First asks whether that would go through, so
+   * a refusal (uncommitted or unmerged work) leaves the chat's turn running; then stops the
+   * chat's Claude (agentd refuses while it runs in the folder) and removes. True once it is gone.
+   * Failures go to the confirmation.
+   */
+  const remove = async (tab: ChatTabState, root: string): Promise<boolean> => {
+    if (!(await askRemoval(tab, root, true))) return false
+    await useChatStore().stopAndWait(tab.id)
+    return askRemoval(tab, root, false)
   }
 
   return { mergingTabs, mergeIntoPreview, remove }

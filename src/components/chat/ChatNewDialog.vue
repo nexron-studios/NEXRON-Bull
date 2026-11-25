@@ -58,7 +58,10 @@ const hasOtherMachines = useHasOtherMachines()
 const machine = computed(() => (machineChoice.value === THIS_MACHINE ? null : machineChoice.value))
 const profiles = useProfiles(machine)
 const recent = useRecentSessions(machine)
-const { canHaveWorktree, isWorktreeWanted, isWorktreePlanned } = useWorktreeOffer(cwd, machine)
+const { canHaveWorktree, isWorktreeWanted, isWorktreePlanned, isSettled } = useWorktreeOffer(
+  cwd,
+  machine
+)
 
 // Only the accounts switched on in the settings, in agentd's order; `fillDefaults` picks the default.
 const offeredProfiles = computed(() =>
@@ -67,7 +70,7 @@ const offeredProfiles = computed(() =>
 const folders = computed(() => [
   ...new Set((recent.data.value ?? []).map((session) => session.cwd))
 ])
-const canStart = computed(() => !!profileDir.value && !!cwd.value.trim())
+const canStart = computed(() => !!profileDir.value && !!cwd.value.trim() && isSettled.value)
 // "Wie im Profil" said nothing to the user: the default option names what will actually run.
 // Only once an account is picked: `null` would ask for the default profile instead.
 const defaults = useAccountDefaultLabels(

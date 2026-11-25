@@ -8,8 +8,10 @@ import { useWorktreeSettingsStore } from '@/stores/worktreeSettings'
 const FOLDER_CHECK_MS = 300
 
 /**
- * "Eigener Worktree" for a new chat on `cwd`: offered for a main checkout only (a folder that
- * already is a worktree is where the chat should work), on unless switched off for that folder.
+ * The own-worktree switch (`worktree.own`) for a new chat on `cwd`: offered for a main checkout
+ * only (a folder that already is a worktree is where the chat should work), on unless switched
+ * off for that folder. `isSettled`: the check has answered for the folder typed now, so a quick
+ * start does not go without a worktree the switch would have offered.
  */
 export const useWorktreeOffer = (cwd: Ref<string>, machine: MaybeRefOrGetter<Machine>) => {
   const settings = useWorktreeSettingsStore()
@@ -28,6 +30,12 @@ export const useWorktreeOffer = (cwd: Ref<string>, machine: MaybeRefOrGetter<Mac
     set: (isWanted: boolean) => settings.setWanted(toValue(machine), cwd.value, isWanted)
   })
   const isWorktreePlanned = computed(() => canHaveWorktree.value && isWorktreeWanted.value)
+  // A machine that cannot answer has nothing to wait for.
+  const isSettled = computed(
+    () =>
+      repo.isUnknown.value ||
+      (checkedFolder.value.trim() === cwd.value.trim() && !repo.isFetching.value)
+  )
 
-  return { canHaveWorktree, isWorktreeWanted, isWorktreePlanned }
+  return { canHaveWorktree, isWorktreeWanted, isWorktreePlanned, isSettled }
 }

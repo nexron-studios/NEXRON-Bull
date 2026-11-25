@@ -328,7 +328,14 @@ export type AgentdEvent =
    * `worktree_root`: the linked git worktree's top folder, the one a removal deletes; `null` in a
    * main checkout, missing from an agentd older than worktrees
    */
-  | { type: 'branch'; id: number | null; branch: string | null; worktree_root?: string | null }
+  /** `is_submodule`: neither a main checkout nor a worktree, it gets no chat worktree */
+  | {
+      type: 'branch'
+      id: number | null
+      branch: string | null
+      worktree_root?: string | null
+      is_submodule?: boolean
+    }
   /** A worktree was not made (`tab` set: its Claude did not start), merged or removed */
   | {
       type: 'worktree_refused'
@@ -467,7 +474,8 @@ export type AgentdRequest =
   | { op: 'background'; tab: string; tool_use_id: string | null }
   | { op: 'merge_into_preview'; worktree: string }
   /** Refuses while anything in the worktree could be lost or a chat runs in it */
-  | { op: 'remove_worktree'; worktree: string }
+  /** `dry_run`: only whether it would go through (`removable`), a running chat not counted */
+  | { op: 'remove_worktree'; worktree: string; dry_run: boolean }
 
 /** `branches`: the other chat branches in `preview` that changed the conflicting files. */
 export type PreviewMergeOutcome =
@@ -478,6 +486,8 @@ export type PreviewMergeOutcome =
   | { kind: 'main_elsewhere'; branch: string }
   /** `preview` is missing and the main checkout has uncommitted changes; nothing was merged */
   | { kind: 'main_dirty' }
+  /** A merge someone else started is still open in the main checkout; nothing was merged */
+  | { kind: 'main_merging' }
 
 /** Why agentd made, merged or removed no worktree; `failed` is git or the disk failing. */
 export const worktreeRefusalKindList = [
@@ -498,6 +508,8 @@ export type WorktreeRemoval =
   | { kind: 'uncommitted'; files: string[] }
   | { kind: 'unmerged'; commits: number; integration: string }
   | { kind: 'in_use' }
+  /** A dry run: the removal would go through */
+  | { kind: 'removable'; branch: string }
 
 /** auto: move to the first allowed account with room; ask: wait and offer them; wait: never move */
 export const limitModeList = ['auto', 'ask', 'wait'] as const

@@ -1,6 +1,7 @@
 import { computed, reactive, toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { AgentdDisconnectedError, agentdService, type Machine } from '@/api/services/agentd.service'
+import type { AgentdEvent } from '@/types/agentd.type'
 
 /** Claude may switch branches while it works; agentd only reads a file, so asking is cheap. */
 const BRANCH_POLL_MS = 30 * 1000
@@ -21,19 +22,27 @@ const forgetOnReconnect = () => {
 }
 
 /**
- * Where the folder sits: the main checkout, a linked worktree with its top folder, or unknown on a
- * machine whose agentd predates worktrees (it can neither tell nor make one).
+ * Where the folder sits: the main checkout, a linked worktree with its top folder, a submodule
+ * (no main checkout of its own), or unknown on a machine whose agentd predates worktrees (it can
+ * neither tell nor make one).
  */
 export type Checkout =
-  { kind: 'main' } | { kind: 'worktree'; root: string } | { kind: 'unsupported' }
+  | { kind: 'main' }
+  | { kind: 'worktree'; root: string }
+  | { kind: 'submodule' }
+  | { kind: 'unsupported' }
 
 export interface GitBranch {
   branch: string | null
   checkout: Checkout
 }
 
-const checkoutOf = (root: string | null | undefined): Checkout => {
+const checkoutOf = ({
+  worktree_root: root,
+  is_submodule: isSubmodule
+}: Pick<Extract<AgentdEvent, { type: 'branch' }>, 'worktree_root' | 'is_submodule'>): Checkout => {
   if (root === undefined) return { kind: 'unsupported' }
+  if (isSubmodule) return { kind: 'submodule' }
   return root === null ? { kind: 'main' } : { kind: 'worktree', root }
 }
 
@@ -55,7 +64,7 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
           on,
           BRANCH_TIMEOUT_MS
         )
-        return { branch: answer.branch, checkout: checkoutOf(answer.worktree_root) }
+        return { branch: answer.branch, checkout: checkoutOf(answer) }
       } catch (error) {
         // A lost connection says nothing about the agentd behind the next one, and its
         // `disconnected` event has already gone by: marking it now would stick.
@@ -68,5 +77,5 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
     refetchInterval: BRANCH_POLL_MS,
     retry: false
   })
-  return { data: query.data, isPending: query.isPending, isUnknown }
+  return { data: query.data, isPending: query.isPending, isFetching: query.isFetching, isUnknown }
 }

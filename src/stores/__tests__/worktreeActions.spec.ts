@@ -43,6 +43,7 @@ describe('useWorktreeActionsStore', () => {
     setActivePinia(createPinia())
     i18n.global.locale.value = 'de'
     ask.mockReset()
+    send.mockClear()
     toast.success.mockClear()
     toast.error.mockClear()
   })
@@ -85,11 +86,17 @@ describe('useWorktreeActionsStore', () => {
   })
 
   it('should close the tab once its worktree is gone after the confirmation', async () => {
-    ask.mockResolvedValue({
-      type: 'worktree_removed',
-      id: 1,
-      outcome: { kind: 'removed', branch: 'feat/week-view' }
-    })
+    ask
+      .mockResolvedValueOnce({
+        type: 'worktree_removed',
+        id: 1,
+        outcome: { kind: 'removable', branch: 'feat/week-view' }
+      })
+      .mockResolvedValueOnce({
+        type: 'worktree_removed',
+        id: 2,
+        outcome: { kind: 'removed', branch: 'feat/week-view' }
+      })
     const chat = useChatStore()
     chat.tabs = [worktreeTab()]
     const actions = useSessionActionsStore()
@@ -97,7 +104,10 @@ describe('useWorktreeActionsStore', () => {
     actions.requestRemoveWorktree(chat.tabs[0], ROOT_OF_SUBFOLDER)
     await actions.confirm()
 
-    expect(ask).toHaveBeenCalledWith({ op: 'remove_worktree', worktree: ROOT_OF_SUBFOLDER }, null)
+    expect(ask.mock.calls).toEqual([
+      [{ op: 'remove_worktree', worktree: ROOT_OF_SUBFOLDER, dry_run: true }, null],
+      [{ op: 'remove_worktree', worktree: ROOT_OF_SUBFOLDER, dry_run: false }, null]
+    ])
     expect(chat.tabs).toEqual([])
     expect(toast.success).toHaveBeenCalledWith(
       'Worktree entfernt, Branch feat/week-view gelöscht.',
@@ -105,20 +115,22 @@ describe('useWorktreeActionsStore', () => {
     )
   })
 
-  it('should keep the tab when agentd refuses because of uncommitted work', async () => {
+  it('should leave a working chat running when agentd would refuse for uncommitted work', async () => {
     ask.mockResolvedValue({
       type: 'worktree_removed',
       id: 1,
       outcome: { kind: 'uncommitted', files: ['draft.txt'] }
     })
     const chat = useChatStore()
-    chat.tabs = [worktreeTab()]
+    chat.tabs = [{ ...worktreeTab(), status: 'working' }]
     const actions = useSessionActionsStore()
 
     actions.requestRemoveWorktree(chat.tabs[0], WORKTREE)
     await actions.confirm()
 
-    expect(chat.tabs.map((tab) => tab.id)).toEqual(['t1'])
+    expect(chat.tabs.map((tab) => [tab.id, tab.status])).toEqual([['t1', 'working']])
+    expect(send).not.toHaveBeenCalled()
+    expect(ask).toHaveBeenCalledTimes(1)
     expect(toast.error).toHaveBeenCalledWith(
       'Nicht entfernt: Im Worktree gibt es nicht committete Änderungen.',
       { description: 'Betroffen: draft.txt.', duration: 10_000 }

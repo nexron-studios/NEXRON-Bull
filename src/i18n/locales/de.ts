@@ -1315,6 +1315,9 @@ export default {
       'Im Worktree liegen noch nicht committete Änderungen. Gemergt werden nur Commits.',
     main_elsewhere: 'Nicht gemergt: Der Hauptordner steht auf {branch}, nicht auf preview.',
     main_elsewhere_hint: 'Wechsle dort zuerst auf preview, dann noch einmal mergen.',
+    main_merging:
+      'Nicht gemergt: Im Hauptordner ist noch ein anderer Merge offen. Schließ ihn dort zuerst ab oder brich ihn ab.',
+    removable: 'Der Worktree von {branch} lässt sich entfernen.',
     main_dirty:
       'Nicht gemergt: preview fehlt, und der Hauptordner hat nicht committete Änderungen. Bull legt preview erst an, wenn er sauber ist.',
     removed: 'Worktree entfernt, Branch {branch} gelöscht.',

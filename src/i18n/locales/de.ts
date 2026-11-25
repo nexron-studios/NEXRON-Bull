@@ -304,6 +304,7 @@ export default {
     preview_hint: 'Klick öffnet die Vorschau',
     pasted_name: 'Bild {time}.{ext}',
     open_marked: '{name} ansehen, markiert',
+    note_count: 'keine Notiz | {n} Notiz | {n} Notizen',
     marked: 'markiert',
     mode: 'Modus',
     view: 'Ansehen',
@@ -366,7 +367,6 @@ export default {
     cancel: 'Abbrechen',
     comment_line: 'Zu {ref}: {comment}',
     reference: '[Bild {n} ({name})]',
-    note_line: 'Bild {n}: {note}',
     close_warning:
       'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',
     too_large: 'Das markierte Bild ist zu groß für Claude.',

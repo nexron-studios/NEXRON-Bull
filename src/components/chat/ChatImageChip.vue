@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { PenLine, X } from '@lucide/vue'
+import { computed, ref } from 'vue'
+import { MessageSquareText, PenLine, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import ChatImageTooltip from '@/components/chat/ChatImageTooltip.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
@@ -10,6 +10,8 @@ import { naturalSizeOf, type Size } from '@/utils/markup'
 import type { PendingImage } from '@/utils/content'
 
 // One attachment in the composer (Figma "20c"): thumbnail, name cut at 16 characters, remove.
+// The notes of its marks only show as a count here and in full in the tooltip; they are changed by
+// opening the image again.
 const { image } = defineProps<{ image: PendingImage }>()
 const emit = defineEmits<{ open: []; remove: []; keydown: [event: KeyboardEvent] }>()
 
@@ -17,18 +19,22 @@ const size = ref<Size | null>(null)
 
 const { t } = useI18n()
 const { ariaOf } = useShortcutLabels()
+
+const noteCount = computed(() => image.notes?.length ?? 0)
+const label = computed(() => {
+  const opening = t(image.isMarked ? 'images.open_marked' : 'chat.open_image', { name: image.name })
+  return noteCount.value ? `${opening}, ${t('images.note_count', noteCount.value)}` : opening
+})
 </script>
 
 <template>
   <div
     class="flex h-9 items-center gap-1 rounded-lg border border-border bg-secondary py-0.5 pr-0.5 pl-0.5 transition-colors hover:border-muted-foreground"
   >
-    <ChatImageTooltip :name="image.name" :bytes="image.bytes" :size>
+    <ChatImageTooltip :name="image.name" :bytes="image.bytes" :size :notes="image.notes">
       <button
         type="button"
-        :aria-label="
-          t(image.isMarked ? 'images.open_marked' : 'chat.open_image', { name: image.name })
-        "
+        :aria-label="label"
         class="flex min-w-0 cursor-zoom-in items-center gap-2 rounded-md pr-1 text-small text-secondary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :data-image-id="image.id"
         :aria-keyshortcuts="ariaOf(MOVE_CHORD)"
@@ -51,6 +57,14 @@ const { ariaOf } = useShortcutLabels()
           </span>
         </span>
         <span class="max-w-[16ch] truncate">{{ image.name }}</span>
+        <span
+          v-if="noteCount"
+          aria-hidden="true"
+          class="flex shrink-0 items-center gap-0.5 text-meta text-muted-foreground tabular-nums"
+        >
+          <MessageSquareText class="size-3" aria-hidden="true" />
+          {{ noteCount }}
+        </span>
       </button>
     </ChatImageTooltip>
     <NchIconButton

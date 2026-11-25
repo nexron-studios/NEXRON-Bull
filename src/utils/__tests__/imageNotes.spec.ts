@@ -1,75 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import {
-  NOTE_LINE_SLOTS,
-  noteLineFormatOf,
-  notesOfImage,
-  remapNoteLines,
-  withImageNotes
-} from '../imageNotes'
+import type { PendingImage } from '@/utils/content'
+import { withImageNotes } from '../imageNotes'
 
-const FORMAT = noteLineFormatOf(`Bild ${NOTE_LINE_SLOTS.n}: ${NOTE_LINE_SLOTS.note}`)
-const one = { id: 'a', name: 'a.png' }
-const two = { id: 'b', name: 'b.png' }
-// Two chips on one line, as the draft holds them (their text does not matter here).
-const LINE = '[Bild 1] [Bild 2] compare them'
-const SECOND_CHIP_END = '[Bild 1] [Bild 2]'.length
-
-describe('noteLineFormatOf', () => {
-  it('should read back what it writes, and nothing else', () => {
-    expect(FORMAT.render(2, '① smaller')).toBe('Bild 2: ① smaller')
-    expect(FORMAT.parse('Bild 12: (21) far off')).toEqual({ n: 12, note: '(21) far off' })
-    expect([FORMAT.parse('Bild 2: smaller'), FORMAT.parse('① smaller')]).toEqual([null, null])
-  })
+const imageOf = (name: string, notes?: string[]): PendingImage => ({
+  id: name,
+  name,
+  mediaType: 'image/png',
+  data: 'QUJD',
+  src: 'data:image/png;base64,QUJD',
+  bytes: 3,
+  notes
 })
+
+const lineOf = (n: number, image: PendingImage, notes: readonly string[]) =>
+  `Zu [Bild ${n} (${image.name})]: ${notes.join(' ')}`
 
 describe('withImageNotes', () => {
-  it('should put the notes on lines of their own under the chip, the rest of the text below', () => {
-    expect(withImageNotes(`${LINE}\nthanks`, 8, 1, ['① bigger', '② bluer'], FORMAT)).toBe(
-      `${LINE}\nBild 1: ① bigger\nBild 1: ② bluer\nthanks`
+  it('should put a line per image with notes in front, numbered by its place', () => {
+    const images = [imageOf('a.png', ['① bigger']), imageOf('b.png'), imageOf('c.png', ['① x'])]
+
+    expect(withImageNotes('please crop', images, lineOf)).toBe(
+      'Zu [Bild 1 (a.png)]: ① bigger\nZu [Bild 3 (c.png)]: ① x\n\nplease crop'
     )
   })
 
-  it('should keep image 1 above image 2 when image 2 was marked first', () => {
-    const second = withImageNotes(LINE, SECOND_CHIP_END, 2, ['① smaller'], FORMAT)
+  it('should leave a text alone whose images have no notes', () => {
+    expect(withImageNotes('please crop', [imageOf('a.png', [])], lineOf)).toBe('please crop')
+  })
 
-    expect(withImageNotes(second, 8, 1, ['① bigger'], FORMAT)).toBe(
-      `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller`
+  it('should send the notes alone when nothing was typed', () => {
+    expect(withImageNotes('', [imageOf('a.png', ['① bigger'])], lineOf)).toBe(
+      'Zu [Bild 1 (a.png)]: ① bigger'
     )
-  })
-
-  it('should add a later round of an image after its earlier notes', () => {
-    const text = `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller`
-
-    expect(withImageNotes(text, 8, 1, ['② bluer'], FORMAT)).toBe(
-      `${LINE}\nBild 1: ① bigger\nBild 1: ② bluer\nBild 2: ① smaller`
-    )
-  })
-})
-
-describe('remapNoteLines', () => {
-  const text = `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller\nthanks`
-
-  it('should take only the notes of a removed image and renumber the rest', () => {
-    expect(remapNoteLines(text, [one, two], [two], FORMAT)).toBe(
-      `${LINE}\nBild 1: ① smaller\nthanks`
-    )
-  })
-
-  it('should keep the notes of an image a marked copy took the place of', () => {
-    const marked = { id: 'm', name: 'a.png' }
-
-    expect(remapNoteLines(text, [one, two], [marked, two], FORMAT, { a: 'm' })).toBe(text)
-  })
-
-  it('should leave a line alone that names no attachment', () => {
-    expect(remapNoteLines('Bild 3: ① stale', [one, two], [two], FORMAT)).toBe('Bild 3: ① stale')
-  })
-})
-
-describe('notesOfImage', () => {
-  it('should read the notes of one image among others', () => {
-    const text = `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller\nBild 1: ② bluer`
-
-    expect(notesOfImage(text, 1, FORMAT)).toEqual(['① bigger', '② bluer'])
   })
 })

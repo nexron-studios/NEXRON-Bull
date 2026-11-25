@@ -53,7 +53,8 @@ import {
   withUnseen
 } from '@/utils/finishOrder'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
-import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
+import { withImageNotes } from '@/utils/imageNotes'
+import { IMAGE_REF_SLOTS, imageRefFormatOf, withPlainImageRefs } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
 import { draftWithUnsent, pendingMessageOf, type SentDraft } from '@/utils/pendingPrompts'
@@ -71,6 +72,20 @@ const HISTORY_PAGE = 40
 const DENIED_MESSAGE = 'The user denied this tool use.'
 /** How image references read in the app's language, for drafts that come back to the composer. */
 const imageRefFormat = () => imageRefFormatOf(i18n.global.t('images.reference', IMAGE_REF_SLOTS))
+/**
+ * The text a message goes out with: what the user wrote, with each marked image's notes in front
+ * ("Zu [Bild 1 (name)]: ① …"), references plain. Only here, so the draft and held messages never
+ * carry them as text.
+ */
+const messageTextOf = (text: string, images: readonly PendingImage[]) => {
+  const format = imageRefFormat()
+  const lineOf = (n: number, image: PendingImage, notes: readonly string[]) =>
+    i18n.global.t('images.comment_line', {
+      ref: format.render(n, image.name),
+      comment: notes.join(' ')
+    })
+  return withPlainImageRefs(withImageNotes(text, images, lineOf), format)
+}
 /** What Claude reads when the user turned a call down and said why, as in the terminal. */
 const deniedWithReason = (reason: string) =>
   `The user denied this tool use and said what to do instead: ${reason}`
@@ -175,7 +190,7 @@ export const useChatStore = defineStore(
       const draft = sentDrafts.get(uuid)
       if (!tab || !draft) return
       const scope = { tabId: id, machine: tab.machine, sessionId: tab.sessionId }
-      useImageNameStore().remember(scope, draft.text, draft.images)
+      useImageNameStore().remember(scope, messageTextOf(draft.text, draft.images), draft.images)
     }
 
     /** A prompt Claude took up: its image names under the session it landed in, then its draft goes. */
@@ -395,7 +410,8 @@ export const useChatStore = defineStore(
     const queueForLimit = (id: string, text: string, images: PendingImage[]): boolean => {
       const tab = tabOf(id)
       if (!tab || !isWaitingTab(tab) || !useLimitPolicyStore().policy.queue) return false
-      toTab(id, { op: 'send', tab: id, content: buildContent(text, images) }).catch(handleError)
+      const content = buildContent(messageTextOf(text, images), images)
+      toTab(id, { op: 'send', tab: id, content }).catch(handleError)
       return true
     }
 
@@ -413,7 +429,10 @@ export const useChatStore = defineStore(
       const tab = tabOf(id)
       if (!tab) return
       const runs = shellRunsFor(id, text)
-      const content = [...runs.flatMap(shellPromptBlocks), ...buildContent(text, images)]
+      const content = [
+        ...runs.flatMap(shellPromptBlocks),
+        ...buildContent(messageTextOf(text, images), images)
+      ]
       const now = Date.now()
       const prompt = pendingMessageOf(content, crypto.randomUUID(), now, hasRepliedThisTurn(tab))
       if (runs.length) {

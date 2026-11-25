@@ -222,7 +222,8 @@ export const useChatStore = defineStore(
     const worktreePlanOf = (tab: ChatTabState) => {
       if (!tab.isWorktreePlanned) return null
       const first = queued.value.get(tab.id)?.[0]
-      const hint = (first && sentDrafts.get(first.uuid)?.text) ?? ''
+      const draft = first && sentDrafts.get(first.uuid)
+      const hint = draft ? messageTextOf(draft.text, draft.images) : ''
       return { hint, root: useWorktreeSettingsStore().rootOrDefault(tab.machine) }
     }
 

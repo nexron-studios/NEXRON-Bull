@@ -1,3 +1,4 @@
+pub mod attach;
 pub mod branches;
 pub mod catalog;
 pub mod chat;

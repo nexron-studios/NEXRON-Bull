@@ -346,6 +346,7 @@ export default {
     note_label: 'Notiz zu dieser Stelle',
     note_placeholder: 'Was soll hier anders sein?',
     remove_mark: 'Markierung {n} entfernen',
+    remove_mark_unnumbered: 'Markierung entfernen',
     text_label: 'Text im Bild',
     text_placeholder: 'Text, Enter setzt ihn',
     comment_hint:

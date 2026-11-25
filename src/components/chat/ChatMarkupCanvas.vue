@@ -43,6 +43,12 @@ const isPhone = useIsPhone()
 
 const isErasing = computed(() => markup.tool.value === 'eraser')
 
+// A line gets its number only once its note has text; until then the × names no number.
+const removeLabel = (id: string) => {
+  const number = markup.numbers.value.get(id)
+  return number ? t('images.remove_mark', { n: number }) : t('images.remove_mark_unnumbered')
+}
+
 /** Screen pixels per image pixel, as the image is shown right now. */
 const screenScale = () => (canvas.value?.getBoundingClientRect().width ?? 0) / natural.width
 
@@ -226,7 +232,7 @@ watch(canvas, redraw)
     :is-focused="isNoteFocused"
     :label="t('images.note_label')"
     :placeholder="t('images.note_placeholder')"
-    :remove-label="t('images.remove_mark', { n: markup.numbers.value.get(editing.id) ?? '' })"
+    :remove-label="removeLabel(editing.id)"
     :can-remove-when-empty="editing.isPin"
     @done="placing.closeNote"
     @cancel="placing.closeNote"

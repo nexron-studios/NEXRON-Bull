@@ -343,6 +343,7 @@ export default {
     note_label: 'Note on this spot',
     note_placeholder: 'What should change here?',
     remove_mark: 'Remove mark {n}',
+    remove_mark_unnumbered: 'Remove mark',
     text_label: 'Text in the image',
     text_placeholder: 'Text, Enter places it',
     comment_hint:

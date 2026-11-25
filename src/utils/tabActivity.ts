@@ -9,6 +9,7 @@ import { liveActivityOf } from '@/utils/liveStream'
 import { askReasonOf, type NotifyReason } from '@/utils/notifications'
 import {
   AGENT_TOOL_NAMES,
+  isListed,
   timeOf,
   type AgentNotice,
   type BackgroundTasks
@@ -280,7 +281,7 @@ export const backgroundShellsOf = (
       block.input.run_in_background === true
         ? text.match(BACKGROUND_ID_PATTERN)?.[1]
         : text.match(MOVED_ID_PATTERN)?.[1]
-    if (!taskId || ended.has(taskId) || (tasks && !tasks.ids.includes(taskId))) return []
+    if (!taskId || ended.has(taskId) || (tasks && !isListed(tasks, taskId))) return []
     const command = typeof block.input.command === 'string' ? block.input.command : ''
     const ownDescription =
       typeof block.input.description === 'string' ? block.input.description.trim() : ''

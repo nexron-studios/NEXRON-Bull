@@ -389,6 +389,7 @@ export default {
     empty_chat: 'waiting for the first prompt',
     background_task: 'In the background: {task}',
     background_count: 'In the background: {n} task | In the background: {n} tasks',
+    background_unnamed: 'Unnamed',
     age_running: 'running for {age}',
     age_finished: 'finished {age} ago',
     empty_title: 'No chat open',

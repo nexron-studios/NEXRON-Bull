@@ -244,9 +244,8 @@ describe('backgroundTasksOf', () => {
     ]
   }
 
-  it('should list every task id and name the tasks that count as activity', () => {
+  it('should name the tasks that count as activity and leave out ambient ones', () => {
     expect(backgroundTasksOf(event)).toEqual({
-      ids: ['blj8exi1k', 'a3cb1f0c2392d1046', 'w1'],
       active: [
         { id: 'blj8exi1k', description: 'Follow act video generation until done' },
         { id: 'a3cb1f0c2392d1046', description: 'Check the release' }
@@ -337,8 +336,14 @@ describe('subagentsOf', () => {
       message('a1', started, [agentCall('toolu_4', { run_in_background: true })]),
       message('u1', started, [result('toolu_4', 'Async agent launched. agentId: a7f')])
     ]
-    const listed = subagentsOf(messages, [], true, { ids: ['a7f'], active: [], at: 50 })
-    const gone = subagentsOf(messages, [], true, { ids: ['b1'], active: [], at: 60 })
+    const listed = subagentsOf(messages, [], true, {
+      active: [{ id: 'a7f', description: 'Explore' }],
+      at: 50
+    })
+    const gone = subagentsOf(messages, [], true, {
+      active: [{ id: 'b1', description: 'npm run dev' }],
+      at: 60
+    })
     expect([listed[0]?.status, gone[0]?.status, gone[0]?.finishedAt]).toEqual([
       'running',
       'done',
@@ -369,7 +374,7 @@ describe('subagentsOf', () => {
     const firstEnd = { id: 'toolu_5', status: 'failed' as const, at: 10 }
 
     it('should run again under the SendMessage call though its first run failed', () => {
-      const [agent] = subagentsOf(messages, [firstEnd], true, { ids: [], active: [], at: 10 })
+      const [agent] = subagentsOf(messages, [firstEnd], true, { active: [], at: 10 })
       expect([agent?.status, agent?.runId, agent?.startedAt]).toEqual([
         'running',
         'toolu_send',

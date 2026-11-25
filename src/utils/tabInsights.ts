@@ -53,11 +53,12 @@ export interface BackgroundTask {
   description: string
 }
 
-/** The background tasks (shells, agents) the stream last listed as running. */
+/**
+ * The background tasks (shells, agents) the stream last listed as running. Only those that count as
+ * activity: ambient housekeeping is left out everywhere, so the row, the badges and the panel agree.
+ */
 export interface BackgroundTasks {
-  /** Task ids: the id a shell's start answer names, the `agentId` of an agent */
-  ids: string[]
-  /** The tasks that count as activity, in the stream's order; ambient housekeeping left out */
+  /** In the stream's order; the id is the one a shell's start answer names, an agent's `agentId` */
   active: BackgroundTask[]
   /** When the list arrived (ms since epoch) */
   at: number
@@ -193,7 +194,6 @@ export const backgroundTasksOf = (event: ClaudeEvent): Omit<BackgroundTasks, 'at
     typeof task.task_id === 'string' ? [{ ...task, id: task.task_id }] : []
   )
   return {
-    ids: tasks.map((task) => task.id),
     active: tasks
       .filter((task) => task.ambient !== true)
       .map((task) => ({
@@ -202,6 +202,10 @@ export const backgroundTasksOf = (event: ClaudeEvent): Omit<BackgroundTasks, 'at
       }))
   }
 }
+
+/** The stream's task list names this task as running work. */
+export const isListed = (tasks: BackgroundTasks, id: string): boolean =>
+  tasks.active.some((task) => task.id === id)
 
 const COMPLETED = 'completed'
 
@@ -283,7 +287,7 @@ const backgroundRunOf = (
 ): Subagent => {
   if (notice) return { ...base, status: notice.status, finishedAt: notice.at }
   const isListCurrent = !isResumed || tasks === null || tasks.at >= (base.startedAt ?? 0)
-  if (base.agentId && tasks && isListCurrent && !tasks.ids.includes(base.agentId))
+  if (base.agentId && tasks && isListCurrent && !isListed(tasks, base.agentId))
     return { ...base, status: 'done', finishedAt: tasks.at }
   return { ...base, status: isLive ? 'running' : 'done', finishedAt: null }
 }

@@ -110,6 +110,15 @@ describe('sessionRowsOf and groupRows', () => {
     expect(keysByGroup(tabs)).toEqual([['done', ['today', 'yesterday']]])
   })
 
+  it('should put finished tabs without a known time after the ones with one', () => {
+    const tabs = [
+      tab('restored', { status: 'idle' }),
+      tab('old', { status: 'idle', finishedAt: YESTERDAY }),
+      tab('fresh', { status: 'idle', finishedAt: NOON - MINUTE })
+    ]
+    expect(keysByGroup(tabs)).toEqual([['done', ['fresh', 'old', 'restored']]])
+  })
+
   it('should list only open tabs, not sessions closed today', () => {
     const recent = [session('fresh', NOON - 3 * MINUTE), session('stale', YESTERDAY)]
     expect(keysByGroup([], recent)).toEqual([])
@@ -354,7 +363,6 @@ describe('rowActivityOf', () => {
 describe('a chat whose turn ended while something runs in the background', () => {
   // Task ids as Claude Code lists them: a background shell (`local_bash`) and an agent.
   const backgroundOf = (taskId: string) => ({
-    ids: [taskId],
     active: [{ id: taskId, description: 'Follow act video generation until done' }],
     at: NOON
   })
@@ -391,7 +399,7 @@ describe('a chat whose turn ended while something runs in the background', () =>
       status: 'working',
       finishedAt: NOON - 10 * MINUTE,
       turn: { startedAt: NOON - MINUTE, afterUuid: null },
-      backgroundTasks: { ids: [], active: [], at: NOON - MINUTE }
+      backgroundTasks: { active: [], at: NOON - MINUTE }
     })
     expect(keysByGroup([reply])).toEqual([['running', ['b']]])
   })

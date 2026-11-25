@@ -325,7 +325,13 @@ describe('backgroundShellsOf', () => {
       ...started('s1', 'b1', 'npm run dev', 1),
       ...started('s2', 'b2', 'npm run build', 2)
     ]
-    const tasks = { ids: ['b2', 'a7f'], active: [], at: ms(9) }
+    const tasks = {
+      active: [
+        { id: 'b2', description: '' },
+        { id: 'a7f', description: '' }
+      ],
+      at: ms(9)
+    }
     expect(backgroundShellsOf(messages, [], true, tasks)).toEqual([
       { id: 's2', command: 'npm run build', description: '', startedAt: ms(2) }
     ])
@@ -349,7 +355,6 @@ describe('backgroundShellsOf', () => {
       answer('s2', 'Command running in background with ID: b2. Output is being written to: x', 2)
     ]
     const tasks = {
-      ids: ['b1', 'b2'],
       active: [
         { id: 'b1', description: '' },
         { id: 'b2', description: 'Follow act video generation until done' }
@@ -359,6 +364,11 @@ describe('backgroundShellsOf', () => {
     expect(backgroundShellsOf(messages, [], true, tasks).map((shell) => shell.description)).toEqual(
       ['Watch the release', 'Follow act video generation until done']
     )
+  })
+
+  it('should end a shell the stream lists only as ambient housekeeping', () => {
+    const messages = started('s1', 'b1', 'node watch.mjs', 1)
+    expect(backgroundShellsOf(messages, [], true, { active: [], at: ms(9) })).toEqual([])
   })
 
   it('should list nothing once Claude has exited', () => {

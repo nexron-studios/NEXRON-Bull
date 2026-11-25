@@ -299,7 +299,7 @@ export const useChatStore = defineStore(
         event.type === 'claude'
           ? backgroundTasksOf(event.event)
           : event.type === 'exited'
-            ? { ids: [], active: [] }
+            ? { active: [] }
             : null
       if (tasks) update(id, (tab) => withBackgroundTasks(tab, tasks, now))
       const live =

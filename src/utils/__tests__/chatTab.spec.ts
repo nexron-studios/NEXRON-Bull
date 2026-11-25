@@ -434,7 +434,6 @@ describe('withTurnClock', () => {
     const turn = { startedAt: 1000, afterUuid: null }
     // `run_in_background` Bash, listed by `background_tasks_changed` until it ends.
     const running = {
-      ids: ['b3vtm9fpi'],
       active: [{ id: 'b3vtm9fpi', description: 'Follow act video generation until done' }],
       at: 2000
     }
@@ -451,7 +450,7 @@ describe('withTurnClock', () => {
       const done = { ...tab(), status: 'idle' as const, finishedAt: 5000, unseenAt: 5000 }
       const reply = withTurnClock({ ...done, status: 'working' }, 7000)
       const ended = withTurnClock(
-        { ...reply, status: 'idle', backgroundTasks: { ids: [], active: [], at: 8000 } },
+        { ...reply, status: 'idle', backgroundTasks: { active: [], at: 8000 } },
         9000
       )
       expect([reply.unseenAt, reply.turn?.startedAt, ended.finishedAt]).toEqual([null, 7000, 9000])
@@ -461,7 +460,6 @@ describe('withTurnClock', () => {
 
 describe('listedTabOf and backgroundWorkOf', () => {
   const tasks = {
-    ids: ['a7f', 'w1'],
     active: [{ id: 'a7f', description: 'Check the release' }],
     at: 1
   }
@@ -513,10 +511,33 @@ describe('a subagent report', () => {
     ])
   })
 
-  it('should not call the reply to a report a finished turn', () => {
+  it('should not call the reply to a report finished while another agent still runs', () => {
     const working = withTurnClock({ ...arrived(answered, 'r1'), status: 'working' }, 9000)
-    const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
+    const stillRunning = { active: [{ id: 'a555', description: 'Check the release' }], at: 8000 }
+    const idle = withTurnClock({ ...working, status: 'idle', backgroundTasks: stillRunning }, 12000)
     expect([idle.turn, idle.finishedAt]).toEqual([null, 5000])
+  })
+
+  it('should finish anew when the reply to the last report ends with nothing left running', () => {
+    // The answer left agent a444 running and finished the chat at 5000; its report came later.
+    const running = { active: [{ id: 'a444', description: 'Ping the server' }], at: 4000 }
+    const ended = withTurnClock(
+      {
+        ...tab(),
+        status: 'idle',
+        turn: { startedAt: 1000, afterUuid: null },
+        backgroundTasks: running
+      },
+      5000
+    )
+    const reported = { ...arrived(ended, 'r1'), backgroundTasks: { active: [], at: 8000 } }
+    const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+    const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
+    expect([ended.finishedAt, working.turn?.isAgentReply, idle.finishedAt]).toEqual([
+      5000,
+      true,
+      12000
+    ])
   })
 
   it('should mark a turn that started before its report arrived', () => {

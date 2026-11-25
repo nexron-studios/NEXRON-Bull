@@ -593,14 +593,17 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
 }
 
 /**
- * Only an answer to the user counts as finished; a crash, an exit, an error result mid-turn or the
- * reply to an agent's message does not. Shells or agents left running in the background do not
- * hold the finish: some never end, and the row says what still runs (Jonas, 25.11.2026).
+ * A turn that ends well finishes the chat; a crash, an exit or an error result mid-turn does not.
+ * Shells or agents left running in the background do not hold the finish: some never end, and the
+ * row says what still runs (Jonas, 25.11.2026). Claude's reply to a background report finishes it
+ * again once nothing is left running, since that reply carries the result the user waited for;
+ * a reply while more still runs is only a step on the way.
  */
 const withTurnEnd = (tab: ChatTabState, now: number): ChatTabState => {
-  const isAnswered =
-    tab.status === 'idle' && !tab.notice && !(tab.turn && isAgentReplyOf(tab, tab.turn))
-  return isAnswered ? { ...tab, finishedAt: now } : tab
+  if (tab.status !== 'idle' || tab.notice) return tab
+  const isAgentReply = !!tab.turn && isAgentReplyOf(tab, tab.turn)
+  if (isAgentReply && backgroundWorkOf(tab).length > 0) return tab
+  return { ...tab, finishedAt: now }
 }
 
 /**

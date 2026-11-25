@@ -206,7 +206,8 @@ export const sessionRowsOf = (
   return tabs.map((tab) => rowOfTab(tab, modified, today))
 }
 
-// Waiting and running rows: longest first. Finished rows: newest first, unknown times on top.
+// Waiting and running rows: longest first. Finished rows: newest first. Unknown times go last in
+// every group, so a tab restored without a finish time never pushes fresh ones down.
 const compareRows = (group: SessionGroup) => (a: SessionRow, b: SessionRow) => {
   const isOldestFirst = group === 'needs' || group === 'running'
   const unknown = isOldestFirst ? Infinity : -Infinity

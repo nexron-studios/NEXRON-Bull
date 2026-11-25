@@ -68,13 +68,13 @@ describe('useChatStore: background work', () => {
     chat.tabs = [
       {
         ...liveTab('t1', null),
-        backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
+        backgroundTasks: { active: [{ id: 'a7f', description: '' }], at: 1 }
       }
     ]
 
     emit({ type: 'exited', tab: 't1', code: 0 })
 
-    expect(chat.tabs[0].backgroundTasks?.ids).toEqual([])
+    expect(chat.tabs[0].backgroundTasks?.active).toEqual([])
   })
 
   it('should finish the turn and keep the name of the shell it left running', () => {

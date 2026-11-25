@@ -12,7 +12,10 @@ const { tasks } = defineProps<{ tasks: BackgroundTask[] }>()
 
 const { t } = useI18n()
 
-const names = computed(() => tasks.map((task) => task.description).filter(Boolean))
+// One name per task, so the hover list matches the count; a task Claude gave no name says so.
+const names = computed(() =>
+  tasks.map((task) => task.description || t('sidebar.background_unnamed'))
+)
 const label = computed(() => {
   const [only] = tasks
   if (tasks.length === 1 && only.description)
@@ -27,9 +30,8 @@ const label = computed(() => {
       class="size-1.5 shrink-0 rounded-full bg-warning motion-safe:animate-pulse"
       aria-hidden="true"
     />
-    <span v-if="!names.length" class="min-w-0 truncate">{{ label }}</span>
     <!-- Hover only: the row is one button, so the names go to screen readers as text instead. -->
-    <Tooltip v-else>
+    <Tooltip>
       <TooltipTrigger as-child>
         <span class="min-w-0 truncate">
           <span aria-hidden="true">{{ label }}</span>

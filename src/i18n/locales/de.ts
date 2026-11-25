@@ -394,6 +394,7 @@ export default {
     empty_chat: 'wartet auf die erste Anfrage',
     background_task: 'Im Hintergrund: {task}',
     background_count: 'Im Hintergrund: {n} Aufgabe | Im Hintergrund: {n} Aufgaben',
+    background_unnamed: 'Ohne Namen',
     age_running: 'läuft seit {age}',
     age_finished: 'fertig vor {age}',
     empty_title: 'Kein Chat offen',

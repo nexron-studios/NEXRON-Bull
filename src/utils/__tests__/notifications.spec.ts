@@ -181,7 +181,7 @@ describe('snapshotOf', () => {
     const idle = { ...tab(), status: 'idle' as const, permission: null }
     const background = {
       ...idle,
-      backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
+      backgroundTasks: { active: [{ id: 'a7f', description: '' }], at: 1 }
     }
     expect(snapshotOf(background, '').status).toBe('idle')
   })

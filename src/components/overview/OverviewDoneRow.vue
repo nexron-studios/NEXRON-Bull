@@ -39,7 +39,10 @@ const age = computed(() => formatAge.value(Math.max(0, now - entry.finishedAt)))
 const openTab = computed(() => target.value?.tab ?? null)
 // Only an open tab knows Claude's last answer; a transcript row has no messages loaded.
 const summary = computed(() => (openTab.value ? summaryOf(openTab.value.messages) : ''))
-const background = computed(() => (openTab.value ? backgroundWorkOf(openTab.value) : []))
+// Only while the chat is done; a new turn of it says what it does in its running card.
+const background = computed(() =>
+  openTab.value?.status === 'idle' ? backgroundWorkOf(openTab.value) : []
+)
 
 // An open tab's row opens it on a click anywhere, like the finish strip did; a transcript row
 // starts Claude, so only its button does that. The row's own buttons handle their clicks, and a

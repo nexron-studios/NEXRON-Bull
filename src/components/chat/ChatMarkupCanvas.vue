@@ -4,30 +4,26 @@ import { useElementBounding } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import ChatMarkupNoteField from '@/components/chat/ChatMarkupNoteField.vue'
 import { useMarkup } from '@/composables/useMarkup'
+import { useMarkupPlacing } from '@/composables/useMarkupPlacing'
+import { useIsPhone } from '@/composables/useViewport'
 import {
-  BADGE_RADIUS_PX,
   MARKUP_COLOR_TOKENS,
-  TEXT_SIZE_PX,
-  badgeAnchorOf,
+  anchorOf,
   eraserRadiusOf,
   strokeWidthOf,
   toImagePoint,
   type LineStroke,
-  type PinStroke,
   type Point,
   type Size,
-  type Stroke,
-  type TextStroke
+  type Stroke
 } from '@/utils/markup'
-import { drawStrokes } from '@/utils/markupCanvas'
+import { drawStrokes, textFontOf } from '@/utils/markupCanvas'
 import { eraseAlong } from '@/utils/markupEraser'
 
 // Drawing layer over the image, at the image's natural resolution. Pointer events cover mouse,
 // pen and touch alike; one pointer draws at a time, so a resting palm does not add a stroke.
 // Every finished mark opens its note field; a click on a number opens it again.
 const { natural } = defineProps<{ natural: Size }>()
-
-const newId = () => crypto.randomUUID()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const activePointer = ref<number | null>(null)
@@ -38,30 +34,32 @@ const remaining = shallowRef<readonly Stroke[] | null>(null)
 const eraserFrom = shallowRef<Point | null>(null)
 /** The pointer in client pixels, for the eraser's outline. */
 const hover = ref<Point | null>(null)
-/** Where a text is being written, with what is typed so far */
-const textDraft = ref<{ at: Point; text: string } | null>(null)
 // Follows scrolling and zooming, so the outline stays under a pointer that does not move.
 const bounds = useElementBounding(canvas)
 
 const { t } = useI18n()
 const markup = useMarkup()
+const isPhone = useIsPhone()
 
 const isErasing = computed(() => markup.tool.value === 'eraser')
 
-/** The mark whose note is open, as long as it is still there (undo can take it away). */
-const editing = computed(() => {
-  const id = markup.editingId.value
-  const stroke = id ? markup.strokes.value.find((mark) => mark.id === id) : undefined
-  const at = stroke ? badgeAnchorOf(stroke) : null
-  return stroke && at ? { id: stroke.id, at, color: stroke.color } : null
-})
+/** Screen pixels per image pixel, as the image is shown right now. */
+const screenScale = () => (canvas.value?.getBoundingClientRect().width ?? 0) / natural.width
 
-const note = computed({
-  get: () => (editing.value ? (markup.notes.value[editing.value.id] ?? '') : ''),
-  set: (text: string) => {
-    if (editing.value) markup.setNote(editing.value.id, text)
-  }
-})
+const resolvedColor = () =>
+  getComputedStyle(document.documentElement)
+    .getPropertyValue(MARKUP_COLOR_TOKENS[markup.color.value])
+    .trim()
+
+const measureText = (text: string, size: number) => {
+  const ctx = canvas.value?.getContext('2d')
+  if (!ctx) return 0
+  ctx.font = textFontOf(size)
+  return ctx.measureText(text).width
+}
+
+const placing = useMarkupPlacing({ markup, screenScale, resolvedColor, measureText })
+const { editing, note, isNoteFocused, textDraft } = placing
 
 const redraw = () => {
   const ctx = canvas.value?.getContext('2d')
@@ -70,9 +68,6 @@ const redraw = () => {
   drawStrokes(ctx, remaining.value ?? markup.strokes.value, markup.numbers.value)
   if (draft.value) drawStrokes(ctx, [draft.value])
 }
-
-/** Screen pixels per image pixel, as the image is shown right now. */
-const screenScale = () => (canvas.value?.getBoundingClientRect().width ?? 0) / natural.width
 
 const pointOf = (event: PointerEvent): Point =>
   toImagePoint(
@@ -104,81 +99,14 @@ const eraseTo = (point: Point) => {
   eraserFrom.value = point
 }
 
-const resolvedColor = () =>
-  getComputedStyle(document.documentElement)
-    .getPropertyValue(MARKUP_COLOR_TOKENS[markup.color.value])
-    .trim()
-
-const badgeRadius = () => BADGE_RADIUS_PX[markup.size.value] / screenScale()
-
-const closeNote = () => {
-  const id = markup.editingId.value
-  if (!id) return
-  markup.settleNote(id)
-  markup.editingId.value = null
-}
-
-const closeText = (isKept: boolean) => {
-  const written = textDraft.value
-  textDraft.value = null
-  const text = written?.text.trim()
-  if (!isKept || !written || !text) return
-  const mark: TextStroke = {
-    id: newId(),
-    tool: 'text',
-    color: resolvedColor(),
-    badge: badgeRadius(),
-    size: TEXT_SIZE_PX[markup.size.value] / screenScale(),
-    text,
-    points: [written.at]
-  }
-  markup.commit([...markup.strokes.value, mark])
-}
-
-/** The numbered mark whose badge is under `point`, the topmost first. */
-const badgeAt = (point: Point) => {
-  const hits = markup.strokes.value.filter((stroke) => {
-    if (!markup.numbers.value.has(stroke.id)) return false
-    const at = badgeAnchorOf(stroke)
-    return !!at && Math.hypot(point.x - at.x, point.y - at.y) <= stroke.badge
-  })
-  return hits.at(-1)?.id ?? null
-}
-
-/** A click that places something instead of drawing: a number, a pin or a text. */
-const placeAt = (point: Point) => {
-  const tool = markup.tool.value
-  const hit = tool === 'eraser' ? null : badgeAt(point)
-  if (hit) {
-    markup.editingId.value = hit
-    return true
-  }
-  if (tool === 'text') {
-    textDraft.value = { at: point, text: '' }
-    return true
-  }
-  if (tool !== 'pin') return false
-  const pin: PinStroke = {
-    id: newId(),
-    tool: 'pin',
-    color: resolvedColor(),
-    badge: badgeRadius(),
-    points: [point]
-  }
-  markup.commit([...markup.strokes.value, pin])
-  markup.editingId.value = pin.id
-  return true
-}
-
 const handleDown = (event: PointerEvent) => {
   if (activePointer.value !== null || !event.isPrimary) return
   event.preventDefault()
   // An open field ends with the next click on the image, whatever that click does.
-  closeNote()
-  closeText(true)
+  placing.closeAll()
   trackHover(event)
   const point = pointOf(event)
-  if (placeAt(point)) return
+  if (placing.placeAt(point)) return
   canvas.value?.setPointerCapture(event.pointerId)
   activePointer.value = event.pointerId
   const tool = markup.tool.value
@@ -188,10 +116,11 @@ const handleDown = (event: PointerEvent) => {
   } else if (tool !== 'pin' && tool !== 'text') {
     const isShape = tool === 'arrow' || tool === 'rect'
     draft.value = {
-      id: newId(),
+      id: crypto.randomUUID(),
       tool,
       color: resolvedColor(),
-      badge: badgeRadius(),
+      badge: placing.badgeRadius(),
+      anchor: point,
       width: strokeWidthOf(tool, markup.size.value, screenScale()),
       points: isShape ? [point, point] : [point]
     }
@@ -228,8 +157,12 @@ const handleUp = (event: PointerEvent) => {
   remaining.value = null
   eraserFrom.value = null
   if (stroke && isVisible(stroke)) {
-    markup.commit([...markup.strokes.value, stroke])
-    markup.editingId.value = stroke.id
+    markup.commit([
+      ...markup.strokes.value,
+      { ...stroke, anchor: anchorOf(stroke.tool, stroke.points) }
+    ])
+    // On the phone the keyboard would cover the image after every line; there a tap opens it.
+    placing.openNote(stroke.id, !isPhone.value)
   }
   // One drag is one undo step, however many strokes it cut.
   if (left && left !== markup.strokes.value) markup.commit([...left])
@@ -252,10 +185,6 @@ watch(markup.strokes, () => {
   redraw()
 })
 watch(markup.numbers, redraw)
-// Undo took the mark whose note was open: its field goes with it.
-watch(editing, (now, before) => {
-  if (!now && before) closeNote()
-})
 watch(canvas, redraw)
 </script>
 
@@ -282,25 +211,31 @@ watch(canvas, redraw)
   />
   <ChatMarkupNoteField
     v-if="editing"
+    :id="editing.id"
     :key="editing.id"
     v-model="note"
     :natural
     :at="editing.at"
     :color="editing.color"
+    :is-focused="isNoteFocused"
     :label="t('images.note_label')"
     :placeholder="t('images.note_placeholder')"
-    @done="closeNote"
-    @cancel="closeNote"
+    @done="placing.closeNote"
+    @cancel="placing.closeNote"
+    @history="markup[$event]()"
   />
   <ChatMarkupNoteField
     v-if="textDraft"
+    :id="textDraft.id"
+    :key="textDraft.id"
     v-model="textDraft.text"
+    variant="text"
     :natural
     :at="textDraft.at"
     :color="resolvedColor()"
     :label="t('images.text_label')"
     :placeholder="t('images.text_placeholder')"
-    @done="closeText(true)"
-    @cancel="closeText(false)"
+    @done="placing.closeText($event, true)"
+    @cancel="placing.closeText($event, false)"
   />
 </template>

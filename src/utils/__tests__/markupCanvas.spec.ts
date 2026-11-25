@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { drawStrokes } from '../markupCanvas'
-import type { LineStroke, LineTool, Stroke } from '../markup'
+import { anchorOf, type LineStroke, type LineTool, type Stroke } from '../markup'
 
 // Records what a 2D context is asked to do, in order, including the style at each stroke().
 // Rounded, so float noise in the arrow head does not leak into the expectations.
@@ -49,6 +49,10 @@ const stroke = (
   tool,
   color: 'red',
   badge: 10,
+  anchor: anchorOf(
+    tool,
+    points.map(([x, y]) => ({ x, y }))
+  ),
   width,
   points: points.map(([x, y]) => ({ x, y }))
 })
@@ -135,7 +139,14 @@ describe('drawStrokes with numbers', () => {
     [40, 60],
     [10, 20]
   ])
-  const pin: Stroke = { id: 'pin', tool: 'pin', color: 'blue', badge: 8, points: [{ x: 5, y: 6 }] }
+  const pin: Stroke = {
+    id: 'pin',
+    tool: 'pin',
+    color: 'blue',
+    badge: 8,
+    anchor: { x: 5, y: 6 },
+    points: [{ x: 5, y: 6 }]
+  }
 
   it('should put the number of a frame on its top-left corner', () => {
     const { ctx, calls } = recorder()
@@ -176,6 +187,15 @@ describe('drawStrokes with numbers', () => {
     expect(calls.filter((call) => call.startsWith('arc'))).toEqual(['arc 0,0 r10'])
   })
 
+  it('should keep a badge where the mark was made, even when its piece starts elsewhere', () => {
+    const { ctx, calls } = recorder()
+    const piece = { ...stroke('pen', [[30, 40]], 2, 'rect'), anchor: { x: 10, y: 20 } }
+
+    drawStrokes(ctx, [piece], new Map([['rect', 1]]))
+
+    expect(calls).toContain('arc 10,20 r10')
+  })
+
   it('should paint the badges after every line, so no line covers a number', () => {
     const { ctx, calls } = recorder()
     const later = stroke('pen', [[1, 1]], 2, 'later')
@@ -192,7 +212,9 @@ describe('drawStrokes with numbers', () => {
       tool: 'text',
       color: 'green',
       badge: 10,
+      anchor: { x: 3, y: 4 },
       size: 20,
+      textWidth: 70,
       text: 'zu groß',
       points: [{ x: 3, y: 4 }]
     }

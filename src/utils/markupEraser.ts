@@ -3,6 +3,7 @@
  * Marks stay vectors, so the pieces are new strokes, and the image under them is never touched.
  */
 import {
+  TEXT_OUTLINE_PER_SIZE,
   arrowHead,
   arrowHeadLengthOf,
   distanceToSegment,
@@ -113,13 +114,10 @@ export const cutPolyline = (
   return isTouched ? pieces : null
 }
 
-/** Average glyph width per font size; close enough to find a word under the eraser. */
-const GLYPH_WIDTH_PER_SIZE = 0.6
-
 /** A written text as its box and the line through its middle, so wiping across it hits too. */
 const textLinesOf = (stroke: TextStroke): Point[][] => {
   const [{ x, y }] = stroke.points
-  const right = x + stroke.text.length * stroke.size * GLYPH_WIDTH_PER_SIZE
+  const right = x + stroke.textWidth
   const bottom = y + stroke.size
   const middle = y + stroke.size / 2
   const box = [
@@ -168,7 +166,8 @@ export const eraseStroke = (stroke: Stroke, from: Point, to: Point, radius: numb
     return isTouched([stroke.points], distance, radius + stroke.badge) ? [] : [stroke]
   }
   if (stroke.tool === 'text') {
-    return isTouched(textLinesOf(stroke), distance, radius) ? [] : [stroke]
+    const reach = radius + (stroke.size * TEXT_OUTLINE_PER_SIZE) / 2
+    return isTouched(textLinesOf(stroke), distance, reach) ? [] : [stroke]
   }
   return eraseLine(stroke, distance, radius)
 }

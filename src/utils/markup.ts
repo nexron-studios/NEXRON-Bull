@@ -54,6 +54,8 @@ interface MarkBase {
   color: string
   /** Radius of the number badge in image pixels, fixed when the mark is made */
   badge: number
+  /** Centre of the number badge, fixed when the mark is made so erasing never moves it */
+  anchor: Point
 }
 
 /** A dragged mark. `width` is the line width. */
@@ -75,6 +77,8 @@ export interface TextStroke extends MarkBase {
   tool: 'text'
   /** Font size in image pixels */
   size: number
+  /** Measured width in image pixels, so the eraser finds the whole word */
+  textWidth: number
   text: string
   points: [Point]
 }
@@ -197,13 +201,15 @@ export const stepZoom = (zoom: number, direction: -1 | 1) => {
 export const BADGE_RADIUS_PX: Record<MarkupSize, number> = { s: 9, m: 11, l: 14 }
 export const TEXT_SIZE_PX: Record<MarkupSize, number> = { s: 14, m: 18, l: 26 }
 
+/** Dark edge around written text, per font size, so it reads on any image. */
+export const TEXT_OUTLINE_PER_SIZE = 0.18
+
 /** Where a mark's number sits: a frame's top-left corner, an arrow's tail, a line's start. */
-export const badgeAnchorOf = (stroke: Stroke): Point | null => {
-  const first = stroke.points[0]
-  if (!first) return null
-  if (stroke.tool !== 'rect') return first
-  const last = stroke.points.at(-1) ?? first
-  return { x: Math.min(first.x, last.x), y: Math.min(first.y, last.y) }
+export const anchorOf = (tool: DrawTool, [first, ...rest]: readonly Point[]): Point => {
+  const start = first ?? { x: 0, y: 0 }
+  if (tool !== 'rect') return start
+  const end = rest.at(-1) ?? start
+  return { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y) }
 }
 
 /** Notes per mark id. A key with an empty note keeps the number while the note is being edited. */

@@ -2,7 +2,7 @@ import {
   HIGHLIGHTER_ALPHA,
   arrowHead,
   arrowHeadLengthOf,
-  badgeAnchorOf,
+  TEXT_OUTLINE_PER_SIZE,
   type LineStroke,
   type Point,
   type Stroke,
@@ -39,7 +39,6 @@ const OUTLINE = 'rgba(0, 0, 0, 0.6)'
 const BADGE_DIGITS = 'white'
 const BADGE_RING_PER_RADIUS = 0.16
 const BADGE_FONT_PER_RADIUS = 1.1
-const TEXT_OUTLINE_PER_SIZE = 0.18
 const FONT_FAMILY = 'system-ui, sans-serif'
 
 /** Font of a written text. */
@@ -93,8 +92,7 @@ const drawText = (ctx: Context, stroke: TextStroke) => {
 
 /** A filled circle in the mark's colour, with its number when it has one. */
 const drawBadge = (ctx: Context, stroke: Stroke, number: number | undefined) => {
-  const at = badgeAnchorOf(stroke)
-  if (!at) return
+  const at = stroke.anchor
   const radius = stroke.badge
   ctx.save()
   ctx.beginPath()

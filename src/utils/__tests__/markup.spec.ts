@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   arrowHead,
-  badgeAnchorOf,
+  anchorOf,
   circledNumberOf,
   commitStrokes,
   distanceToSegment,
@@ -24,6 +24,7 @@ const pen = (points: [number, number][], width = 2): LineStroke => ({
   tool: 'pen',
   color: '#f00',
   badge: 10,
+  anchor: { x: points[0]?.[0] ?? 0, y: points[0]?.[1] ?? 0 },
   width,
   points: points.map(([x, y]) => ({ x, y }))
 })
@@ -151,6 +152,7 @@ describe('numbered marks', () => {
     tool: 'pin',
     color: '#f00',
     badge: 10,
+    anchor: { x: 0, y: 0 },
     points: [{ x: 0, y: 0 }]
   })
   const text: Stroke = {
@@ -158,7 +160,9 @@ describe('numbered marks', () => {
     tool: 'text',
     color: '#f00',
     badge: 10,
+    anchor: { x: 0, y: 0 },
     size: 18,
+    textWidth: 20,
     text: 'hi',
     points: [{ x: 0, y: 0 }]
   }
@@ -202,15 +206,21 @@ describe('numbered marks', () => {
   })
 
   it('should anchor a frame at its top-left corner whichever way it was drawn', () => {
-    const frame = {
-      ...pen([
-        [40, 60],
-        [10, 20]
-      ]),
-      tool: 'rect'
-    } as const
+    expect(
+      anchorOf('rect', [
+        { x: 40, y: 60 },
+        { x: 10, y: 20 }
+      ])
+    ).toEqual({ x: 10, y: 20 })
+  })
 
-    expect(badgeAnchorOf(frame)).toEqual({ x: 10, y: 20 })
+  it('should anchor an arrow at its tail', () => {
+    expect(
+      anchorOf('arrow', [
+        { x: 40, y: 60 },
+        { x: 10, y: 20 }
+      ])
+    ).toEqual({ x: 40, y: 60 })
   })
 
   it('should write ① to ⑳ and bracket the numbers after', () => {

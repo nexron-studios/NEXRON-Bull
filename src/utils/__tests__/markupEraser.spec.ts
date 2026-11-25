@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LineStroke, Point, Stroke } from '../markup'
+import { anchorOf, type LineStroke, type Point, type Stroke } from '../markup'
 import { cutPolyline, eraseAlong, eraseStroke, outlinesOf } from '../markupEraser'
 
 const at = (x: number, y: number): Point => ({ x, y })
@@ -9,6 +9,7 @@ const pen = (points: [number, number][], width = 2): LineStroke => ({
   tool: 'pen',
   color: '#f00',
   badge: 10,
+  anchor: at(...(points[0] ?? [0, 0])),
   width,
   points: points.map(([x, y]) => at(x, y))
 })
@@ -22,6 +23,7 @@ const shape = (
   tool,
   color: '#00f',
   badge: 10,
+  anchor: anchorOf(tool, [at(...from), at(...to)]),
   width: 2,
   points: [at(...from), at(...to)]
 })
@@ -168,13 +170,22 @@ describe('eraseAlong', () => {
 })
 
 describe('eraseStroke on pins and text', () => {
-  const pin: Stroke = { id: 'pin', tool: 'pin', color: '#00f', badge: 10, points: [at(50, 50)] }
+  const pin: Stroke = {
+    id: 'pin',
+    tool: 'pin',
+    color: '#00f',
+    badge: 10,
+    anchor: at(50, 50),
+    points: [at(50, 50)]
+  }
   const text: Stroke = {
     id: 'text',
     tool: 'text',
     color: '#00f',
     badge: 10,
+    anchor: at(0, 0),
     size: 20,
+    textWidth: 50,
     text: 'abcde',
     points: [at(0, 0)]
   }
@@ -189,6 +200,19 @@ describe('eraseStroke on pins and text', () => {
 
   it('should remove a text when the eraser wipes through its middle', () => {
     expect(eraseStroke(text, at(30, 10), at(30, 10), 2)).toEqual([])
+  })
+
+  it('should find the end of a text by its measured width', () => {
+    expect(eraseStroke(text, at(49, 10), at(49, 10), 0.5)).toEqual([])
+    expect(eraseStroke(text, at(56, 10), at(56, 10), 0.5)).toEqual([text])
+  })
+
+  it('should keep the badge of a frame where it was when a piece is cut off', () => {
+    const frame = shape('rect', [40, 30], [0, 0])
+
+    const pieces = eraseStroke(frame, at(20, 0), at(20, 0), 3)
+
+    expect(pieces.map((piece) => piece.anchor)).toEqual(pieces.map(() => at(0, 0)))
   })
 
   it('should keep a text the eraser stays away from', () => {

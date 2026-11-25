@@ -4,7 +4,6 @@ import { ArrowDown } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMarkup } from '@/composables/useMarkup'
@@ -13,7 +12,7 @@ import { useMarkup } from '@/composables/useMarkup'
 // composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
 // While marking, each numbered mark has its note here as well as on the image, so the text and
 // the spot it is about stay one thing; the field below is then for anything else. Nothing is sent
-// from here.
+// from here. A long note wraps and grows up to a few lines, then scrolls.
 const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
 const emit = defineEmits<{ discard: []; apply: [] }>()
 
@@ -39,19 +38,20 @@ const hasNotes = computed(() => isMarking && rows.value.length > 0)
       {{ t('images.comment_title') }}
     </Label>
     <ol v-if="hasNotes" :aria-label="t('images.notes_title')" class="flex flex-col gap-1">
-      <li v-for="row in rows" :key="row.id" class="flex items-center gap-2">
+      <li v-for="row in rows" :key="row.id" class="flex items-start gap-2">
         <span
-          class="grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"
+          class="mt-1 grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"
           :style="{ backgroundColor: row.color }"
           aria-hidden="true"
         >
           {{ row.number }}
         </span>
-        <Input
+        <Textarea
           :model-value="markup.notes.value[row.id] ?? ''"
+          rows="1"
           :aria-label="`${t('images.note_label')} ${row.number}`"
           :placeholder="t('images.note_placeholder')"
-          class="h-7 text-small"
+          class="max-h-24 min-h-7 resize-none py-1 text-small"
           @update:model-value="markup.setNote(row.id, String($event))"
           @blur="markup.settleNote(row.id)"
         />

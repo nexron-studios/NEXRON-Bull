@@ -214,7 +214,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Send { tab, content } => self.send_prompt(&tab, &content).inspect(|()| self.retitle(&tab, &content)),
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
-                self.with_session(&tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
+                self.forget_ask(&tab, &request_id);
                 self.write(&tab, &json!({
                     "type": "control_response",
                     "response": { "subtype": "success", "request_id": request_id, "response": decision },
@@ -442,6 +442,14 @@ impl<W: Write + Send + 'static> Daemon<W> {
         Attach::Done
     }
 
+    /// An answered ask is no longer replayed. Under the tab's reply lock, like everything `attach`
+    /// reads, so an app attaching meanwhile gets the ask either before its answer or not at all.
+    fn forget_ask(&self, tab: &str, request_id: &str) {
+        let gate = self.sessions().get(tab).map(|session| Arc::clone(&session.partial));
+        let _partial = gate.as_deref().map(locked);
+        self.with_session(tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
+    }
+
     fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read, partial: &Mutex<PartialReply>) {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let event: Value = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));
@@ -451,7 +459,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 continue;
             }
             let message = chat::message_from(&event);
-            // From the state an attaching app reads (working, asks) through the emit, see `start`.
+            // From the state an attaching app reads (working, asks) through the emit, see `attach`.
             let mut partial = locked(partial);
             self.with_session(tab, |session| track_turn(session, &event));
             self.observe_limits(tab, &event);

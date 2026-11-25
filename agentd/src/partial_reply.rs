@@ -32,9 +32,10 @@ impl PartialReply {
         match event["type"].as_str() {
             // A subagent streams too; the app shows its text inside the Agent call, not here.
             Some("stream_event") if event["parent_tool_use_id"].is_null() => self.observe_stream(&event["event"]),
-            Some("result") => self.finish_block(),
+            // The turn is over, also an interrupted or failed one: nothing streams until the next
+            // call starts, and an app attaching meanwhile has nothing to replay.
             // `/clear` empties the chat, the app's token estimate with it.
-            Some("conversation_reset") => *self = Self::default(),
+            Some("result" | "conversation_reset") => *self = Self::default(),
             _ => {}
         }
     }
@@ -138,7 +139,16 @@ mod tests {
         assert_eq!(replayed(&partial)["text"], "Welt");
 
         partial.observe(&json!({ "type": "result", "subtype": "success" }));
-        assert_eq!((replayed(&partial)["text"].clone(), replayed(&partial)["chars"].clone()), (json!(""), json!(9)));
+        assert!(partial.replay("t1").is_none());
+    }
+
+    #[test]
+    fn replays_nothing_after_an_interrupted_turn() {
+        let mut partial = PartialReply::default();
+        partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
+        partial.observe(&text_delta("Hal"));
+        partial.observe(&json!({ "type": "result", "subtype": "error_during_execution", "is_error": true }));
+        assert!(partial.replay("t1").is_none());
     }
 
     #[test]

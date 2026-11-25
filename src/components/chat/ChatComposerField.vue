@@ -114,7 +114,7 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
       :aria-controls="menuId ?? undefined"
       :aria-activedescendant="activeOptionId ?? undefined"
       rows="1"
-      class="col-start-1 row-start-1 field-sizing-content max-h-60 min-h-11 w-full resize-none overflow-y-scroll bg-transparent px-4 pt-3 pb-1 text-body outline-none placeholder:text-muted-foreground"
+      class="col-start-1 row-start-1 field-sizing-content max-h-60 min-h-11 w-full resize-none overflow-x-hidden overflow-y-scroll bg-transparent px-4 pt-3 pb-1 text-body outline-none placeholder:text-muted-foreground"
       :class="[
         isShell && 'font-mono',
         hasChip &&

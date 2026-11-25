@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { isTauri } from '@tauri-apps/api/core'
+import { isDesktopApp } from '@/lib/platform'
 import {
   Bell,
   ChevronRight,
@@ -47,7 +47,7 @@ const contextUsage = useContextUsageStore()
 const chatSettings = useChatSettingsStore()
 const { settings, chipLabel } = useSessionSettings(() => tab)
 // Terminals are processes of the app window; the browser has none.
-const hasTerminals = isTauri()
+const hasTerminals = isDesktopApp()
 
 const runLabel = computed(() =>
   t('composer.settings_summary', {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { isTauri } from '@tauri-apps/api/core'
+import { isDesktopApp } from '@/lib/platform'
 import { toast } from 'vue-sonner'
 import { Monitor, Plus, Server, ServerOff, UserRound } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
@@ -35,7 +35,7 @@ const hasOtherMachines = useHasOtherMachines()
 
 const SKELETON_CARDS = 2
 // Logging in runs `claude /login` in a terminal of the app window; a browser has none.
-const canLogIn = isTauri()
+const canLogIn = isDesktopApp()
 
 const askLogin = (machine: Machine, profile: ProfileProps) => {
   if (!canLogIn) return void toast.info(t('terminal.desktop_only'))
@@ -50,26 +50,27 @@ const askLogin = (machine: Machine, profile: ProfileProps) => {
     :description="t('settings.accounts.description')"
     :is-phone
   >
-    <template v-if="!canLogIn" />
-    <NchIconButton
-      v-else-if="isPhone"
-      :label="t('settings.accounts.add')"
-      size="icon-lg"
-      class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
-      aria-haspopup="dialog"
-      @click="isAddOpen = true"
-    >
-      <Plus class="size-5" aria-hidden="true" />
-    </NchIconButton>
-    <Button
-      v-else
-      class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
-      aria-haspopup="dialog"
-      @click="isAddOpen = true"
-    >
-      <Plus class="size-4" aria-hidden="true" />
-      {{ t('settings.accounts.add') }}
-    </Button>
+    <template v-if="canLogIn">
+      <NchIconButton
+        v-if="isPhone"
+        :label="t('settings.accounts.add')"
+        size="icon-lg"
+        class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
+        aria-haspopup="dialog"
+        @click="isAddOpen = true"
+      >
+        <Plus class="size-5" aria-hidden="true" />
+      </NchIconButton>
+      <Button
+        v-else
+        class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
+        aria-haspopup="dialog"
+        @click="isAddOpen = true"
+      >
+        <Plus class="size-4" aria-hidden="true" />
+        {{ t('settings.accounts.add') }}
+      </Button>
+    </template>
   </SettingsSectionHeader>
 
   <!-- Each machine is a column once two fit, so a host's accounts show without scrolling past

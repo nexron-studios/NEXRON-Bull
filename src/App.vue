@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { isTauri } from '@tauri-apps/api/core'
 import 'vue-sonner/style.css'
+import { isDesktopApp } from '@/lib/platform'
 import { bridgeService } from '@/api/services/bridge.service'
 import BridgeTokenScreen from '@/components/bridge/BridgeTokenScreen.vue'
 import NchCopyHint from '@/components/common/NchCopyHint.vue'
@@ -17,7 +17,7 @@ useCopyOnSelect()
 
 // A browser reaches agentd through the bridge, which first wants this device's token.
 const needsToken = computed(() => {
-  if (isTauri()) return false
+  if (isDesktopApp()) return false
   const { status, isSigningIn } = bridgeService.state
   return isSigningIn || status === 'needs_token' || status === 'rejected'
 })

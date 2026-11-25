@@ -1,4 +1,4 @@
-import { isTauri } from '@tauri-apps/api/core'
+import { isDesktopApp } from '@/lib/platform'
 import { agentdService, type Machine } from '@/api/services/agentd.service'
 import { adoptedTabsOf } from '@/utils/adoptedTabs'
 import type { SavedTab } from '@/utils/chatTab'
@@ -25,7 +25,7 @@ export const runningTabsOn = async (
   machine: Machine,
   knownIds: ReadonlySet<string>
 ): Promise<RunningTabs> => {
-  if (isTauri()) return runningOnly(machine)
+  if (isDesktopApp()) return runningOnly(machine)
   try {
     const { tabs: infos } = await agentdService.ask<'tabs'>({ op: 'tabs' }, machine)
     return {

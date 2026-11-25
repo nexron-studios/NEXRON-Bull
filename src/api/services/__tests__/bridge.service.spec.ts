@@ -102,7 +102,7 @@ describe('bridgeService', () => {
       machine: null,
       line: '{"op":"tabs","id":1}'
     })
-    await expect(sent).resolves.toBe(1)
+    await expect(sent).resolves.toBe(7)
   })
 
   it('should end every connection of a lost socket under the ids the app knows', async () => {
@@ -117,28 +117,19 @@ describe('bridgeService', () => {
     socket.drop(1006)
 
     expect(lines.map((line) => JSON.parse(line))).toEqual([
-      { type: 'disconnected', machine: 'main-pc', connection: 1 }
+      { type: 'disconnected', machine: 'main-pc', connection: 3 }
     ])
     expect(service.state.status).toBe('offline')
   })
 
-  it('should count connections on across a new socket, though the bridge starts from 1 again', async () => {
-    const { service, socket } = await signedIn()
-    const first = service.request('{"op":"hello"}', null)
-    await vi.waitFor(() => expect(socket.sent).toHaveLength(2))
-    socket.receive({ type: 'sent', seq: 1, connection: 1 })
-    await first
-    socket.drop(1006)
+  it('should tell the attach every machine the bridge reaches, this one first', async () => {
+    const { service } = await signedIn()
+    const told: (string | null)[][] = []
 
-    await vi.advanceTimersByTimeAsync(1000)
-    const next = FakeSocket.last as FakeSocket
-    next.open()
-    next.receive({ type: 'ready', machines: [] })
-    const second = service.request('{"op":"hello"}', null)
-    await vi.waitFor(() => expect(next.sent).toHaveLength(2))
-    next.receive({ type: 'sent', seq: 2, connection: 1 })
+    service.onReady((machines) => told.push(machines))
+    await Promise.resolve()
 
-    await expect(second).resolves.toBe(2)
+    expect(told).toEqual([[null, 'main-pc']])
   })
 
   it('should forget a refused token and ask for another', async () => {

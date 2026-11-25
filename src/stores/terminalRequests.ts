@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { isTauri } from '@tauri-apps/api/core'
 import { toast } from 'vue-sonner'
+import { isDesktopApp } from '@/lib/platform'
 import i18n from '@/i18n'
 
 export interface TerminalRequest {
@@ -28,7 +28,7 @@ export const useTerminalRequestStore = defineStore('terminalRequests', () => {
 
   const request = (terminal: TerminalRequest) => {
     // Terminals are processes of the app window: a browser (the phone) says where to go instead.
-    if (!isTauri()) return void toast.info(i18n.global.t('terminal.desktop_only'))
+    if (!isDesktopApp()) return void toast.info(i18n.global.t('terminal.desktop_only'))
     pending.value = [...pending.value, terminal]
   }
 

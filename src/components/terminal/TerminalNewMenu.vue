@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { isTauri } from '@tauri-apps/api/core'
+import { isDesktopApp } from '@/lib/platform'
 import { MessagesSquare, Monitor, Plus, Server, SquareTerminal } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'
@@ -31,7 +31,7 @@ const { labelOf } = useShortcutLabels()
 const store = useTerminalStore()
 const { data: hosts } = useMachines()
 // Terminals are processes of the app window; a browser only gets the new chat.
-const hasTerminals = isTauri()
+const hasTerminals = isDesktopApp()
 
 const hereLabel = computed(() => {
   const folder = folderNameOf(here.cwd)

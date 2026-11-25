@@ -3,6 +3,7 @@ import { computed, useTemplateRef, watch, type Component } from 'vue'
 import { ChevronLeft } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import { offeredSettingsSections } from '@/lib/platform'
 import NchScrollEdge from '@/components/common/NchScrollEdge.vue'
 import SettingsAccounts from '@/components/settings/SettingsAccounts.vue'
 import SettingsAppearance from '@/components/settings/SettingsAppearance.vue'
@@ -14,12 +15,7 @@ import SettingsPhoneList from '@/components/settings/SettingsPhoneList.vue'
 import SettingsTerminal from '@/components/settings/SettingsTerminal.vue'
 import { useScrollEdges } from '@/composables/useScrollEdges'
 import { useIsPhone } from '@/composables/useViewport'
-import { isTauri } from '@tauri-apps/api/core'
-import {
-  offeredSettingsSectionsOf,
-  shownSettingsSectionOf,
-  type SettingsSection
-} from '@/utils/settings'
+import { shownSettingsSectionOf, type SettingsSection } from '@/utils/settings'
 
 // One page with its sections on the left (Figma "22"); a phone lists them and opens each as its
 // own screen (Figma "M22", "M23"). The section is in the URL, so the back gesture returns to the list.
@@ -41,7 +37,7 @@ const SECTION_COMPONENT: Record<SettingsSection, Component> = {
 }
 
 // A browser has no machine checks and no terminals; their links lead to the first section there.
-const offered = offeredSettingsSectionsOf(isTauri())
+const offered = offeredSettingsSections()
 const section = computed(() => shownSettingsSectionOf(route.params.section, isPhone.value, offered))
 // Every section reuses this page and its scroll area, and the router only resets the window's
 // scroll: without this a section would open where the last one was left.

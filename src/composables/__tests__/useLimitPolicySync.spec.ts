@@ -14,7 +14,7 @@ const { ask, machines, client } = vi.hoisted(() => ({
 
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
-  agentdService: { ask, onEvent: () => () => {} }
+  agentdService: { ask, onEvent: () => () => {}, onReady: () => () => {} }
 }))
 vi.mock('@/api/services/machine.service', () => ({ machineService: { list: machines } }))
 vi.mock('@tanstack/vue-query', async (importOriginal) => ({

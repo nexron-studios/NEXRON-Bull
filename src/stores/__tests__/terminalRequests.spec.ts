@@ -3,22 +3,19 @@ import { createPinia, setActivePinia } from 'pinia'
 import i18n from '@/i18n'
 import { useTerminalRequestStore } from '../terminalRequests'
 
-const { runtime, info } = vi.hoisted(() => ({ runtime: { isTauri: true }, info: vi.fn() }))
+const { runtime, info } = vi.hoisted(() => ({ runtime: { isDesktopApp: true }, info: vi.fn() }))
 
-vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
-  isTauri: () => runtime.isTauri
-}))
+vi.mock('@/lib/platform', () => ({ isDesktopApp: () => runtime.isDesktopApp }))
 vi.mock('vue-sonner', () => ({ toast: { info } }))
 
 describe('useTerminalRequestStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    runtime.isTauri = true
+    runtime.isDesktopApp = true
   })
 
   it('should say in a browser that terminals need the app, and queue nothing', () => {
-    runtime.isTauri = false
+    runtime.isDesktopApp = false
     i18n.global.locale.value = 'de'
     const store = useTerminalRequestStore()
 

@@ -7,7 +7,13 @@ import { newTab } from '@/utils/chatTab'
 
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
-  agentdService: { send: vi.fn(), ask: vi.fn(), waitFor: vi.fn(), onEvent: () => () => {} }
+  agentdService: {
+    send: vi.fn(),
+    ask: vi.fn(),
+    waitFor: vi.fn(),
+    onEvent: () => () => {},
+    onReady: () => () => {}
+  }
 }))
 
 const tab = newTab({

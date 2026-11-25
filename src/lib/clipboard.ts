@@ -1,6 +1,6 @@
-import { isTauri } from '@tauri-apps/api/core'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { toast } from 'vue-sonner'
+import { isDesktopApp } from '@/lib/platform'
 import i18n from '@/i18n'
 import { handleError } from '@/lib/error'
 
@@ -13,7 +13,7 @@ import { handleError } from '@/lib/error'
 export const writeClipboard = (text: string): Promise<boolean> =>
   // Inside the chain: outside a secure context the browser has no `navigator.clipboard` at all.
   Promise.resolve()
-    .then(() => (isTauri() ? writeText(text) : navigator.clipboard.writeText(text)))
+    .then(() => (isDesktopApp() ? writeText(text) : navigator.clipboard.writeText(text)))
     .then(() => true)
     .catch((error: unknown) => {
       handleError(error)

@@ -1,6 +1,8 @@
 import { readonly, ref } from 'vue'
-// A cycle with agentd.service, harmless: the error class is only used once requests run.
-import { AgentdDisconnectedError, type Machine } from '@/api/services/agentd.service'
+import { CLOSE_CODE, SOCKET_PATH, type BridgeMessage, type ClientMessage } from '@bridge/protocol'
+import { AgentdDisconnectedError, type Machine } from '@/api/agentdErrors'
+import type { AgentdTransport } from '@/api/agentdTransport'
+import { parseBridgeMessage } from '@/utils/bridgeMessage'
 
 /**
  * The browser's way to agentd: one WebSocket to the bridge (`bridge/`), which runs an
@@ -18,53 +20,8 @@ export const bridgeStatusList = [
 export type BridgeStatus = (typeof bridgeStatusList)[number]
 
 const TOKEN_KEY = 'bull.bridge.token'
-const SOCKET_PATH = '/ws'
-/**
- * The bridge's close code for a token it does not know. Its other codes (no token in time, the
- * token file unreadable) say nothing about the token: the app keeps it and tries again.
- */
-const UNAUTHORIZED = 4401
 const RETRY_FIRST_MS = 1000
 const RETRY_MAX_MS = 30_000
-
-type BridgeMessage =
-  | { type: 'ready'; machines: string[] }
-  | { type: 'sent'; seq: number; connection: number }
-  | { type: 'failed'; seq: number; message: string }
-  | { type: 'event'; line: string }
-  | { type: 'disconnected'; machine: Machine; connection: number }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
-
-const isCount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value)
-
-const isMachine = (value: unknown): value is Machine => value === null || typeof value === 'string'
-
-/**
- * The one place a message from the bridge is checked; `null` for one this app cannot read or does
- * not know (a newer bridge may send more), which is then left out.
- */
-export const parseBridgeMessage = (data: string): BridgeMessage | null => {
-  let value: unknown
-  try {
-    value = JSON.parse(data)
-  } catch {
-    return null
-  }
-  if (!isRecord(value)) return null
-  const { type, seq, connection, machine, machines, message, line } = value
-  if (type === 'ready' && Array.isArray(machines) && machines.every((m) => typeof m === 'string'))
-    return { type, machines }
-  if (type === 'sent' && isCount(seq) && isCount(connection)) return { type, seq, connection }
-  if (type === 'failed' && isCount(seq) && typeof message === 'string')
-    return { type, seq, message }
-  if (type === 'event' && typeof line === 'string') return { type, line }
-  if (type === 'disconnected' && isMachine(machine) && isCount(connection))
-    return { type, machine, connection }
-  return null
-}
 
 interface PendingSend {
   machine: Machine
@@ -80,33 +37,23 @@ const isSigningIn = ref(false)
 let socket: WebSocket | null = null
 let nextSeq = 1
 const pendingSends = new Map<number, PendingSend>()
-/**
- * The bridge's connection ids of this socket → the app's own. The bridge counts from 1 again
- * after a restart, and the app remembers ended connections by id, so it numbers them itself.
- */
-const connections = new Map<number, { id: number; machine: Machine }>()
-let lastConnection = 0
+/** The open connections of this socket and their machine; all end with it. */
+const connections = new Map<number, Machine>()
 let readyWaiters: (() => void)[] = []
 const lineListeners = new Set<(line: string) => void>()
-const readyListeners = new Set<(machines: string[]) => void>()
+const readyListeners = new Set<(machines: Machine[]) => void>()
 let retryDelay = RETRY_FIRST_MS
 let retryTimer: ReturnType<typeof setTimeout> | undefined
 
 const socketUrl = () =>
   `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${SOCKET_PATH}`
 
+const sendToBridge = (message: ClientMessage) => socket?.send(JSON.stringify(message))
+
 const emitLine = (line: string) => lineListeners.forEach((listener) => listener(line))
 
-const lost = (machine: Machine, id: number) =>
-  emitLine(JSON.stringify({ type: 'disconnected', machine, connection: id }))
-
-const ownConnection = (bridgeId: number, machine: Machine): number => {
-  const known = connections.get(bridgeId)
-  if (known) return known.id
-  const id = ++lastConnection
-  connections.set(bridgeId, { id, machine })
-  return id
-}
+const lost = (machine: Machine, connection: number) =>
+  emitLine(JSON.stringify({ type: 'disconnected', machine, connection }))
 
 const onMessage = (message: BridgeMessage) => {
   switch (message.type) {
@@ -116,13 +63,14 @@ const onMessage = (message: BridgeMessage) => {
       isSigningIn.value = false
       retryDelay = RETRY_FIRST_MS
       readyWaiters.splice(0).forEach((wake) => wake())
-      readyListeners.forEach((listener) => listener(message.machines))
+      readyListeners.forEach((listener) => listener([null, ...message.machines]))
       return
     case 'sent': {
       const waiter = pendingSends.get(message.seq)
       if (!waiter) return
       pendingSends.delete(message.seq)
-      waiter.resolve(ownConnection(message.connection, waiter.machine))
+      connections.set(message.connection, waiter.machine)
+      waiter.resolve(message.connection)
       return
     }
     case 'failed': {
@@ -132,11 +80,9 @@ const onMessage = (message: BridgeMessage) => {
     }
     case 'event':
       return emitLine(message.line)
-    case 'disconnected': {
-      const id = ownConnection(message.connection, message.machine)
+    case 'disconnected':
       connections.delete(message.connection)
-      return lost(message.machine, id)
-    }
+      return lost(message.machine, message.connection)
     default: {
       const unhandled: never = message
       throw new Error(`Unhandled bridge message: ${JSON.stringify(unhandled)}`)
@@ -151,10 +97,12 @@ const onClose = (code: number) => {
   for (const waiter of pendingSends.values())
     waiter.reject(new AgentdDisconnectedError(waiter.machine))
   pendingSends.clear()
-  const ended = [...connections.values()]
+  const ended = [...connections]
   connections.clear()
-  ended.forEach(({ machine, id }) => lost(machine, id))
-  if (code === UNAUTHORIZED) {
+  ended.forEach(([connection, machine]) => lost(machine, connection))
+  // Only this code means the token is wrong; the others (no token in time, the bridge cannot
+  // read its token file) say nothing about it, so the app keeps it and tries again.
+  if (code === CLOSE_CODE.unauthorized) {
     isSigningIn.value = false
     localStorage.removeItem(TOKEN_KEY)
     status.value = 'rejected'
@@ -179,7 +127,7 @@ const connect = () => {
   const opened = new WebSocket(socketUrl())
   socket = opened
   // The token goes in the first message, never in the URL or a cookie another page could use.
-  opened.onopen = () => opened.send(JSON.stringify({ type: 'auth', token }))
+  opened.onopen = () => sendToBridge({ type: 'auth', token })
   opened.onmessage = ({ data }) => {
     const message = parseBridgeMessage(String(data))
     if (message) onMessage(message)
@@ -187,10 +135,10 @@ const connect = () => {
   opened.onclose = ({ code }) => onClose(code)
 }
 
+const isReady = () => status.value === 'ready' && socket?.readyState === WebSocket.OPEN
+
 const whenReady = (): Promise<void> =>
-  status.value === 'ready' && socket?.readyState === WebSocket.OPEN
-    ? Promise.resolve()
-    : new Promise((resolve) => readyWaiters.push(resolve))
+  isReady() ? Promise.resolve() : new Promise((resolve) => readyWaiters.push(resolve))
 
 // A phone suspends the page; once it is back the socket should not wait out the backoff.
 const reconnectNow = () => {
@@ -226,18 +174,19 @@ export const bridgeService = {
     const sent = new Promise<number>((resolve, reject) =>
       pendingSends.set(seq, { machine, resolve, reject })
     )
-    socket?.send(JSON.stringify({ type: 'request', seq, machine, line }))
+    sendToBridge({ type: 'request', seq, machine, line })
     return sent
   },
 
-  onLine: (listener: (line: string) => void): (() => void) => {
+  onLine: async (listener: (line: string) => void): Promise<() => void> => {
     lineListeners.add(listener)
     return () => lineListeners.delete(listener)
   },
 
-  /** Called each time the socket is (again) signed in, with the machines the bridge reaches. */
-  onReady: (listener: (machines: string[]) => void): (() => void) => {
+  /** Each time the socket is (again) signed in, and at once when it is now; see the transport. */
+  onReady: (listener: (machines: Machine[]) => void): (() => void) => {
     readyListeners.add(listener)
+    if (isReady()) queueMicrotask(() => listener([null, ...machines.value]))
     return () => readyListeners.delete(listener)
   }
-}
+} satisfies AgentdTransport & Record<string, unknown>

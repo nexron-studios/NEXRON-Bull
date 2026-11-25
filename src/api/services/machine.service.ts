@@ -1,5 +1,6 @@
-import { invoke, isTauri } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { isDesktopApp } from '@/lib/platform'
 import { bridgeService } from '@/api/services/bridge.service'
 import type {
   InstallError,
@@ -30,7 +31,7 @@ export const machineService = {
    * the bridge's list: the machines it reaches besides its own, by their ssh alias there.
    */
   list: async (): Promise<MachineEntry[]> => {
-    if (isTauri()) return invoke<MachineEntry[]>('list_machines')
+    if (isDesktopApp()) return invoke<MachineEntry[]>('list_machines')
     await bridgeService.whenReady()
     return bridgeService.state.machines.map((name) => ({ name, host: name }))
   },

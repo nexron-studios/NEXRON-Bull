@@ -14,7 +14,13 @@ const bridgeUrl = process.env.BULL_BRIDGE_URL ?? 'ws://127.0.0.1:3060'
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // What the app and the phone bridge say over the socket, shared with `bridge/`.
+      '@bridge': fileURLToPath(new URL('./bridge/src', import.meta.url))
+    }
+  },
   clearScreen: false,
   server: {
     port: 1460,

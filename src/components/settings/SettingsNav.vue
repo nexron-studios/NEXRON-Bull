@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { offeredSettingsSections } from '@/lib/platform'
 import SettingsAboutCard from '@/components/settings/SettingsAboutCard.vue'
-import { isTauri } from '@tauri-apps/api/core'
-import {
-  offeredSettingsSectionsOf,
-  SETTINGS_SECTION_ICON,
-  type SettingsSection
-} from '@/utils/settings'
+import { SETTINGS_SECTION_ICON, type SettingsSection } from '@/utils/settings'
 
 // The sections of the settings page, as links: each has its own URL (Figma "22"). The current
 // one sits on a marker of its own, so a section change can glide it to the next link while the
@@ -14,7 +10,7 @@ import {
 defineProps<{ current: SettingsSection }>()
 
 const { t } = useI18n()
-const sections = offeredSettingsSectionsOf(isTauri())
+const sections = offeredSettingsSections()
 </script>
 
 <template>

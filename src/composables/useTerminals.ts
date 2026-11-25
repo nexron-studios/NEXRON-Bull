@@ -1,6 +1,6 @@
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { isTauri } from '@tauri-apps/api/core'
+import { isDesktopApp } from '@/lib/platform'
 import { useTerminalSessions } from '@/composables/useTerminalSessions'
 import { handleError } from '@/lib/error'
 import { prepareTerminals } from '@/lib/terminalSession'
@@ -23,7 +23,7 @@ export const useTerminals = () => {
   const { disposeExcept, setFontSize, fontSize } = useTerminalSessions()
   // Drawer shells are not saved: what a previous page load left running ends now, not when the
   // next terminal happens to start. A browser has no shells to end.
-  if (isTauri()) void prepareTerminals().catch(handleError)
+  if (isDesktopApp()) void prepareTerminals().catch(handleError)
 
   /** Where "Terminal here" opens: the shown chat's folder on its machine, else home here. */
   const here = computed<TerminalRequest>(() =>

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runningTabsOn } from '../runningTabs'
 
 const { ask } = vi.hoisted(() => ({ ask: vi.fn() }))
-vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false }))
+vi.mock('@/lib/platform', () => ({ isDesktopApp: () => false }))
 vi.mock('@/api/services/agentd.service', () => ({ agentdService: { ask } }))
 
 describe('runningTabsOn in a browser', () => {

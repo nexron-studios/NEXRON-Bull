@@ -921,7 +921,7 @@ export default {
         },
         offline: {
           title: '{machine} antwortet nicht',
-          hint: 'Ist der Rechner an und im selben Netz oder Tailnet? Dort muss der Windows-Dienst „OpenSSH SSH Server“ laufen.'
+          hint: 'Ist der Rechner an und im selben Netz oder Tailnet? Dort muss ein SSH-Server laufen: unter Windows der Dienst „OpenSSH SSH Server“, am Mac „Entfernte Anmeldung“ in den Systemeinstellungen, unter Linux sshd.'
         },
         auth_failed: {
           title: '{machine} kennt deinen Schlüssel noch nicht',
@@ -929,7 +929,7 @@ export default {
         },
         host_key_changed: {
           title: '{machine} meldet sich mit einem anderen Schlüssel',
-          hint: 'Das passiert nach einer Neuinstallation von Windows. Hast du nichts geändert, verbinde dich nicht. Sonst vergiss den alten Schlüssel und prüf erneut.'
+          hint: 'Das passiert nach einer Neuinstallation des Systems. Hast du nichts geändert, verbinde dich nicht. Sonst vergiss den alten Schlüssel und prüf erneut.'
         },
         host_key_unknown: {
           title: 'Bull kennt {machine} noch nicht',
@@ -940,12 +940,12 @@ export default {
           hint: 'Die Verbindung steht. Bull kopiert agentd hinüber, in den Ordner .nexron-chat im Benutzerordner dort.'
         },
         agentd_blocked: {
-          title: 'Windows startet agentd auf {machine} nicht',
-          hint: 'Oft blockiert Smart App Control eine neue, unsignierte Datei. Ein frisch kopiertes agentd hilft manchmal, sonst muss es dort erlaubt werden.'
+          title: '{machine} startet agentd nicht',
+          hint: 'Unter Windows blockiert oft Smart App Control eine neue, unsignierte Datei, am Mac und unter Linux passt es manchmal nicht zum Prozessor. Ein frisch aufgespieltes agentd hilft oft, sonst muss es dort erlaubt werden.'
         },
-        not_windows: {
-          title: '{machine} ist kein Windows-Rechner',
-          hint: 'Bull verbindet sich bisher nur mit Windows. Mac und Linux kommen später.'
+        unsupported_system: {
+          title: 'Bull kennt das System von {machine} nicht',
+          hint: 'Bull verbindet sich mit Windows, macOS und Linux. Dieser Rechner läuft mit etwas anderem oder bietet keine Shell an.'
         }
       },
       assistant: {
@@ -953,7 +953,7 @@ export default {
         edit_title: 'Verbindung zu {machine}',
         edit_description: 'Adresse, Benutzer und Port, mit denen Bull sich per SSH anmeldet.',
         description:
-          'Bull meldet sich per SSH bei einem Windows-Rechner an und startet Claude dort.',
+          'Bull meldet sich per SSH bei einem Windows-, Mac- oder Linux-Rechner an und startet Claude dort.',
         suggestions: 'Aus deiner SSH-Konfiguration',
         host: 'Adresse',
         host_hint: 'Name im Netz, IP-Adresse oder ein Host aus ~/.ssh/config.',
@@ -989,6 +989,8 @@ export default {
           open_terminal: 'Terminal öffnen',
           paste: 'Füge dort diese Zeile ein und drück Enter:',
           again: 'Schließ das Terminal und prüf die Verbindung erneut.',
+          unix: 'Der Rechner ist ein Mac oder Linux-Rechner',
+          unix_hint: 'Dann legt die Zeile den Schlüssel in ~/.ssh/authorized_keys ab.',
           admin: 'Das Konto dort ist Administrator',
           admin_hint:
             'Für Administratoren liest Windows den Schlüssel nur aus C:\\ProgramData\\ssh\\administrators_authorized_keys. Die Zeile legt ihn dort ab und setzt die Rechte, die Windows verlangt.',
@@ -1012,9 +1014,13 @@ export default {
             'agentd auf {machine} sagt nicht, ob dort noch Chats laufen. Damit keiner abbricht, bleibt es, wie es ist. Versuch es gleich noch einmal.',
           copy_failed:
             'Das Kopieren hat nicht geklappt. Läuft agentd dort noch aus einem anderen Bull?',
+          download_failed:
+            '{machine} konnte agentd nicht laden. Bull lädt es dort aus dem GitHub-Release dieser Bull-Version. Ist der Rechner im Internet, und ist das Release mit agentd schon veröffentlicht? Ein Entwurf liefert noch nichts aus. Adresse: {url}',
+          own_agentd_missing:
+            'Bull findet sein eigenes agentd nicht und kann es deshalb nicht hinüberkopieren. Installier Bull neu.',
           invalid: 'Mit diesen Angaben kann Bull sich nicht verbinden.'
         },
-        old_kept: 'Die vorige Fassung liegt dort als agentd.old.exe daneben.',
+        old_kept: 'Die vorige Fassung liegt dort als {file} daneben.',
         done_title: '{machine} ist verbunden',
         done_hint:
           'agentd {version} antwortet. Bei einer neuen Session wählst du den Rechner jetzt aus. Claude braucht dort ein angemeldetes Konto.',

@@ -12,27 +12,15 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::connections::{Connections, home_folder, lock};
-use crate::machine_setup::{self, ProbeReason};
+use crate::machine_os::MachineOs;
+use crate::machine_setup::{self, Probe, ProbeReason};
+use crate::ssh_config::ssh_config_hosts;
 
 const DATA_FOLDER: &str = ".nexron-chat";
 const STORE_FILE: &str = "machines.json";
 const MAX_NAME_CHARS: usize = 40;
 /// The keys ssh tries by default, in its order.
 const PUBLIC_KEY_FILES: [&str; 3] = ["id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub"];
-/// The login GitHub, GitLab and other Git hosts expect over ssh.
-const GIT_USER: &str = "git";
-/// Their own guides set up a `Host` for these without a `User` line, the user sits in the clone URL.
-const GIT_SERVICES: [&str; 7] = [
-    "github.com",
-    "ssh.github.com",
-    "gitlab.com",
-    "altssh.gitlab.com",
-    "bitbucket.org",
-    "ssh.dev.azure.com",
-    "codeberg.org",
-];
-
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MachineEntry {
     pub name: String,
@@ -42,9 +30,24 @@ pub struct MachineEntry {
     pub user: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
+    /// What the last check found; see `system`. Only the backend sets it: `validated` drops what
+    /// the frontend sends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<MachineOs>,
 }
 
 impl MachineEntry {
+    /// A machine never checked counts as Windows: every machine listed before Bull knew other
+    /// systems was one.
+    pub fn system(&self) -> MachineOs {
+        self.os.unwrap_or(MachineOs::Windows)
+    }
+
+    /// A `~/.ssh/config` host as a machine of the same name.
+    fn for_host(host: String) -> Self {
+        Self { name: host.clone(), host, user: None, port: None, os: None }
+    }
+
     /// `user@host`, or the host alone so `~/.ssh/config` supplies the user.
     pub fn destination(&self) -> String {
         match &self.user {
@@ -127,7 +130,7 @@ impl MachineStore {
         if let Some(entries) = load()? {
             return Ok(entries);
         }
-        let entries = migrate(ssh_config_hosts(), |entry| machine_setup::probe(entry, false).reason);
+        let entries = migrate(ssh_config_hosts(), |entry| machine_setup::probe(entry, false));
         save(&entries)?;
         Ok(entries)
     }
@@ -139,6 +142,29 @@ impl MachineStore {
         let entries = put(load()?.unwrap_or_default(), entry, replacing)?;
         save(&entries)?;
         Ok(entries)
+    }
+
+    /// Remembers what a check found the machine to run, for its next connection. Only for the
+    /// entry that still has the checked host: the user may have changed it meanwhile. A list that
+    /// cannot be written must not turn the check's result into an error; the next check finds the
+    /// system again.
+    pub fn remember_os(&self, checked: &MachineEntry, os: MachineOs) {
+        if let Err(err) = self.record_os(checked, os) {
+            eprintln!("warning: cannot remember the system of {}: {err}", checked.name);
+        }
+    }
+
+    fn record_os(&self, checked: &MachineEntry, os: MachineOs) -> Result<(), MachinesError> {
+        let _guard = lock(&self.0);
+        let mut entries = load()?.unwrap_or_default();
+        let Some(listed) = entries.iter_mut().find(|entry| entry.name == checked.name && entry.host == checked.host) else {
+            return Ok(());
+        };
+        if listed.os == Some(os) {
+            return Ok(());
+        }
+        listed.os = Some(os);
+        save(&entries)
     }
 
     pub fn remove(&self, name: &str) -> Result<Vec<MachineEntry>, MachinesError> {
@@ -159,35 +185,39 @@ fn put(mut entries: Vec<MachineEntry>, entry: MachineEntry, replacing: Option<&s
         return Err(MachinesError::Taken(entry.name));
     }
     match at {
-        Some(index) => entries[index] = entry,
+        Some(index) => {
+            // The form knows no system; the same host still runs the one checked.
+            let os = entries[index].os.filter(|_| entries[index].host == entry.host);
+            entries[index] = MachineEntry { os, ..entry };
+        }
         None => entries.push(entry),
     }
     Ok(entries)
 }
 
 /// Before this list, every `~/.ssh/config` host was a machine. Each one is asked once, in
-/// parallel, and kept unless it proves it is none: refused login, no agentd, not Windows, a host
+/// parallel, and kept unless it proves it is none: refused login, no agentd, no system Bull runs on, a host
 /// ssh never connected to (`github.com` usually). An offline host stays, it may be the server that
 /// is off right now, and so does one whose key changed: its card says how to fix that. Without
 /// accepting new host keys, so the user's `known_hosts` stays as it is.
-fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> ProbeReason + Sync) -> Vec<MachineEntry> {
-    let candidates: Vec<MachineEntry> =
-        hosts.into_iter().map(|host| MachineEntry { name: host.clone(), host, user: None, port: None }).collect();
-    let reasons: Vec<ProbeReason> = thread::scope(|scope| {
+fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> Probe + Sync) -> Vec<MachineEntry> {
+    let candidates: Vec<MachineEntry> = hosts.into_iter().map(MachineEntry::for_host).collect();
+    let probes: Vec<Option<Probe>> = thread::scope(|scope| {
         let probe = &probe;
         let asks: Vec<_> = candidates.iter().map(|entry| scope.spawn(move || probe(entry))).collect();
-        asks.into_iter().map(|ask| ask.join().unwrap_or(ProbeReason::Offline)).collect()
+        asks.into_iter().map(|ask| ask.join().ok()).collect()
     });
     candidates
         .into_iter()
-        .zip(reasons)
-        .filter(|(_, reason)| {
-            matches!(
+        .zip(probes)
+        .filter_map(|(entry, probe)| {
+            let (reason, os) = probe.map_or((ProbeReason::Offline, None), |probe| (probe.reason, probe.os));
+            let is_kept = matches!(
                 reason,
                 ProbeReason::Ok | ProbeReason::Offline | ProbeReason::AgentdBlocked | ProbeReason::HostKeyChanged
-            )
+            );
+            is_kept.then_some(MachineEntry { os, ..entry })
         })
-        .map(|(entry, _)| entry)
         .collect()
 }
 
@@ -199,7 +229,7 @@ pub fn resolve(name: &str) -> Result<MachineEntry, MachinesError> {
         Some(entry) => Ok(entry),
         None => {
             check_host(name)?;
-            Ok(MachineEntry { name: name.to_string(), host: name.to_string(), user: None, port: None })
+            Ok(MachineEntry::for_host(name.to_string()))
         }
     }
 }
@@ -213,7 +243,8 @@ pub fn suggestions() -> Result<Vec<String>, MachinesError> {
         .collect())
 }
 
-/// Everything here ends up on ssh's command line: a leading `-` would turn into an option.
+/// Everything here ends up on ssh's command line: a leading `-` would turn into an option. The
+/// system is left out: only a check sets it.
 pub fn validated(entry: MachineEntry) -> Result<MachineEntry, MachinesError> {
     let name = entry.name.trim().to_string();
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS || name.chars().any(char::is_control) {
@@ -230,7 +261,7 @@ pub fn validated(entry: MachineEntry) -> Result<MachineEntry, MachinesError> {
     if entry.port == Some(0) {
         return Err(MachinesError::Invalid("port"));
     }
-    Ok(MachineEntry { name, host, user, port: entry.port })
+    Ok(MachineEntry { name, host, user, port: entry.port, os: None })
 }
 
 fn check_host(host: &str) -> Result<(), MachinesError> {
@@ -239,84 +270,6 @@ fn check_host(host: &str) -> Result<(), MachinesError> {
         return Err(MachinesError::Invalid("host"));
     }
     Ok(())
-}
-
-fn ssh_config_hosts() -> Vec<String> {
-    let config = home_folder().and_then(|home| fs::read_to_string(home.join(".ssh").join("config")).ok());
-    config.map(|text| hosts_in(&text)).unwrap_or_default()
-}
-
-/// One `Host` section of `~/.ssh/config`, with the options that tell a Git host.
-#[derive(Default)]
-struct HostBlock {
-    aliases: Vec<String>,
-    user: Option<String>,
-    host_name: Option<String>,
-}
-
-impl HostBlock {
-    /// Logs in as `git` or reaches a known Git service. Only the section's own options count; a
-    /// `User git` in `Host *` or above the first section is not read.
-    fn is_git_host(&self) -> bool {
-        self.user.as_deref().is_some_and(|user| user.eq_ignore_ascii_case(GIT_USER))
-            || self.host_name.as_deref().is_some_and(is_git_service)
-    }
-}
-
-/// Host aliases from `~/.ssh/config`, without wildcard patterns and without Git hosts (github.com,
-/// gitlab.com, any `User git`): those serve repositories, they are no machine to connect.
-fn hosts_in(config: &str) -> Vec<String> {
-    host_blocks(config)
-        .into_iter()
-        .filter(|block| !block.is_git_host())
-        .flat_map(|block| block.aliases)
-        .filter(|alias| !is_git_service(alias))
-        .collect()
-}
-
-/// Every `Host` or `Match` line opens a section that runs to the next one. Lines before the first
-/// and `Match` sections give no aliases. As in ssh, the first value of an option wins.
-fn host_blocks(config: &str) -> Vec<HostBlock> {
-    let mut blocks = vec![HostBlock::default()];
-    for (key, value) in config.lines().filter_map(keyword_of) {
-        let value = value.trim_matches('"');
-        if key.eq_ignore_ascii_case("host") || key.eq_ignore_ascii_case("match") {
-            let aliases = if key.eq_ignore_ascii_case("host") { aliases_in(value) } else { Vec::new() };
-            blocks.push(HostBlock { aliases, ..HostBlock::default() });
-            continue;
-        }
-        let Some(block) = blocks.last_mut() else { continue };
-        let option = match key.to_ascii_lowercase().as_str() {
-            "user" => &mut block.user,
-            "hostname" => &mut block.host_name,
-            _ => continue,
-        };
-        option.get_or_insert_with(|| value.to_string());
-    }
-    blocks
-}
-
-fn is_git_service(host: &str) -> bool {
-    GIT_SERVICES.iter().any(|service| host.eq_ignore_ascii_case(service))
-}
-
-/// `Keyword value` or `Keyword=value`, as ssh reads it; `None` for blank lines and comments.
-fn keyword_of(line: &str) -> Option<(&str, &str)> {
-    let line = line.trim();
-    if line.starts_with('#') {
-        return None;
-    }
-    let (key, value) = line.split_once(|c: char| c.is_whitespace() || c == '=')?;
-    Some((key, value.trim_start_matches(|c: char| c.is_whitespace() || c == '=')))
-}
-
-fn aliases_in(patterns: &str) -> Vec<String> {
-    patterns
-        .split_whitespace()
-        .map(|host| host.trim_matches('"'))
-        .filter(|host| !host.is_empty() && !host.contains(['*', '?', '!']))
-        .map(str::to_string)
-        .collect()
 }
 
 /// The other machines the user can open tabs on; the first call may ask each ssh host once.
@@ -362,49 +315,45 @@ mod tests {
     use super::*;
 
     fn entry(name: &str, host: &str) -> MachineEntry {
-        MachineEntry { name: name.into(), host: host.into(), user: None, port: None }
-    }
-
-    #[test]
-    fn reads_host_aliases_and_skips_patterns() {
-        let config = "Host nexron-server\n  HostName 10.0.0.2\n\nHost *\n  ServerAliveInterval 30\nHost box work-pc\n# Host commented\n";
-        assert_eq!(hosts_in(config), vec!["nexron-server", "box", "work-pc"]);
-    }
-
-    #[test]
-    fn skips_git_hosts() {
-        let config = "Host github.com\n  User git\nHost gitlab.com\n  User=\"git\"\nHost server\n  User admin\n\
-                      Match host gitea\n  User git\nHost pi\n";
-        assert_eq!(hosts_in(config), vec!["server", "pi"]);
-    }
-
-    #[test]
-    fn skips_git_services_without_a_user_line() {
-        let config = "Host github.com\n  IdentityFile ~/.ssh/id_ed25519\nHost work-git\n  HostName GitLab.com\n\
-                      Host box github.com\nHost \"quoted\"\n";
-        assert_eq!(hosts_in(config), vec!["box", "quoted"]);
-    }
-
-    #[test]
-    fn reads_the_first_user_like_ssh() {
-        let config = "Host shared\n  User git\n  User admin\nHost server\n  User admin\n  User git\n";
-        assert_eq!(hosts_in(config), vec!["server"]);
+        MachineEntry { name: name.into(), host: host.into(), user: None, port: None, os: None }
     }
 
     #[test]
     fn migration_keeps_working_and_offline_hosts_only() {
         let hosts = ["server", "github.com", "laptop", "pi", "blocked", "reinstalled", "new"].map(String::from).to_vec();
-        let kept = migrate(hosts, |entry| match entry.host.as_str() {
-            "server" => ProbeReason::Ok,
-            "github.com" => ProbeReason::NotWindows,
-            "laptop" => ProbeReason::Offline,
-            "pi" => ProbeReason::AuthFailed,
-            "reinstalled" => ProbeReason::HostKeyChanged,
-            "new" => ProbeReason::HostKeyUnknown,
-            _ => ProbeReason::AgentdBlocked,
+        let kept = migrate(hosts, |entry| {
+            let reason = match entry.host.as_str() {
+                "server" => ProbeReason::Ok,
+                "github.com" => ProbeReason::UnsupportedSystem,
+                "laptop" => ProbeReason::Offline,
+                "pi" => ProbeReason::AuthFailed,
+                "reinstalled" => ProbeReason::HostKeyChanged,
+                "new" => ProbeReason::HostKeyUnknown,
+                _ => ProbeReason::AgentdBlocked,
+            };
+            let os = (reason == ProbeReason::Ok).then_some(MachineOs::Linux);
+            Probe { reason, version: None, detail: None, known_host: None, os }
         });
         let names: Vec<&str> = kept.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(names, ["server", "laptop", "blocked", "reinstalled"]);
+        assert_eq!(kept[0].os, Some(MachineOs::Linux));
+        assert_eq!(kept[1].os, None);
+    }
+
+    #[test]
+    fn a_corrected_entry_keeps_the_system_of_its_host() {
+        let listed = vec![MachineEntry { os: Some(MachineOs::Macos), ..entry("mac", "mac.local") }];
+        let renamed = MachineEntry { user: Some("alex".into()), ..entry("mac", "mac.local") };
+        assert_eq!(put(listed.clone(), renamed, Some("mac")).unwrap()[0].os, Some(MachineOs::Macos));
+        assert_eq!(put(listed, entry("mac", "10.0.0.9"), Some("mac")).unwrap()[0].os, None);
+    }
+
+    #[test]
+    fn a_machine_listed_before_systems_were_known_is_windows() {
+        let old: MachineEntry = serde_json::from_str(r#"{"name":"server","host":"nexron-server"}"#).unwrap();
+        assert_eq!(old.system(), MachineOs::Windows);
+        let mac = MachineEntry { os: Some(MachineOs::Macos), ..entry("mac", "mac") };
+        assert_eq!(serde_json::to_string(&mac).unwrap(), r#"{"name":"mac","host":"mac","os":"macos"}"#);
     }
 
     #[test]
@@ -434,6 +383,14 @@ mod tests {
         assert!(validated(MachineEntry { user: Some("-l".into()), ..entry("x", "box") }).is_err());
         assert!(validated(entry("  ", "box")).is_err());
         assert!(validated(MachineEntry { port: Some(0), ..entry("x", "box") }).is_err());
+    }
+
+    #[test]
+    fn takes_no_system_from_the_frontend() {
+        let claimed = MachineEntry { os: Some(MachineOs::Linux), ..entry("box", "box") };
+        assert_eq!(validated(claimed.clone()).unwrap().os, None);
+        let listed = vec![MachineEntry { os: Some(MachineOs::Macos), ..entry("box", "box") }];
+        assert_eq!(put(listed, claimed, Some("box")).unwrap()[0].os, Some(MachineOs::Macos));
     }
 
     #[test]

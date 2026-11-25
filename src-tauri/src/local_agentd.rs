@@ -52,14 +52,23 @@ pub fn installed_exe() -> Result<PathBuf, LocalAgentdError> {
 /// a running exe is never half overwritten: Windows refuses the rename, Unix keeps the old file
 /// for the process that runs it.
 fn install(source: &Path, target: &Path) -> io::Result<()> {
-    if is_same_file_content(source, target)? {
+    let wanted = fs::read(source)?;
+    if is_same_content(&wanted, target)? {
         return Ok(());
     }
     if let Some(folder) = target.parent() {
         fs::create_dir_all(folder)?;
     }
     let staged = target.with_extension("new");
-    fs::copy(source, &staged)?;
+    // Written, not `fs::copy`: on macOS that carries the app's quarantine flag over, and Gatekeeper
+    // then refuses to run the copy outside the app bundle.
+    fs::write(&staged, wanted)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        const EXECUTABLE: u32 = 0o755;
+        fs::set_permissions(&staged, fs::Permissions::from_mode(EXECUTABLE))?;
+    }
     fs::rename(&staged, target).inspect_err(|_| {
         if let Err(err) = fs::remove_file(&staged) {
             eprintln!("warning: cannot remove {}: {err}", staged.display());
@@ -67,8 +76,7 @@ fn install(source: &Path, target: &Path) -> io::Result<()> {
     })
 }
 
-fn is_same_file_content(source: &Path, target: &Path) -> io::Result<bool> {
-    let wanted = fs::read(source)?;
+fn is_same_content(wanted: &[u8], target: &Path) -> io::Result<bool> {
     match fs::read(target) {
         Ok(present) => Ok(present == wanted),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),

@@ -11,6 +11,7 @@
 <img src="https://img.shields.io/badge/Tauri-2-4d7cff?style=flat-square&labelColor=19191a&logo=tauri&logoColor=f0efec" alt="Tauri 2">
 <img src="https://img.shields.io/badge/Vue-3-4d7cff?style=flat-square&labelColor=19191a&logo=vuedotjs&logoColor=f0efec" alt="Vue 3">
 <img src="https://img.shields.io/badge/Windows-11-4d7cff?style=flat-square&labelColor=19191a" alt="Windows 11">
+<img src="https://img.shields.io/badge/macOS-universal-4d7cff?style=flat-square&labelColor=19191a" alt="macOS, Apple silicon and Intel">
 <img src="https://img.shields.io/badge/Rust-1.90-4d7cff?style=flat-square&labelColor=19191a&logo=rust&logoColor=f0efec" alt="Rust 1.90">
 <img src="https://img.shields.io/badge/Claude_Code-headless-4d7cff?style=flat-square&labelColor=19191a&logo=anthropic&logoColor=f0efec" alt="Drives Claude Code headless">
 
@@ -72,8 +73,8 @@ The screenshots show made-up data. See [Screenshots](#screenshots-1) under Devel
 - **Accounts.** Every `~/.claude` and `~/.claude-<name>` profile can be an account. Switch a chat
   to another account and the session moves with it. When an account hits its limit, Bull moves
   the chat or waits for the reset, as you set it.
-- **Machines.** A setup assistant connects a Windows machine over SSH and installs `agentd`
-  there. Claude keeps running on it when Bull closes or the connection drops.
+- **Machines.** A setup assistant connects a Windows, Mac or Linux machine over SSH and
+  installs `agentd` there. Claude keeps running on it when Bull closes or the connection drops.
 - **Around the chat.** Sidebar grouped by what needs you, notifications, search, a terminal per
   folder, light and dark theme, phone layout.
 
@@ -81,7 +82,7 @@ The screenshots show made-up data. See [Screenshots](#screenshots-1) under Devel
 
 ### Requirements
 
-- Windows 11.
+- Windows 11 or macOS (Apple silicon or Intel).
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed, `claude` on the
   PATH, and logged in once.
 - To build: Node 22 and Rust 1.90 with the MSVC toolchain.
@@ -92,6 +93,10 @@ Download `Bull_<version>_x64-setup.exe` from the
 [latest release](https://github.com/nexron-studios/NEXRON-Bull/releases/latest), run it and start
 Bull from the Start menu. The installer is not signed yet, so Windows SmartScreen asks first:
 **More info › Run anyway**.
+
+On a Mac, download `Bull_<version>_universal.dmg` from the same release and drag Bull into
+Applications. It is not notarised yet, so macOS refuses the first start: right-click Bull ›
+**Open**, or on macOS 15 and later **System Settings › Privacy & Security › Open Anyway**.
 
 To build the installer yourself:
 
@@ -116,8 +121,9 @@ The installers land in `src-tauri/target/release/bundle/` (`nsis/` and `msi/`).
    when an account runs out: move the chat, ask first, or wait.
 5. **Connect another machine.** Settings › Machines › **Connect**. Enter the address or pick a
    host from `~/.ssh/config`. Bull checks the SSH login, tells you what is missing (a key, a host
-   key) and installs `agentd` there. The machine needs Windows, the OpenSSH server and Claude
-   Code logged in.
+   key) and installs `agentd` there. The machine needs Windows, macOS or Linux, an SSH server
+   and Claude Code logged in. A Mac or Linux machine downloads `agentd` from the GitHub release
+   of your Bull version.
 
 ## How it works
 

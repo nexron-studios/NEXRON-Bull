@@ -20,7 +20,7 @@ import {
   answersOf,
   questionsOf,
   toggledChoice,
-  withOtherChoice
+  withOwnAnswer
 } from '@/utils/questions'
 import { glowClassOf } from '@/theme/glow'
 
@@ -47,21 +47,21 @@ const keyed = computed(() => (isKeyed && questions.value.length === 1 ? question
 const isChosen = (question: string, label: string) =>
   chosen.value[question]?.includes(label) ?? false
 
-const toggle = (question: string, label: string, isMulti: boolean) => {
-  chosen.value = {
-    ...chosen.value,
-    [question]: toggledChoice(chosen.value[question] ?? [], label, isMulti)
-  }
+const setChosen = (question: string, choices: string[]) => {
+  chosen.value = { ...chosen.value, [question]: choices }
 }
 
-// Typing in the own answer chooses it, so the card shows what "answer" sends. Focus alone only
-// chooses text typed before: tabbing past the field must not drop the picked option.
-const chooseOther = (question: string, isMulti: boolean) => {
-  chosen.value = {
-    ...chosen.value,
-    [question]: withOtherChoice(chosen.value[question] ?? [], isMulti)
-  }
-}
+const toggle = (question: string, label: string, isMulti: boolean) =>
+  setChosen(question, toggledChoice(chosen.value[question] ?? [], label, isMulti))
+
+// Typing in the own answer chooses it, so the card shows what "answer" sends; emptying it
+// unchooses it. Focus alone only chooses text typed before: tabbing past the field must not drop
+// the picked option.
+const updateOther = (question: string, isMulti: boolean) =>
+  setChosen(
+    question,
+    withOwnAnswer(chosen.value[question] ?? [], other.value[question] ?? '', isMulti)
+  )
 
 const submit = () => {
   if (!isComplete.value) return
@@ -75,8 +75,10 @@ useChoiceKeys(
     const question = keyed.value
     const option = question?.options[index]
     if (!question || !option) return
-    toggle(question.question, option.label, question.multiSelect)
-    if (!question.multiSelect) submit()
+    if (question.multiSelect) return toggle(question.question, option.label, true)
+    // The key always picks its option, even the one already chosen: it answers, never unchooses.
+    setChosen(question.question, [option.label])
+    submit()
   }
 )
 </script>
@@ -116,7 +118,7 @@ useChoiceKeys(
             class="sr-only"
             :checked="isChosen(q.question, option.label)"
             :aria-keyshortcuts="keyed && oIndex < MAX_CHOICE_KEY ? String(oIndex + 1) : undefined"
-            @change="toggle(q.question, option.label, q.multiSelect)"
+            @click="toggle(q.question, option.label, q.multiSelect)"
           />
           <template v-if="q.multiSelect">
             <SquareCheck
@@ -159,8 +161,8 @@ useChoiceKeys(
             v-model="other[q.question]"
             :placeholder="t('chat.question_other')"
             :aria-label="t('chat.question_other')"
-            @focus="other[q.question]?.trim() && chooseOther(q.question, q.multiSelect)"
-            @input="chooseOther(q.question, q.multiSelect)"
+            @focus="other[q.question]?.trim() && updateOther(q.question, q.multiSelect)"
+            @input="updateOther(q.question, q.multiSelect)"
             class="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-small"
           />
         </div>

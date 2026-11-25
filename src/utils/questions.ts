@@ -44,14 +44,21 @@ export const answersOf = (
     })
   )
 
-/** The choices of one question after a click on `label`: several toggle, a single one replaces. */
+/**
+ * The choices of one question after a click on `label`: a chosen one is unchosen, otherwise a
+ * single choice replaces and several add.
+ */
 export const toggledChoice = (current: string[], label: string, isMulti: boolean): string[] => {
-  if (!isMulti) return [label]
-  return current.includes(label) ? current.filter((l) => l !== label) : [...current, label]
+  if (current.includes(label)) return current.filter((l) => l !== label)
+  return isMulti ? [...current, label] : [label]
 }
 
-/** The choices once the user turns to the own answer: it replaces a single choice, adds to several. */
-export const withOtherChoice = (current: string[], isMulti: boolean): string[] => {
+/**
+ * The choices once the own answer reads `text`: text chooses it (replacing a single choice, adding
+ * to several), an emptied field unchooses it.
+ */
+export const withOwnAnswer = (current: string[], text: string, isMulti: boolean): string[] => {
+  if (!text.trim()) return current.filter((choice) => choice !== OTHER_CHOICE)
   if (!isMulti) return [OTHER_CHOICE]
   return current.includes(OTHER_CHOICE) ? current : [...current, OTHER_CHOICE]
 }

@@ -47,7 +47,7 @@ describe('ChatQuestionCard', () => {
 
   it('should take the own answer alone once it is typed after picking an option', async () => {
     const wrapper = mountCard()
-    await optionInputs(wrapper)[2].setValue(true)
+    await optionInputs(wrapper)[2].trigger('click')
 
     await otherField(wrapper).trigger('focus')
     await otherField(wrapper).setValue('Mach du es')
@@ -63,7 +63,7 @@ describe('ChatQuestionCard', () => {
     const wrapper = mountCard()
     await otherField(wrapper).setValue('Mach du es')
 
-    await optionInputs(wrapper)[1].setValue(true)
+    await optionInputs(wrapper)[1].trigger('click')
     await submit(wrapper)
 
     expect(sentAnswer(wrapper)).toEqual({ [QUESTION]: 'Läuft noch' })
@@ -71,7 +71,7 @@ describe('ChatQuestionCard', () => {
 
   it('should keep the picked option when focus only passes through the empty own answer', async () => {
     const wrapper = mountCard()
-    await optionInputs(wrapper)[1].setValue(true)
+    await optionInputs(wrapper)[1].trigger('click')
 
     await otherField(wrapper).trigger('focus')
     await submit(wrapper)
@@ -79,24 +79,48 @@ describe('ChatQuestionCard', () => {
     expect(sentAnswer(wrapper)).toEqual({ [QUESTION]: 'Läuft noch' })
   })
 
-  it('should not send an empty own answer', async () => {
+  it('should keep the picked option when the own answer is only blanks', async () => {
     const wrapper = mountCard()
-    await optionInputs(wrapper)[0].setValue(true)
+    await optionInputs(wrapper)[0].trigger('click')
 
     await otherField(wrapper).setValue('   ')
     await submit(wrapper)
 
-    expect(wrapper.emitted('answer')).toBeUndefined()
+    expect(sentAnswer(wrapper)).toEqual({ [QUESTION]: 'Ja' })
   })
 
   it('should add the own answer to the checked options of a multi-select question', async () => {
     const wrapper = mountCard(true)
-    await optionInputs(wrapper)[0].setValue(true)
-    await optionInputs(wrapper)[2].setValue(true)
+    await optionInputs(wrapper)[0].trigger('click')
+    await optionInputs(wrapper)[2].trigger('click')
 
     await otherField(wrapper).setValue('Französisch')
     await submit(wrapper)
 
     expect(sentAnswer(wrapper)).toEqual({ [SPRACHEN]: 'Ja, Windows machen, Französisch' })
+  })
+
+  it('should unchoose a single option clicked again', async () => {
+    const wrapper = mountCard()
+    await optionInputs(wrapper)[1].trigger('click')
+
+    await optionInputs(wrapper)[1].trigger('click')
+    await submit(wrapper)
+
+    expect([checkedOf(wrapper), wrapper.emitted('answer')]).toEqual([
+      [false, false, false],
+      undefined
+    ])
+  })
+
+  it('should unchoose the own answer once its text is cleared', async () => {
+    const wrapper = mountCard(true)
+    await optionInputs(wrapper)[0].trigger('click')
+    await otherField(wrapper).setValue('Französisch')
+
+    await otherField(wrapper).setValue('')
+    await submit(wrapper)
+
+    expect(sentAnswer(wrapper)).toEqual({ [SPRACHEN]: 'Ja' })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OTHER_CHOICE, answersOf, questionsOf, toggledChoice, withOtherChoice } from '../questions'
+import { OTHER_CHOICE, answersOf, questionsOf, toggledChoice, withOwnAnswer } from '../questions'
 
 const input = {
   questions: [
@@ -50,19 +50,30 @@ describe('answersOf', () => {
   })
 })
 
-describe('withOtherChoice', () => {
+describe('withOwnAnswer', () => {
   it('should replace a single choice and add to several once', () => {
     expect([
-      withOtherChoice(['Rot'], false),
-      withOtherChoice(['de'], true),
-      withOtherChoice(['de', OTHER_CHOICE], true)
+      withOwnAnswer(['Rot'], 'Grün', false),
+      withOwnAnswer(['de'], 'fr', true),
+      withOwnAnswer(['de', OTHER_CHOICE], 'fr', true)
     ]).toEqual([[OTHER_CHOICE], ['de', OTHER_CHOICE], ['de', OTHER_CHOICE]])
+  })
+
+  it('should unchoose the own answer once its text is emptied', () => {
+    expect([
+      withOwnAnswer([OTHER_CHOICE], '  ', false),
+      withOwnAnswer(['de', OTHER_CHOICE], '', true)
+    ]).toEqual([[], ['de']])
   })
 })
 
 describe('toggledChoice', () => {
   it('should replace a single choice', () => {
     expect(toggledChoice(['Rot'], 'Blau', false)).toEqual(['Blau'])
+  })
+
+  it('should unchoose the chosen single choice', () => {
+    expect(toggledChoice(['Rot'], 'Rot', false)).toEqual([])
   })
 
   it('should add and remove choices of a multi-select question', () => {

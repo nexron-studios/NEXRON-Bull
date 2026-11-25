@@ -69,7 +69,7 @@ onMounted(focus)
       <Button type="submit" size="sm" :disabled="!text.trim()">
         <MessageSquarePlus class="size-4" aria-hidden="true" />
         {{ t('review.comment_add') }}
-        <NchKbd :key-label="labelOf(SUBMIT_CHORD)" is-on-brand />
+        <NchKbd :key-label="labelOf(SUBMIT_CHORD)" is-on-fill />
       </Button>
     </div>
   </form>

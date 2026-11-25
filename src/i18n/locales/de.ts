@@ -632,6 +632,10 @@ export default {
   },
   activity: {
     title: 'Aktivität',
+    bar_title: 'Läuft noch im Hintergrund',
+    bar_agent_hint:
+      'Claude antwortet, sobald der Subagent fertig ist | Claude antwortet, sobald die Subagents fertig sind',
+    bar_more: '+{n} weitere',
     tool_count: '{n} Tool | {n} Tools',
     live: 'live',
     needs_you: 'braucht dich',

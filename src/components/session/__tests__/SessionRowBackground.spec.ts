@@ -30,26 +30,30 @@ describe('SessionRowBackground', () => {
   })
 
   it('should name the one task that runs', () => {
-    const tasks = [{ id: 'b1', description: 'Follow act video generation until done' }]
+    const tasks = [
+      { id: 'b1', description: 'Follow act video generation until done', kind: 'shell' as const }
+    ]
     expect(shownTextOf(tasks)).toBe('Im Hintergrund: Follow act video generation until done')
   })
 
   it('should count several tasks', () => {
     const tasks = [
-      { id: 'b1', description: 'Follow act video generation until done' },
-      { id: 'b2', description: 'Watch the release' }
+      { id: 'b1', description: 'Follow act video generation until done', kind: 'shell' as const },
+      { id: 'b2', description: 'Watch the release', kind: 'shell' as const }
     ]
     expect(shownTextOf(tasks)).toBe('Im Hintergrund: 2 Aufgaben')
   })
 
   it('should count a task Claude gave no name', () => {
-    expect(shownTextOf([{ id: 'b1', description: '' }])).toBe('Im Hintergrund: 1 Aufgabe')
+    expect(shownTextOf([{ id: 'b1', description: '', kind: 'shell' as const }])).toBe(
+      'Im Hintergrund: 1 Aufgabe'
+    )
   })
 
   it('should give screen readers one name per task, also for an unnamed one', () => {
     const tasks = [
-      { id: 'b1', description: 'Watch the release' },
-      { id: 'b2', description: '' }
+      { id: 'b1', description: 'Watch the release', kind: 'shell' as const },
+      { id: 'b2', description: '', kind: 'shell' as const }
     ]
     expect(spokenTextOf(tasks)).toBe('Im Hintergrund: 2 Aufgaben: Watch the release, Ohne Namen')
   })

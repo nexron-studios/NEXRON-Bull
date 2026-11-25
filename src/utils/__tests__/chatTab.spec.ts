@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyEvent,
   backgroundWorkOf,
-  listedTabOf,
+  withBackgroundTasks,
   newTab,
   savedTabOf,
   stampArrival,
@@ -15,6 +15,7 @@ import {
   type ChatTabState,
   type SavedTab
 } from '../chatTab'
+import { listedTabOf, shownStatusOf } from '../shownStatus'
 import type { ChatMessage, LiveBlock } from '@/types/agentd.type'
 import { pendingMessageOf } from '../pendingPrompts'
 
@@ -434,8 +435,15 @@ describe('withTurnClock', () => {
     const turn = { startedAt: 1000, afterUuid: null }
     // `run_in_background` Bash, listed by `background_tasks_changed` until it ends.
     const running = {
-      active: [{ id: 'b3vtm9fpi', description: 'Follow act video generation until done' }],
-      at: 2000
+      active: [
+        {
+          id: 'b3vtm9fpi',
+          description: 'Follow act video generation until done',
+          kind: 'shell' as const
+        }
+      ],
+      at: 2000,
+      agentsSince: null
     }
 
     it('should finish the chat when the answer ends, whatever still runs', () => {
@@ -450,7 +458,7 @@ describe('withTurnClock', () => {
       const done = { ...tab(), status: 'idle' as const, finishedAt: 5000, unseenAt: 5000 }
       const reply = withTurnClock({ ...done, status: 'working' }, 7000)
       const ended = withTurnClock(
-        { ...reply, status: 'idle', backgroundTasks: { active: [], at: 8000 } },
+        { ...reply, status: 'idle', backgroundTasks: { active: [], at: 8000, agentsSince: null } },
         9000
       )
       expect([reply.unseenAt, reply.turn?.startedAt, ended.finishedAt]).toEqual([null, 7000, 9000])
@@ -460,16 +468,34 @@ describe('withTurnClock', () => {
 
 describe('listedTabOf and backgroundWorkOf', () => {
   const tasks = {
-    active: [{ id: 'a7f', description: 'Check the release' }],
-    at: 1
+    active: [{ id: 'a7f', description: 'Check the release', kind: 'agent' as const }],
+    at: 1,
+    agentsSince: null
   }
 
-  it('should list an idle chat with background work as idle', () => {
+  it('should list an idle chat whose background agent runs as working', () => {
     const idle = { ...tab(), status: 'idle' as const, backgroundTasks: tasks }
-    expect([listedTabOf(idle).status, backgroundWorkOf(idle)]).toEqual([
-      'idle',
-      [{ id: 'a7f', description: 'Check the release' }]
-    ])
+    expect([listedTabOf(idle).status, shownStatusOf(idle)]).toEqual(['working', 'working'])
+  })
+
+  it('should show a failed turn as failed while a background agent runs', () => {
+    const failed = {
+      ...tab(),
+      status: 'idle' as const,
+      notice: 'API error',
+      backgroundTasks: tasks
+    }
+    expect(shownStatusOf(failed)).toBe('idle')
+  })
+
+  it('should list an idle chat whose background shell runs as idle', () => {
+    const shell = { id: 'b1', description: 'npm run dev', kind: 'shell' as const }
+    const idle = {
+      ...tab(),
+      status: 'idle' as const,
+      backgroundTasks: { active: [shell], at: 1, agentsSince: null }
+    }
+    expect([listedTabOf(idle).status, backgroundWorkOf(idle)]).toEqual(['idle', [shell]])
   })
 
   it('should list the status from before while the chat moves to another account', () => {
@@ -513,31 +539,93 @@ describe('a subagent report', () => {
 
   it('should not call the reply to a report finished while another agent still runs', () => {
     const working = withTurnClock({ ...arrived(answered, 'r1'), status: 'working' }, 9000)
-    const stillRunning = { active: [{ id: 'a555', description: 'Check the release' }], at: 8000 }
+    const stillRunning = {
+      active: [{ id: 'a555', description: 'Check the release', kind: 'agent' as const }],
+      at: 8000,
+      agentsSince: null
+    }
     const idle = withTurnClock({ ...working, status: 'idle', backgroundTasks: stillRunning }, 12000)
     expect([idle.turn, idle.finishedAt]).toEqual([null, 5000])
   })
 
-  it('should finish anew when the reply to the last report ends with nothing left running', () => {
-    // The answer left agent a444 running and finished the chat at 5000; its report came later.
-    const running = { active: [{ id: 'a444', description: 'Ping the server' }], at: 4000 }
+  describe('with a background agent still running', () => {
+    const agent = { id: 'a444', description: 'Ping the server', kind: 'agent' as const }
+    const shell = { id: 'b1', description: 'npm run dev', kind: 'shell' as const }
+    // The user's answer ends while agent a444 (and a dev server) still run.
     const ended = withTurnClock(
       {
         ...tab(),
         status: 'idle',
         turn: { startedAt: 1000, afterUuid: null },
-        backgroundTasks: running
+        backgroundTasks: { active: [agent, shell], at: 4000, agentsSince: 4000 }
       },
       5000
     )
-    const reported = { ...arrived(ended, 'r1'), backgroundTasks: { active: [], at: 8000 } }
-    const working = withTurnClock({ ...reported, status: 'working' }, 9000)
-    const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
-    expect([ended.finishedAt, working.turn?.isAgentReply, idle.finishedAt]).toEqual([
-      5000,
-      true,
-      12000
-    ])
+
+    it('should hold the finish of the answer', () => {
+      expect([ended.turn, ended.finishedAt, ended.finishHold]).toEqual([
+        null,
+        null,
+        { kind: 'agents', since: 1000 }
+      ])
+    })
+
+    it('should finish once the reply to the last report ends, even with a shell left', () => {
+      const reported = {
+        ...arrived(ended, 'r1'),
+        backgroundTasks: { active: [shell], at: 8000, agentsSince: null }
+      }
+      const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+      const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
+      expect([working.turn?.isAgentReply, idle.finishedAt, idle.finishHold]).toEqual([
+        true,
+        12000,
+        null
+      ])
+    })
+
+    it('should keep holding while the reply to a report ends with another agent running', () => {
+      const other = { id: 'a555', description: 'Check the release', kind: 'agent' as const }
+      const reported = {
+        ...arrived(ended, 'r1'),
+        backgroundTasks: { active: [other], at: 8000, agentsSince: 4000 }
+      }
+      const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+      const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
+      expect([idle.finishedAt, idle.finishHold]).toEqual([null, { kind: 'replied', since: 1000 }])
+    })
+
+    it('should finish once the task list drops the agent after Claude already replied', () => {
+      const reported = arrived(ended, 'r1')
+      const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+      // The reply ends while the list still names a444; the list catches up later.
+      const replied = withTurnClock({ ...working, status: 'idle' }, 12000)
+      const caughtUp = withBackgroundTasks(replied, { active: [shell] }, 13000)
+      expect([replied.finishedAt, caughtUp.finishedAt, caughtUp.finishHold]).toEqual([
+        null,
+        13000,
+        null
+      ])
+    })
+
+    it('should show the chat as working between the agent end and Claude reply', () => {
+      const agentEnded = withBackgroundTasks(ended, { active: [shell] }, 8000)
+      expect([agentEnded.finishedAt, shownStatusOf(agentEnded)]).toEqual([null, 'working'])
+    })
+
+    it('should let go of the hold when the reply fails with no agent left', () => {
+      const reported = {
+        ...arrived(ended, 'r1'),
+        backgroundTasks: { active: [], at: 8000, agentsSince: null }
+      }
+      const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+      const failed = withTurnClock({ ...working, status: 'idle', notice: 'API error' }, 12000)
+      expect([failed.finishedAt, failed.finishHold, shownStatusOf(failed)]).toEqual([
+        null,
+        null,
+        'idle'
+      ])
+    })
   })
 
   it('should mark a turn that started before its report arrived', () => {
@@ -905,5 +993,32 @@ describe('a block agentd replays on attach', () => {
     })
     next = applyEvent(next, delta('Neu'))
     expect([...whileCut, next.live]).toEqual([cut, 2_000_014, writing('Neu')])
+  })
+})
+
+describe('withBackgroundTasks', () => {
+  const agent = { id: 'a1', description: 'Review', kind: 'agent' as const }
+  const shell = { id: 'b1', description: 'npm run build', kind: 'shell' as const }
+
+  it('should note when an agent starts running', () => {
+    expect(withBackgroundTasks(tab(), { active: [agent] }, 3000).backgroundTasks).toEqual({
+      active: [agent],
+      at: 3000,
+      agentsSince: 3000
+    })
+  })
+
+  it('should keep the start while agents run on', () => {
+    const running = withBackgroundTasks(tab(), { active: [agent] }, 3000)
+    expect(
+      withBackgroundTasks(running, { active: [agent, shell] }, 5000).backgroundTasks?.agentsSince
+    ).toBe(3000)
+  })
+
+  it('should forget the start once only shells run', () => {
+    const running = withBackgroundTasks(tab(), { active: [agent] }, 3000)
+    expect(
+      withBackgroundTasks(running, { active: [shell] }, 5000).backgroundTasks?.agentsSince
+    ).toBe(null)
   })
 })

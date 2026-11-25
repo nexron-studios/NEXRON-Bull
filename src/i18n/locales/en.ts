@@ -617,6 +617,10 @@ export default {
   },
   activity: {
     title: 'Activity',
+    bar_title: 'Still running in the background',
+    bar_agent_hint:
+      'Claude replies once the subagent is done | Claude replies once the subagents are done',
+    bar_more: '+{n} more',
     tool_count: '{n} tool | {n} tools',
     live: 'live',
     needs_you: 'needs you',

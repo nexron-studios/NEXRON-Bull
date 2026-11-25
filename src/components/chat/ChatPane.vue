@@ -10,6 +10,7 @@ import NchScrollEdge from '@/components/common/NchScrollEdge.vue'
 import { Button } from '@/components/ui/button'
 import ChatActivitySheet from '@/components/chat/ChatActivitySheet.vue'
 import ChatAutoCompactHint from '@/components/chat/ChatAutoCompactHint.vue'
+import ChatBackgroundBar from '@/components/chat/ChatBackgroundBar.vue'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatContextDialog from '@/components/chat/ChatContextDialog.vue'
 import ChatHistorySkeleton from '@/components/chat/ChatHistorySkeleton.vue'
@@ -405,6 +406,7 @@ const handlePreviewClick = (event: MouseEvent) => {
         @interrupt="chat.interrupt(tab.id)"
         @details="isActivityOpen = true"
       />
+      <ChatBackgroundBar v-else :tab-id="tab.id" />
       <ChatComposer
         ref="composer"
         :tab

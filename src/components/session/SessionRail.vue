@@ -14,6 +14,7 @@ import { useSidebarMachine } from '@/composables/useSidebarMachine'
 import { useChatStore } from '@/stores/chat'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import type { ChatTabState } from '@/utils/chatTab'
+import { shownStatusOf } from '@/utils/shownStatus'
 import { groupRows, isEmptyChat, sessionRowsOf, withManualOrder } from '@/utils/sessionList'
 
 // The collapsed sidebar: the bull opens it again, then new session, search, the pages, and one
@@ -44,7 +45,7 @@ const statusLabelOf = (tab: ChatTabState) => {
   const rank = finishRanks.value.get(tab.id)
   if (rank) return t('finish.rank', { n: rank })
   if (tab.status === 'idle' && tab.notice !== null) return t('chat.status.failed')
-  return t(`chat.status.${tab.status}`)
+  return t(`chat.status.${shownStatusOf(tab)}`)
 }
 </script>
 
@@ -99,7 +100,7 @@ const statusLabelOf = (tab: ChatTabState) => {
               @click="openChat(tab.id)"
             >
               <ChatStatusIcon
-                :status="tab.status"
+                :status="shownStatusOf(tab)"
                 :is-empty="isEmptyChat(tab)"
                 :rank="finishRanks.get(tab.id) ?? null"
                 :is-failed="tab.notice !== null"

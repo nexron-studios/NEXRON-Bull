@@ -7,6 +7,7 @@ import { useAgeFormat } from '@/composables/useAgeFormat'
 import { useUsageFormat } from '@/composables/useUsageFormat'
 import { useChatStore } from '@/stores/chat'
 import { isBusyStatus, type ChatTabState } from '@/utils/chatTab'
+import { runningSinceOf, shownStatusOf } from '@/utils/shownStatus'
 
 // The card's one info line, as in the Agent Dashboard: when it finished (with its finish number)
 // or how long it runs, then how many prompts. It never wraps, or a tick from "59 s" to "1 min"
@@ -24,7 +25,9 @@ const format = useUsageFormat()
 const { finishRanks } = storeToRefs(useChatStore())
 
 const rank = computed(() => finishRanks.value.get(tab.id) ?? null)
-const finishedAt = computed(() => (isBusyStatus(tab.status) ? null : tab.finishedAt))
+// A chat a background agent holds runs on, though Claude's own turn is over.
+const finishedAt = computed(() => (isBusyStatus(shownStatusOf(tab)) ? null : tab.finishedAt))
+const runningSince = computed(() => runningSinceOf(tab))
 const ageOf = (since: number) => formatAge.value(Math.max(0, now - since))
 </script>
 
@@ -39,11 +42,11 @@ const ageOf = (since: number) => formatAge.value(Math.max(0, now - since))
       </span>
       <span class="tabular-nums">{{ t('overview.card.ago', { age: ageOf(finishedAt) }) }}</span>
     </template>
-    <span v-else-if="tab.turn" class="tabular-nums">
-      {{ t('sidebar.age_running', { age: ageOf(tab.turn.startedAt) }) }}
+    <span v-else-if="runningSince !== null" class="tabular-nums">
+      {{ t('sidebar.age_running', { age: ageOf(runningSince) }) }}
     </span>
     <template v-if="promptCount !== null">
-      <span v-if="finishedAt !== null || tab.turn" aria-hidden="true">·</span>
+      <span v-if="finishedAt !== null || runningSince !== null" aria-hidden="true">·</span>
       <span class="truncate">{{ t('overview.card.prompts', promptCount) }}</span>
     </template>
   </p>

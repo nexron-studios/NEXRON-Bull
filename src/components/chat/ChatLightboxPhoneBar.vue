@@ -13,7 +13,13 @@ const { index, total, canMark, isApplying } = defineProps<{
   canMark: boolean
   isApplying: boolean
 }>()
-const emit = defineEmits<{ step: [delta: number]; copy: []; mark: []; apply: [] }>()
+const emit = defineEmits<{
+  step: [delta: number]
+  copy: []
+  mark: []
+  apply: []
+  send: []
+}>()
 
 const { t } = useI18n()
 
@@ -45,7 +51,7 @@ const ON_STAGE =
       </NchIconButton>
     </nav>
     <div v-if="canMark" class="px-4 pb-2">
-      <ChatMarkupPhoneComment :is-applying @apply="emit('apply')" />
+      <ChatMarkupPhoneComment :is-applying @apply="emit('apply')" @send="emit('send')" />
     </div>
     <div class="flex gap-2 px-4 pb-3">
       <Button

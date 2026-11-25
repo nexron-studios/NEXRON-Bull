@@ -7,6 +7,19 @@ describe('calloutsIn', () => {
     expect(calloutsIn(text).map((callout) => callout.kind)).toEqual(['warning', 'question'])
   })
 
+  it('should read the list of requests as its own kind', () => {
+    expect(
+      calloutsIn('> [!changes] Aufträge\n> - **Tab-Linie**: so breit wie der Tab, gemergt')
+    ).toEqual([
+      {
+        kind: 'changes',
+        title: 'Aufträge',
+        body: '- **Tab-Linie**: so breit wie der Tab, gemergt',
+        isFolded: false
+      }
+    ])
+  })
+
   it('should skip a callout inside a fenced code block', () => {
     expect(calloutsIn('~~~\n> [!todo] x\n~~~\n> [!tip] y')).toEqual([
       { kind: 'tip', title: 'y', body: '', isFolded: false }

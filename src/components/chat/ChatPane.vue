@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, shallowReactive, watch } from 'vue'
-import {
-  ArrowDown,
-  ChevronsUp,
-  FileWarning,
-  ImageDown,
-  Info,
-  RotateCcw,
-  TriangleAlert
-} from '@lucide/vue'
+import { ArrowDown, FileWarning, ImageDown, Info, RotateCcw, TriangleAlert } from '@lucide/vue'
 import { useEventListener, usePreferredReducedMotion } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import NchClawdEmpty from '@/components/common/NchClawdEmpty.vue'
@@ -23,6 +15,7 @@ import ChatContextDialog from '@/components/chat/ChatContextDialog.vue'
 import ChatHistorySkeleton from '@/components/chat/ChatHistorySkeleton.vue'
 import ChatLimitNudge from '@/components/chat/ChatLimitNudge.vue'
 import ChatLimitWaitingCard from '@/components/chat/ChatLimitWaitingCard.vue'
+import ChatOlderHistory from '@/components/chat/ChatOlderHistory.vue'
 import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import ChatPermissionCard from '@/components/chat/ChatPermissionCard.vue'
 import ChatPlanCard from '@/components/chat/ChatPlanCard.vue'
@@ -45,6 +38,7 @@ import { useDoubleEscape } from '@/composables/useDoubleEscape'
 import { provideImageNameScope } from '@/composables/useImageNameScope'
 import { provideCalloutTarget } from '@/composables/useCalloutTarget'
 import { provideMarkupTarget } from '@/composables/useMarkupTarget'
+import { useOlderHistory } from '@/composables/useOlderHistory'
 import { useScrollEdges } from '@/composables/useScrollEdges'
 import { providePromptEdit, usePromptEditOf } from '@/composables/usePromptEdit'
 import { useChatStore } from '@/stores/chat'
@@ -53,7 +47,7 @@ import { useRewindStore } from '@/stores/rewind'
 import type { QueuedPromptProps } from '@/types/agentd.type'
 import { latestAnswerOf } from '@/utils/answerCallouts'
 import type { ChatTabState } from '@/utils/chatTab'
-import { buildStream } from '@/utils/chatStream'
+import { buildStream, firstTurnIndexOf } from '@/utils/chatStream'
 import type { PendingImage } from '@/utils/content'
 import { resultsByToolId } from '@/utils/toolPairs'
 import { isAwaitingReply } from '@/utils/activity'
@@ -83,7 +77,8 @@ const { labelOf: machineLabelOf } = useMachineLabel()
 const chat = useChatStore()
 const rewind = useRewindStore()
 const drafts = useDraftStore()
-const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo } = useChatFollow(scroller)
+const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo, isGliding, onGlideEnd } =
+  useChatFollow(scroller)
 // The open search floats over the chat's top: a revealed card lands below it.
 useRevealTarget(scroller, glideTo, () => searchBox.value?.coverOf() ?? null)
 const reducedMotion = usePreferredReducedMotion()
@@ -103,6 +98,11 @@ const stream = computed(() =>
   buildStream(messages.value, results.value, { outputs: tab.outputs, isRunning: isWorking.value })
 )
 const search = reactive(useChatSearch(stream, scroller, glideTo))
+// From here on the items keep their keys when older messages load: the scroll anchors.
+const anchorsFrom = computed(() => {
+  const index = firstTurnIndexOf(stream.value)
+  return index < 0 ? stream.value.length : index
+})
 // A prompt sent before Claude started waits in the store; the pane already shows Claude starting.
 const isQueued = computed(() => chat.hasQueued(tab.id))
 const isWaiting = computed(() => isAwaitingReply(tab) || isQueued.value)
@@ -119,6 +119,12 @@ const isEmpty = computed(
     !isQueued.value
 )
 const hasHistoryFailed = computed(() => tab.history === 'failed' && !messages.value.length)
+const loadOlder = () => chat.loadHistory(tab.id)
+useOlderHistory(
+  scroller,
+  () => ({ history: tab.history, hasMore: tab.hasMore, count: tab.messages.length }),
+  { load: loadOlder, isGliding, onGlideEnd }
+)
 const emptyHint = computed(() =>
   machineLabelOf(tab.machine)
     ? t('chat.clawd_hint', { machine: machineLabelOf(tab.machine), folder: folderNameOf(tab.cwd) })
@@ -180,8 +186,9 @@ useDoubleEscape(
   () => rewind.openRewind(tab.id)
 )
 
-// A marked image, from the history or the composer itself, goes into this tab's composer.
-provideMarkupTarget((result) => composer.value?.takeMarkup(result) ?? false)
+// A marked image, from the history or the composer itself, goes into this tab's composer, or out
+// as a message of its own.
+provideMarkupTarget((result, handoff) => composer.value?.handOver(result, handoff) ?? false)
 // The buttons of a callout in an answer: a question goes into the composer, a suggestion is sent.
 provideCalloutTarget({
   reply: (question) => composer.value?.quote(question),
@@ -204,7 +211,8 @@ const settleArrival = (event: AnimationEvent, key: string) => {
   if (event.target === event.currentTarget && event.animationName === last) arrivals.delete(key)
 }
 
-watch(() => [messages.value.length, tab.live, tab.permission] as const, follow)
+// The newest message, not the count: an older page landing above is no reason to follow.
+watch(() => [messages.value.at(-1)?.uuid, tab.live, tab.permission] as const, follow)
 watch(() => tab.id, scrollToBottom, { immediate: true })
 // Before the render that adds them, so they mount already rising.
 watch(
@@ -250,7 +258,12 @@ const handlePreviewClick = (event: MouseEvent) => {
     <!-- The backdrop starts below the session bar: the bar is chrome, not part of the chat. -->
     <div class="relative isolate flex min-h-0 flex-1 flex-col">
       <ChatBackdrop />
-      <div ref="scroller" class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+      <!-- No overflow-anchor: older pages are anchored by hand (useOlderHistory), as WKWebView
+           has no native anchoring; Chromium's on top would move the list a second time. -->
+      <div
+        ref="scroller"
+        class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]"
+      >
         <!-- data-tab-content: the part that fades in on a tab switch (transitions.css). -->
         <div
           data-tab-content
@@ -272,24 +285,17 @@ const handlePreviewClick = (event: MouseEvent) => {
               {{ t('chat.history_retry') }}
             </Button>
           </NchEmpty>
-          <Button
-            v-if="tab.hasMore"
-            variant="ghost"
-            class="self-center"
-            @click="chat.loadHistory(tab.id)"
-          >
-            <ChevronsUp class="size-4" aria-hidden="true" />
-            {{ t('chat.load_older') }}
-          </Button>
+          <ChatOlderHistory v-if="tab.hasMore" :history="tab.history" @load="loadOlder" />
           <ChatHistorySkeleton v-if="tab.history === 'loading' && !messages.length" />
           <ChatStreamItem
-            v-for="item in stream"
+            v-for="(item, index) in stream"
             :key="item.key"
             :item
             :results
             :is-running="isWorking"
             :class="arrivals.has(item.key) && 'message-rise'"
             :data-search-key="item.key"
+            :data-scroll-anchor="index >= anchorsFrom ? item.key : undefined"
             @animationend="settleArrival($event, item.key)"
           />
           <ChatRetryCard v-if="tab.retry" :retry="tab.retry" class="message-fade" />

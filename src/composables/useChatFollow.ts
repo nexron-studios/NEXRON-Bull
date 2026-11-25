@@ -1,5 +1,5 @@
 import { nextTick, onScopeDispose, ref, type Ref } from 'vue'
-import { useEventListener, usePreferredReducedMotion } from '@vueuse/core'
+import { createEventHook, useEventListener, usePreferredReducedMotion } from '@vueuse/core'
 import { springStepOf, type SpringState } from '@/utils/motion'
 import { smoothScrollStartOf } from '@/utils/scrollJump'
 
@@ -24,6 +24,8 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
   // list is not at the bottom while it runs.
   let isGlidingToHit = false
   let isDisposed = false
+  // A glide that came to rest or that the reader took over; one replaced by the next does not count.
+  const glideEnd = createEventHook<void>()
 
   const reducedMotion = usePreferredReducedMotion()
 
@@ -56,8 +58,12 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
   const startFollow = (el: HTMLElement, targetOf: (el: HTMLElement) => number = bottomOf) => {
     let spring: SpringState = { offset: 0, velocity: 0 }
     let last = performance.now()
+    const end = () => {
+      stopFollow()
+      void glideEnd.trigger()
+    }
     const step = (now: number) => {
-      if (hasReaderMoved(el)) return stopFollow()
+      if (hasReaderMoved(el)) return end()
       const target = targetOf(el)
       // Measured from the target as it is now: content that grew since the last frame widens the
       // gap, and the spring carries its speed into it instead of the list jumping by the growth.
@@ -67,7 +73,7 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
         Math.abs(spring.offset) < ARRIVAL_SLACK_PX && Math.abs(spring.velocity) < FOLLOW_REST_SPEED
       el.scrollTop = hasArrived ? target : target + spring.offset
       written = el.scrollTop
-      if (hasArrived) return stopFollow()
+      if (hasArrived) return end()
       followFrame = requestAnimationFrame(step)
     }
     written = el.scrollTop
@@ -120,5 +126,16 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
     stopFollow()
   })
 
-  return { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo }
+  /** A follow or glide is moving the list, not the reader. */
+  const isGliding = () => followFrame !== 0
+
+  return {
+    isAtBottom,
+    scrollToBottom,
+    follow,
+    glideToBottom,
+    glideTo,
+    isGliding,
+    onGlideEnd: glideEnd.on
+  }
 }

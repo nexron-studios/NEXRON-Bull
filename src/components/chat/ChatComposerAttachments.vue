@@ -10,7 +10,8 @@ import { MAX_IMAGES_PER_MESSAGE } from '@/utils/attachments'
 import type { PendingImage } from '@/utils/content'
 import { moveStepOf } from '@/utils/shortcuts'
 
-// The images of the next message above its text: drag or Ctrl+Shift+arrows to reorder.
+// The images of the next message above its text: drag or Ctrl+Shift+arrows to reorder. They are
+// still being written about, so the preview opens them ready to draw on.
 const { readingCount } = defineProps<{ readingCount: number }>()
 const emit = defineEmits<{ remove: [id: string]; move: [id: string, step: -1 | 1] }>()
 
@@ -24,6 +25,7 @@ const { t } = useI18n()
 const dragOptions = useDragOptions('x')
 
 const openAt = (at: number) => {
+  if (!images.value[at]) return
   lightboxIndex.value = at
   isLightboxOpen.value = true
 }
@@ -37,6 +39,8 @@ const handleThumbKeydown = async (event: KeyboardEvent, id: string) => {
   await nextTick()
   thumbs.value?.querySelector<HTMLElement>(`[data-image-id="${id}"]`)?.focus()
 }
+
+defineExpose({ openAt })
 </script>
 
 <template>
@@ -69,6 +73,11 @@ const handleThumbKeydown = async (event: KeyboardEvent, id: string) => {
     <p class="text-meta text-muted-foreground tabular-nums">
       {{ t('chat.attachment_count', { count: images.length, max: MAX_IMAGES_PER_MESSAGE }) }}
     </p>
-    <ChatImageLightbox v-model:open="isLightboxOpen" v-model:index="lightboxIndex" :images />
+    <ChatImageLightbox
+      v-model:open="isLightboxOpen"
+      v-model:index="lightboxIndex"
+      :images
+      initial-mode="mark"
+    />
   </div>
 </template>

@@ -4,7 +4,9 @@ export default {
     studio_name: 'NEXRON Studios',
     cancel: 'Abbrechen',
     save: 'Speichern',
-    undo: 'Rückgängig'
+    undo: 'Rückgängig',
+    session_id: 'Session-ID {id}',
+    session_id_copy: 'Session-ID {id}, Klick kopiert sie'
   },
   bridge: {
     title: 'Bull mit diesem Gerät verbinden',
@@ -75,6 +77,8 @@ export default {
     send: 'Senden',
     stop: 'Stoppen',
     load_older: 'Ältere Nachrichten laden',
+    loading_older: 'Ältere Nachrichten werden geladen',
+    load_older_failed: 'Ältere Nachrichten nicht geladen · erneut versuchen',
     compacted: 'Verlauf wurde zusammengefasst',
     interrupted: 'Abgebrochen',
     agent_report: 'Rückmeldung von Subagent „{name}“',
@@ -161,6 +165,7 @@ export default {
     sent_now: 'jetzt',
     sent_ago: 'vor {age}',
     callout: {
+      changes: 'Aufträge',
       info: 'Einzelheiten',
       warning: 'Achtung',
       preview: 'So siehst du es',
@@ -345,21 +350,26 @@ export default {
     notes_title: 'Notizen zu den Markierungen',
     note_label: 'Notiz zu dieser Stelle',
     note_placeholder: 'Was soll hier anders sein?',
+    remove_mark: 'Markierung {n} entfernen',
+    remove_mark_unnumbered: 'Markierung entfernen',
     text_label: 'Text im Bild',
     text_placeholder: 'Text, Enter setzt ihn',
     comment_hint:
-      'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern.',
+      'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern. Senden schickt beides gleich als eigene Nachricht.',
     keep_original: 'Original zusätzlich mitschicken',
     discard: 'Verwerfen',
     apply: 'Ins Eingabefeld',
-    apply_phone_hint: 'Pfeil: markiertes Bild und Kommentar ins Eingabefeld',
+    send: 'Senden',
+    apply_phone_hint:
+      'Pfeil nach unten: Bild und Kommentar ins Eingabefeld. Pfeil nach oben: gleich senden.',
     cancel: 'Abbrechen',
     comment_line: 'Zu {ref}: {comment}',
     reference: '[Bild {n} ({name})]',
     close_warning:
       'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',
     too_large: 'Das markierte Bild ist zu groß für Claude.',
-    marked_limit: 'Höchstens {max} Bilder pro Nachricht. Entferne erst ein Bild.'
+    marked_limit: 'Höchstens {max} Bilder pro Nachricht. Entferne erst ein Bild.',
+    send_empty: 'Das Bild lässt sich nicht mitschicken, und ohne Kommentar bleibt nichts zu senden.'
   },
   sidebar: {
     loading: 'Sessions werden geladen',
@@ -383,7 +393,6 @@ export default {
       earlier: 'Früher'
     },
     empty_chat: 'wartet auf die erste Anfrage',
-    session_id: 'Session-ID {id}',
     age_running: 'läuft seit {age}',
     age_finished: 'fertig vor {age}',
     empty_title: 'Kein Chat offen',
@@ -1203,7 +1212,8 @@ export default {
       last_prompt: 'Letzte Anfrage:',
       claude: 'Claude:',
       asks_for: 'Fragt nach:',
-      to_chat: 'Zum Chat'
+      to_chat: 'Zum Chat',
+      copy_session_id: '{name}, Session-ID kopieren'
     },
     resume: 'Fortsetzen',
     resume_label: '{title} fortsetzen',

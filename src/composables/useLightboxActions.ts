@@ -2,7 +2,7 @@ import { ref, watch, type Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import type { useMarkup } from '@/composables/useMarkup'
-import type { useMarkupTarget } from '@/composables/useMarkupTarget'
+import type { MarkupHandoff, useMarkupTarget } from '@/composables/useMarkupTarget'
 import { handleError } from '@/lib/error'
 import { ImageTooLargeError, copyImage, downloadImage, flattenImage } from '@/lib/imageExport'
 import { fileNameOf, type LightboxImage } from '@/utils/attachments'
@@ -46,10 +46,15 @@ export const useLightboxActions = ({
   /** Back to viewing drops only the strokes. */
   const mayStopMarking = () => mayDrop(markup.strokes.value.length > 0)
 
-  // A comment alone on a history image brings a copy along, so Claude sees what it is about.
-  const imagesFor = async (image: LightboxImage): Promise<PendingImage[]> => {
+  // A comment alone on a history image brings a copy along, so Claude sees what it is about. An
+  // attachment stays where it is for the composer, but a message sent from here needs it along.
+  const imagesFor = async (
+    image: LightboxImage,
+    handoff: MarkupHandoff
+  ): Promise<PendingImage[]> => {
     if (!markup.strokes.value.length) {
-      const copy = image.id ? null : toPendingImage(image, newId)
+      const isInComposer = !!image.id && handoff === 'compose'
+      const copy = isInComposer ? null : toPendingImage(image, newId)
       return copy ? [copy] : []
     }
     const encoded = await flattenImage(image.src, markup.strokes.value, markup.numbers.value)
@@ -58,16 +63,16 @@ export const useLightboxActions = ({
     return original ? [marked, original] : [marked]
   }
 
-  const apply = async () => {
+  const apply = async (handoff: MarkupHandoff = 'compose') => {
     const image = current.value
     if (!image || !target || !markup.isDirty.value || isApplying.value) return
     isApplying.value = true
     try {
-      const images = await imagesFor(image)
+      const images = await imagesFor(image, handoff)
       // Discarded while the image was being encoded: the result is no longer wanted.
       if (!markup.isDirty.value) return
       const result = { sourceId: image.id ?? null, images }
-      if (!target({ ...result, comment: markup.fullComment.value })) return
+      if (!target({ ...result, comment: markup.fullComment.value }, handoff)) return
       markup.reset()
       onApplied()
     } catch (error) {

@@ -5,7 +5,7 @@ import { toast } from 'vue-sonner'
 import i18n from '@/i18n'
 import { flattenImage } from '@/lib/imageExport'
 import type { LightboxImage } from '@/utils/attachments'
-import type { MarkupResult } from '../useMarkupTarget'
+import type { MarkupHandoff, MarkupResult } from '../useMarkupTarget'
 import { useLightboxActions } from '../useLightboxActions'
 import { useProvideMarkup } from '../useMarkup'
 
@@ -22,7 +22,7 @@ const attached: LightboxImage = { id: 'a', src: SRC, name: 'shot.png', bytes: 3 
 const fromHistory: LightboxImage = { src: SRC, name: 'Bild 1', bytes: 3 }
 
 const setup = (image: LightboxImage) => {
-  const target = vi.fn((_result: MarkupResult) => true)
+  const target = vi.fn((_result: MarkupResult, _handoff: MarkupHandoff) => true)
   const onApplied = vi.fn()
   let api:
     | {
@@ -55,12 +55,36 @@ describe('useLightboxActions', () => {
     const { markup, actions, target, onApplied } = setup(attached)
     markup.comment.value = '  make the button blue '
     await actions.apply()
-    expect(target).toHaveBeenCalledWith({
-      sourceId: 'a',
-      images: [],
-      comment: 'make the button blue'
-    })
+    expect(target).toHaveBeenCalledWith(
+      { sourceId: 'a', images: [], comment: 'make the button blue' },
+      'compose'
+    )
     expect(flattenImage).not.toHaveBeenCalled()
+    expect(onApplied).toHaveBeenCalledOnce()
+  })
+
+  it('should send an attachment along with a comment alone when sent right away', async () => {
+    const { markup, actions, target, onApplied } = setup(attached)
+    markup.comment.value = 'make the button blue'
+    await actions.apply('send')
+    expect(target).toHaveBeenCalledWith(
+      {
+        sourceId: 'a',
+        images: [
+          {
+            id: 'a',
+            name: 'shot.png',
+            src: SRC,
+            bytes: 3,
+            isMarked: undefined,
+            mediaType: 'image/png',
+            data: 'QUJD'
+          }
+        ],
+        comment: 'make the button blue'
+      },
+      'send'
+    )
     expect(onApplied).toHaveBeenCalledOnce()
   })
 

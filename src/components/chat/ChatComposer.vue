@@ -11,11 +11,11 @@ import ChatComposerMenu from '@/components/chat/ChatComposerMenu.vue'
 import ChatComposerQueue from '@/components/chat/ChatComposerQueue.vue'
 import ChatContextRing from '@/components/chat/ChatContextRing.vue'
 import ChatPasteChip from '@/components/chat/ChatPasteChip.vue'
+import { useComposerMarkup } from '@/composables/useComposerMarkup'
 import { useComposerMenu } from '@/composables/useComposerMenu'
 import { useComposerPaste } from '@/composables/useComposerPaste'
 import { useImageAttachments } from '@/composables/useImageAttachments'
 import { useImageReferences } from '@/composables/useImageReferences'
-import type { MarkupResult } from '@/composables/useMarkupTarget'
 import { usePromptHistory } from '@/composables/usePromptHistory'
 import { useDraftStore } from '@/stores/drafts'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
@@ -44,6 +44,8 @@ const emit = defineEmits<{ send: [text: string, images: PendingImage[]]; interru
 const picker = ref<HTMLInputElement | null>(null)
 const field = useTemplateRef<InstanceType<typeof ChatComposerField>>('field')
 const menuView = useTemplateRef<InstanceType<typeof ChatComposerMenu>>('menuView')
+const attachmentList =
+  useTemplateRef<InstanceType<typeof ChatComposerAttachments>>('attachmentList')
 const caret = ref(0)
 const isShell = ref(false)
 
@@ -88,18 +90,43 @@ const history = usePromptHistory(() => [...tab.messages, ...tab.pending], draft,
  * Pasted, dropped or picked images: each also gets a reference where the user writes, or at the
  * end when the field never had the caret. A shell command has no room for one.
  */
-const attachFiles = async (files: Iterable<File>) => {
+const attachFiles = async (files: Iterable<File>): Promise<PendingImage[]> => {
   const added = await addFiles(files)
-  if (isShell.value) return
+  if (isShell.value) return added
   const isFocused = field.value?.isFocused() ?? false
   const selection = field.value?.selection() ?? null
   // Only a paste replaces selected text; a picked or dropped file lands after it.
   const at = selection && !isFocused ? { start: selection.end, end: selection.end } : selection
   const caretAfter = references.insert(added, at)
   if (caretAfter !== null && isFocused) setCaret(caretAfter)
+  return added
 }
 
-const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles: attachFiles })
+/** A comment on an image or on lines goes in front of the draft; nothing is sent. */
+const prependComment = (line: string) => {
+  draft.value = prependLine(draft.value, line)
+  focusField()
+}
+
+const { openImage, handOver } = useComposerMarkup({
+  images,
+  isShell,
+  references,
+  placeMarkedImages,
+  remove,
+  openAt: (at) => attachmentList.value?.openAt(at),
+  prependComment,
+  focusField,
+  send: (text, outgoing) => emit('send', text, outgoing)
+})
+
+const { handlePaste } = useComposerPaste({
+  images,
+  pastes,
+  isShell,
+  addFiles: attachFiles,
+  onSinglePaste: (image) => void openImage(image.id)
+})
 
 // Images still being read would otherwise miss this message and turn up in the next one.
 const canSend = computed(
@@ -203,37 +230,13 @@ const quote = (question: string) => {
   setCaret(quoted.length)
 }
 
-/** A comment on an image or on lines goes in front of the draft; nothing is sent. */
-const prependComment = (line: string) => {
-  draft.value = prependLine(draft.value, line)
-  focusField()
-}
-
-/**
- * A marked image from the preview, its comment in front of the draft; nothing is sent. The comment
- * names the image by a reference, so it follows the chips like any other.
- */
-const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
-  if (incoming.length && !placeMarkedImages(sourceId, incoming)) return false
-  const anchorId = incoming[0]?.id ?? sourceId
-  const at = images.value.findIndex((image) => image.id === anchorId)
-  const anchor = images.value[at]
-  if (!comment || !anchor) {
-    focusField()
-    return true
-  }
-  const ref = references.format.value.render(at + 1, anchor.name)
-  prependComment(t('images.comment_line', { ref, comment }))
-  return true
-}
-
 /** Line comments from the diff review, by the same path as a marked image's comment. */
 const takeReview = (comments: string) => {
   isShell.value = false
   prependComment(comments)
 }
 
-defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup, takeReview })
+defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, handOver, takeReview })
 </script>
 
 <template>
@@ -272,6 +275,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup
         >
           <ChatComposerAttachments
             v-if="images.length || isReading"
+            ref="attachmentList"
             :images
             :reading-count="readingCount"
             @update:images="reorder"
@@ -306,6 +310,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup
             @keydown="handleKeydown"
             @paste="handlePaste"
             @caret="caret = $event"
+            @open-image="attachmentList?.openAt($event - 1)"
           />
           <span
             v-if="!draft && !isShell && !isCompact"

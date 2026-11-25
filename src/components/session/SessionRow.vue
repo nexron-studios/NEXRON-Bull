@@ -78,7 +78,7 @@ const activity = computed(() => {
       </span>
       <button
         type="button"
-        class="motion-press flex w-full touch-manipulation items-center gap-3 rounded-lg py-2 pr-2.5 pl-5 text-left hover:bg-muted/60 pointer-coarse:pr-12"
+        class="motion-press flex w-full touch-manipulation items-center gap-3 rounded-lg py-2 pr-2.5 pl-5 text-left hover:bg-muted/60 has-[[data-copy-id]:active]:transform-none pointer-coarse:pr-12"
         :class="{ 'bg-muted hover:bg-muted': isActive }"
         :aria-current="isActive ? 'true' : undefined"
         @click="emit('open')"

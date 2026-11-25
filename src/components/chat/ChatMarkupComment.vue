@@ -1,33 +1,62 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { ArrowDown } from '@lucide/vue'
+import { computed, nextTick, useTemplateRef, watch } from 'vue'
+import { ArrowDown, ArrowUp, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import NchIconButton from '@/components/common/NchIconButton.vue'
+import NchKbd from '@/components/common/NchKbd.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMarkup } from '@/composables/useMarkup'
+import { useShortcutLabels } from '@/composables/useShortcutLabels'
+import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 
 // Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
 // composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
 // While marking, each numbered mark has its note here as well as on the image, so the text and
-// the spot it is about stay one thing; the field below is then for anything else. Nothing is sent
-// from here.
+// the spot it is about stay one thing; the field below is then for anything else. "Ins
+// Eingabefeld" hands everything to the composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it
+// as a message of its own. A long note wraps and grows up to a few lines, then scrolls. The × removes the mark
+// with its note; Backspace in a pin's empty note does too, as a pin is nothing without it.
+// Past about ten notes the list scrolls instead of squeezing the image, and a new mark's row
+// comes into view, since its note is typed on the image and the list would not follow by itself.
 const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
-const emit = defineEmits<{ discard: []; apply: [] }>()
+const emit = defineEmits<{ discard: []; apply: []; send: [] }>()
 
 const { t } = useI18n()
+const { labelOf, ariaOf } = useShortcutLabels()
 const markup = useMarkup()
+
+const rowLookOf = (id: string) => {
+  const stroke = markup.strokes.value.find((mark) => mark.id === id)
+  return { color: stroke?.color ?? 'transparent', isPin: stroke?.tool === 'pin' }
+}
 
 const rows = computed(() =>
   [...markup.numbers.value].map(([id, number]) => ({
     id,
     number,
-    color: markup.strokes.value.find((stroke) => stroke.id === id)?.color ?? 'transparent'
+    ...rowLookOf(id)
   }))
 )
+
+const handleNoteKeydown = (event: KeyboardEvent, row: { id: string; isPin: boolean }) => {
+  if (!row.isPin || markup.notes.value[row.id] || !isRemoveKey(event)) return
+  event.preventDefault()
+  markup.removeMark(row.id)
+}
 const hasNotes = computed(() => isMarking && rows.value.length > 0)
+
+const noteList = useTemplateRef('noteList')
+watch(
+  () => rows.value.length,
+  async (count, previousCount) => {
+    if (count <= previousCount) return
+    await nextTick()
+    noteList.value?.lastElementChild?.scrollIntoView({ block: 'nearest' })
+  }
+)
 </script>
 
 <template>
@@ -38,23 +67,41 @@ const hasNotes = computed(() => isMarking && rows.value.length > 0)
     <Label id="markup-comment-title" for="markup-comment" class="sr-only">
       {{ t('images.comment_title') }}
     </Label>
-    <ol v-if="hasNotes" :aria-label="t('images.notes_title')" class="flex flex-col gap-1">
-      <li v-for="row in rows" :key="row.id" class="flex items-center gap-2">
+    <!-- The padding keeps the focus ring of a note inside the scrolling box. -->
+    <ol
+      v-if="hasNotes"
+      ref="noteList"
+      :aria-label="t('images.notes_title')"
+      class="-m-1 flex max-h-82 flex-col gap-1 overflow-y-auto overscroll-contain p-1"
+    >
+      <li v-for="row in rows" :key="row.id" class="flex items-start gap-2">
         <span
-          class="grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"
+          class="mt-1 grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"
           :style="{ backgroundColor: row.color }"
           aria-hidden="true"
         >
           {{ row.number }}
         </span>
-        <Input
+        <Textarea
           :model-value="markup.notes.value[row.id] ?? ''"
+          rows="1"
           :aria-label="`${t('images.note_label')} ${row.number}`"
           :placeholder="t('images.note_placeholder')"
-          class="h-7 text-small"
+          class="max-h-24 min-h-7 resize-none py-1 text-small"
           @update:model-value="markup.setNote(row.id, String($event))"
           @blur="markup.settleNote(row.id)"
+          @keydown="handleNoteKeydown($event, row)"
         />
+        <!-- mousedown would blur the note first, and an empty one gives its row up on blur. -->
+        <NchIconButton
+          :label="t('images.remove_mark', { n: row.number })"
+          size="icon-xs"
+          class="mt-1 shrink-0 text-muted-foreground"
+          @mousedown.prevent
+          @click="markup.removeMark(row.id)"
+        >
+          <X aria-hidden="true" />
+        </NchIconButton>
       </li>
     </ol>
     <Textarea
@@ -83,14 +130,26 @@ const hasNotes = computed(() => isMarking && rows.value.length > 0)
           {{ t('images.discard') }}
         </Button>
         <Button
+          variant="secondary"
           size="sm"
-          class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
           :disabled="!markup.isDirty.value"
           :aria-busy="isApplying"
           @click="emit('apply')"
         >
           <ArrowDown aria-hidden="true" />
           {{ t('images.apply') }}
+        </Button>
+        <Button
+          size="sm"
+          class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
+          :disabled="!markup.isDirty.value"
+          :aria-busy="isApplying"
+          :aria-keyshortcuts="ariaOf(SEND_CHORD)"
+          @click="emit('send')"
+        >
+          <ArrowUp aria-hidden="true" />
+          {{ t('images.send') }}
+          <NchKbd :key-label="labelOf(SEND_CHORD)" is-on-fill />
         </Button>
       </div>
     </div>

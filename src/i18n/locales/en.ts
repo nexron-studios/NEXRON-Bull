@@ -4,7 +4,9 @@ export default {
     studio_name: 'NEXRON Studios',
     cancel: 'Cancel',
     save: 'Save',
-    undo: 'Undo'
+    undo: 'Undo',
+    session_id: 'Session ID {id}',
+    session_id_copy: 'Session ID {id}, click to copy'
   },
   bridge: {
     title: 'Connect Bull on this device',
@@ -74,6 +76,8 @@ export default {
     send: 'Send',
     stop: 'Stop',
     load_older: 'Load older messages',
+    loading_older: 'Loading older messages',
+    load_older_failed: 'Older messages did not load · try again',
     compacted: 'Conversation was compacted',
     interrupted: 'Stopped',
     agent_report: 'Report from subagent “{name}”',
@@ -160,6 +164,7 @@ export default {
     sent_now: 'just now',
     sent_ago: '{age} ago',
     callout: {
+      changes: 'Requests',
       info: 'Details',
       warning: 'Heads-up',
       preview: 'Where to see it',
@@ -342,20 +347,24 @@ export default {
     notes_title: 'Notes on the marks',
     note_label: 'Note on this spot',
     note_placeholder: 'What should change here?',
+    remove_mark: 'Remove mark {n}',
+    remove_mark_unnumbered: 'Remove mark',
     text_label: 'Text in the image',
     text_placeholder: 'Text, Enter places it',
     comment_hint:
-      'Goes into your message with the image, marked if you drew on it. You can still edit it there.',
+      'Goes into your message with the image, marked if you drew on it. You can still edit it there. Send sends both right away as a message of their own.',
     keep_original: 'Also send the original',
     discard: 'Discard',
     apply: 'Add to message',
-    apply_phone_hint: 'Arrow: marked image and comment into your message',
+    send: 'Send',
+    apply_phone_hint: 'Arrow down: image and comment into your message. Arrow up: send right away.',
     cancel: 'Cancel',
     comment_line: 'About {ref}: {comment}',
     reference: '[Image {n} ({name})]',
     close_warning: 'The comment or markup is not in your message yet. Do it again to discard it.',
     too_large: 'The marked image is too large for Claude.',
-    marked_limit: 'At most {max} images per message. Remove an image first.'
+    marked_limit: 'At most {max} images per message. Remove an image first.',
+    send_empty: 'This image cannot be sent, and without a comment there is nothing to send.'
   },
   sidebar: {
     loading: 'Loading sessions',
@@ -379,7 +388,6 @@ export default {
       earlier: 'Earlier'
     },
     empty_chat: 'waiting for the first prompt',
-    session_id: 'Session ID {id}',
     age_running: 'running for {age}',
     age_finished: 'finished {age} ago',
     empty_title: 'No chat open',
@@ -1184,7 +1192,8 @@ export default {
       last_prompt: 'Last prompt:',
       claude: 'Claude:',
       asks_for: 'Asks for:',
-      to_chat: 'Go to chat'
+      to_chat: 'Go to chat',
+      copy_session_id: '{name}, copy session ID'
     },
     resume: 'Continue',
     resume_label: 'Continue {title}',

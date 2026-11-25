@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
 import ChatTextPieces from '@/components/chat/ChatTextPieces.vue'
 import { mentionRangesOf } from '@/utils/fileMentions'
-import type { TextSelection } from '@/utils/imageRefs'
+import { imageRefNumberAt, type ImageRefBox, type TextSelection } from '@/utils/imageRefs'
 import { textPiecesOf, type Highlight } from '@/utils/textPieces'
 
 // The composer's text field. A textarea cannot style part of its text, so mentioned files and
@@ -13,6 +14,8 @@ import { textPiecesOf, type Highlight } from '@/utils/textPieces'
 // Both wrap, so neither ever scrolls sideways: `overflow-x-hidden` says so, because the system
 // WebView (WebKit regression 311766@main, fixed upstream in 312927@main) sometimes gave the empty
 // field a horizontal scrollbar anyway.
+// The chips lie behind the textarea, so a click on one is found by position: it opens that image,
+// and the caret still lands where the click put it.
 const {
   placeholder,
   label,
@@ -36,6 +39,8 @@ const emit = defineEmits<{
   keydown: [event: KeyboardEvent]
   paste: [event: ClipboardEvent]
   caret: [at: number]
+  /** A reference chip was clicked; `n` is its image's number, from 1 */
+  openImage: [n: number]
 }>()
 
 const text = defineModel<string>({ required: true })
@@ -45,6 +50,7 @@ const mirror = useTemplateRef<HTMLElement>('mirror')
 
 // Until the field was focused once, its selection says nothing about where the user writes.
 const hasCaret = ref(false)
+const isOverChip = ref(false)
 
 const pieces = computed(() =>
   isShell ? [] : textPiecesOf(text.value, [...mentionRangesOf(text.value, known), ...highlights])
@@ -63,7 +69,50 @@ const handleFocus = () => {
   hasCaret.value = true
   reportCaret()
 }
+// The chips' boxes relative to the mirror, measured once per layout: the pointer moves far more
+// often than the text, its scroll or the field's width change, which are what forget them.
+let chipBoxes: ImageRefBox[] | null = null
+const forgetChipBoxes = () => {
+  chipBoxes = null
+}
+const measureChipBoxes = (origin: DOMRect): ImageRefBox[] =>
+  [...(mirror.value?.querySelectorAll<HTMLElement>('[data-image-ref]') ?? [])].map((chip) => {
+    const { left, right, top, bottom } = chip.getBoundingClientRect()
+    return {
+      n: Number(chip.dataset.imageRef),
+      rect: {
+        left: left - origin.left,
+        right: right - origin.left,
+        top: top - origin.top,
+        bottom: bottom - origin.top
+      }
+    }
+  })
+const chipAt = (event: MouseEvent) => {
+  if (!hasChip.value || !mirror.value) return null
+  const origin = mirror.value.getBoundingClientRect()
+  chipBoxes ??= measureChipBoxes(origin)
+  return imageRefNumberAt(chipBoxes, event.clientX - origin.left, event.clientY - origin.top)
+}
+
+const trackChip = (event: MouseEvent) => {
+  isOverChip.value = chipAt(event) !== null
+}
+
+// A drag that ends on a chip selects text, and a modifier click extends the selection; only a
+// plain click opens the image.
+const handleClick = (event: MouseEvent) => {
+  reportCaret()
+  if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return
+  if (field.value && field.value.selectionStart !== field.value.selectionEnd) return
+  // A click is rare enough to measure afresh, so it never trusts a layout that moved unnoticed.
+  forgetChipBoxes()
+  const n = chipAt(event)
+  if (n !== null) emit('openImage', n)
+}
+
 const syncScroll = () => {
+  forgetChipBoxes()
   if (mirror.value && field.value) mirror.value.scrollTop = field.value.scrollTop
 }
 const focus = () => field.value?.focus()
@@ -85,6 +134,7 @@ const setCaret = async (at: number) => {
 
 // A mirror that just appeared, or text that changed the height, starts at the field's scroll.
 watch(pieces, syncScroll, { flush: 'post' })
+useResizeObserver(mirror, forgetChipBoxes)
 
 defineExpose({ focus, isFocused, selection, setCaret, field })
 </script>
@@ -118,12 +168,15 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
       :class="[
         isShell && 'font-mono',
         hasChip &&
-          'text-transparent caret-foreground selection:bg-brand/30 selection:text-transparent'
+          'text-transparent caret-foreground selection:bg-brand/30 selection:text-transparent',
+        isOverChip && 'cursor-pointer'
       ]"
       @keydown="emit('keydown', $event)"
       @paste="emit('paste', $event)"
       @input="handleInput"
-      @click="reportCaret"
+      @click="handleClick"
+      @mousemove="trackChip"
+      @mouseleave="isOverChip = false"
       @keyup="reportCaret"
       @focus="handleFocus"
       @scroll="syncScroll"

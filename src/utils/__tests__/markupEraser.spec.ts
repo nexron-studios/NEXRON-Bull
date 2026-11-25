@@ -161,6 +161,21 @@ describe('eraseAlong', () => {
     expect(eraseAlong(strokes, at(50, 50), at(60, 50), 2)).toBe(strokes)
   })
 
+  it('should take every piece of a numbered mark when the eraser touches its number', () => {
+    const arrow = shape('arrow', [0, 0], [100, 0])
+    const kept = pen([[0, 100]])
+
+    expect(eraseAlong([arrow, kept], at(0, 12), at(0, 12), 4, new Map([['arrow', 1]]))).toEqual([
+      kept
+    ])
+  })
+
+  it('should only cut a mark without a number where the eraser passes', () => {
+    const arrow = shape('arrow', [0, 0], [100, 0])
+
+    expect(eraseAlong([arrow], at(0, 12), at(0, 12), 4)).toEqual([arrow])
+  })
+
   it('should remove a dot and keep the strokes the drag missed', () => {
     const dot = pen([[10, 10]])
     const kept = pen([[100, 100]])

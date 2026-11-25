@@ -15,6 +15,7 @@ import {
   strokeWidthOf,
   toImagePoint,
   undoHistory,
+  withoutMark,
   type LineStroke,
   type Stroke
 } from '../markup'
@@ -183,6 +184,13 @@ describe('numbered marks', () => {
 
   it('should number a mark cut in pieces once', () => {
     expect([...markNumbersOf([mark('a'), mark('a')], { a: 'x' })]).toEqual([['a', 1]])
+  })
+
+  it('should remove every piece of a mark and number the rest anew', () => {
+    const strokes = withoutMark([pin('p1'), mark('a'), mark('a'), pin('p2')], 'a')
+
+    expect(strokes.map((stroke) => stroke.id)).toEqual(['p1', 'p2'])
+    expect([...markNumbersOf(withoutMark(strokes, 'p1'), {})]).toEqual([['p2', 1]])
   })
 
   it('should never number a text', () => {

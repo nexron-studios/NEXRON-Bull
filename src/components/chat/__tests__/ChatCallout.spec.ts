@@ -84,6 +84,16 @@ describe('ChatCallout', () => {
     expect(wrapper.get('[role="note"]').attributes('aria-label')).toBe('Achtung')
   })
 
+  it('should label the list of requests and offer no buttons on it', () => {
+    i18n.global.locale.value = 'de'
+    const { wrapper } = mountInPane(calloutOf('changes', 'Tab-Linie: gemergt'))
+
+    expect([
+      wrapper.get('[role="note"]').attributes('aria-label'),
+      wrapper.findAll('button').length
+    ]).toEqual(['Aufträge', 0])
+  })
+
   it('should show no buttons outside a chat pane', () => {
     i18n.global.locale.value = 'de'
     const wrapper = mount(ChatCallout, {

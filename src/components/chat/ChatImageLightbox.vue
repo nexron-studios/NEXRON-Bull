@@ -13,20 +13,24 @@ import { useProvideMarkup } from '@/composables/useMarkup'
 import { useMarkupTarget } from '@/composables/useMarkupTarget'
 import { useIsPhone } from '@/composables/useViewport'
 import { imageMeta, stepIndex, type LightboxImage } from '@/utils/attachments'
-import type { LightboxMode } from '@/utils/lightbox'
+import { startModeOf, type LightboxMode } from '@/utils/lightbox'
 import type { Size } from '@/utils/markup'
-import { historyStepOf } from '@/utils/shortcuts'
+import { historyStepOf, isSendShortcut } from '@/utils/shortcuts'
 import { isTextField } from '@/utils/textField'
 
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
 // "M20"): view and page, or draw on it; either way a comment can go with it to the composer.
-const { images } = defineProps<{ images: LightboxImage[] }>()
+// `initialMode`: what an opening starts in. The composer's own images open ready to draw on;
+// sent ones open to look at.
+const { images, initialMode = 'view' } = defineProps<{
+  images: LightboxImage[]
+  initialMode?: LightboxMode
+}>()
 
 const isOpen = defineModel<boolean>('open', { required: true })
 const index = defineModel<number>('index', { required: true })
 
 const stage = ref<InstanceType<typeof ChatLightboxStage> | null>(null)
-const mode = ref<LightboxMode>('view')
 const zoom = ref(1)
 const natural = ref<Size | null>(null)
 
@@ -34,6 +38,7 @@ const { t, locale } = useI18n()
 const isPhone = useIsPhone()
 const markup = useProvideMarkup()
 const target = useMarkupTarget()
+const mode = ref<LightboxMode>(startModeOf(initialMode, !!target))
 
 const current = computed(() => images[index.value] ?? null)
 const hasSeveral = computed(() => images.length > 1)
@@ -89,17 +94,27 @@ const focusStage = (event: Event) => {
   stage.value?.focus()
 }
 
+/** Undo and redo of the drawing; false for any other key. */
 const handleMarkKey = (event: KeyboardEvent) => {
   const action = historyStepOf(event)
-  if (!action) return
+  if (!action) return false
   event.preventDefault()
   markup[action]()
+  return true
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
+  // Also from inside a note or the comment, where a plain Enter has its own meaning.
+  if (target && isSendShortcut(event)) {
+    event.preventDefault()
+    void apply('send')
+    return
+  }
   // The comment field keeps its own keys: text undo, and arrows that move the caret.
   if (isTextField(event.target)) return
-  if (isMarking.value) return handleMarkKey(event)
+  if (isMarking.value && handleMarkKey(event)) return
+  // Arrows page while marking too, since the composer's images open ready to mark; unsaved
+  // marks are asked about first, as on closing (`step` goes through `mayLeave`).
   const delta = KEY_STEPS[event.key]
   if (!delta || !hasSeveral.value) return
   event.preventDefault()
@@ -112,7 +127,10 @@ watch(index, () => {
 })
 
 watch(isOpen, (open) => {
-  if (open) return
+  if (open) {
+    mode.value = startModeOf(initialMode, !!target)
+    return
+  }
   discard()
   zoom.value = 1
 })
@@ -151,7 +169,12 @@ watch(isOpen, (open) => {
             @step="step"
             @load="natural = $event"
           />
-          <ChatMarkupSheet v-if="isMarking" :is-applying @apply="apply" />
+          <ChatMarkupSheet
+            v-if="isMarking"
+            :is-applying
+            @apply="apply('compose')"
+            @send="apply('send')"
+          />
           <ChatLightboxPhoneBar
             v-else
             class="pb-safe"
@@ -162,7 +185,8 @@ watch(isOpen, (open) => {
             @step="step"
             @copy="copy"
             @mark="setMode('mark')"
-            @apply="apply"
+            @apply="apply('compose')"
+            @send="apply('send')"
           />
         </template>
 
@@ -195,7 +219,8 @@ watch(isOpen, (open) => {
             :is-marking
             :is-applying
             @discard="discard"
-            @apply="apply"
+            @apply="apply('compose')"
+            @send="apply('send')"
           />
         </div>
       </template>

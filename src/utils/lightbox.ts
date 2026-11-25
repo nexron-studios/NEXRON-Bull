@@ -5,6 +5,10 @@ import type { ImageType, PendingImage } from '@/utils/content'
 export const lightboxModeList = ['view', 'mark'] as const
 export type LightboxMode = (typeof lightboxModeList)[number]
 
+/** The mode a preview opens in: marking only where the markup has somewhere to go. */
+export const startModeOf = (requested: LightboxMode, canMark: boolean): LightboxMode =>
+  canMark ? requested : 'view'
+
 const DATA_URL = /^data:([^;,]+);base64,(.*)$/s
 
 /** Media type and base64 of a data URL; `null` for anything Claude would not take as an image. */

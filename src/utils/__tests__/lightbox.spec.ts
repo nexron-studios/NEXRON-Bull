@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markedCopyOf, parseDataUrl, toPendingImage } from '../lightbox'
+import { markedCopyOf, parseDataUrl, startModeOf, toPendingImage } from '../lightbox'
 
 describe('parseDataUrl', () => {
   it('should split a base64 image data URL into media type and data', () => {
@@ -58,5 +58,19 @@ describe('markedCopyOf', () => {
       data: 'aGk=',
       bytes: 2
     })
+  })
+})
+
+describe('startModeOf', () => {
+  it('should open ready to mark when asked and the markup has a target', () => {
+    expect(startModeOf('mark', true)).toBe('mark')
+  })
+
+  it('should open for viewing when nothing could take the markup', () => {
+    expect(startModeOf('mark', false)).toBe('view')
+  })
+
+  it('should keep viewing when viewing was asked for', () => {
+    expect(startModeOf('view', true)).toBe('view')
   })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Archive, Copy, OctagonX, SquareSlash } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/types/agentd.type'
@@ -13,6 +13,7 @@ import NchIconButton from '@/components/common/NchIconButton.vue'
 import ChatAgentMessage from '@/components/chat/ChatAgentMessage.vue'
 import ChatHookLine from '@/components/chat/ChatHookLine.vue'
 import ChatImageGallery from '@/components/chat/ChatImageGallery.vue'
+import ChatImageLightbox from '@/components/chat/ChatImageLightbox.vue'
 import ChatLimitMovedCard from '@/components/chat/ChatLimitMovedCard.vue'
 import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import ChatShellBlock from '@/components/chat/ChatShellBlock.vue'
@@ -24,6 +25,7 @@ import ChatUserMessageActions from '@/components/chat/ChatUserMessageActions.vue
 import { useCalloutTarget } from '@/composables/useCalloutTarget'
 import { toolCardIdOf } from '@/composables/useChatReveal'
 import { useImageRefFormat } from '@/composables/useImageRefFormat'
+import { useSentImages } from '@/composables/useSentImages'
 
 // `stats`: the answer ends its turn; the line under it says what the turn took.
 const {
@@ -60,6 +62,19 @@ const firstImageIndex = computed(() => message.blocks.findIndex((block) => block
 const texts = computed(() =>
   message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
 )
+const sentImages = useSentImages(
+  () => imageBlocks.value,
+  () => texts.value
+)
+
+// One preview per message, so a tile and a chip in the text open the same images.
+const isPreviewOpen = ref(false)
+const previewIndex = ref(0)
+const openPreview = (at: number) => {
+  if (!sentImages.value[at]) return
+  previewIndex.value = at
+  isPreviewOpen.value = true
+}
 
 /** A sent prompt's text with its image references highlighted like in the composer. */
 const promptPiecesOf = (text: string) =>
@@ -131,7 +146,11 @@ const shellOutputAt = (index: number) => {
         v-else-if="block.type === 'text' && message.role === 'user'"
         class="max-w-[72ch] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-body break-words whitespace-pre-wrap"
       >
-        <ChatTextPieces :pieces="promptPiecesOf(block.text)" />
+        <ChatTextPieces
+          :pieces="promptPiecesOf(block.text)"
+          :images="sentImages"
+          @open="openPreview($event - 1)"
+        />
       </div>
       <ChatMarkdown
         v-else-if="block.type === 'text'"
@@ -140,8 +159,8 @@ const shellOutputAt = (index: number) => {
       />
       <ChatImageGallery
         v-else-if="block.type === 'image' && index === firstImageIndex"
-        :blocks="imageBlocks"
-        :texts
+        :images="sentImages"
+        @open="openPreview"
       />
       <ChatToolCall
         v-else-if="block.type === 'tool_use'"
@@ -200,5 +219,11 @@ const shellOutputAt = (index: number) => {
       </NchIconButton>
       <ChatTurnStats v-if="stats" :stats />
     </div>
+    <ChatImageLightbox
+      v-if="sentImages.length"
+      v-model:open="isPreviewOpen"
+      v-model:index="previewIndex"
+      :images="sentImages"
+    />
   </div>
 </template>

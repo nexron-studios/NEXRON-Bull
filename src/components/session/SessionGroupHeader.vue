@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { CircleAlert, CircleCheck, History, ListX, LoaderCircle, Timer } from '@lucide/vue'
+import { CircleAlert, CircleCheck, ListX, LoaderCircle, Timer } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import BrandClawdMark from '@/components/brand/BrandClawdMark.vue'
 import NchScrollEdge from '@/components/common/NchScrollEdge.vue'
@@ -34,8 +34,7 @@ const GROUP_LOOK: Record<SessionGroup, { icon: Component; class: string }> = {
   running: { icon: LoaderCircle, class: 'text-warning' },
   empty: { icon: BrandClawdMark, class: '' },
   waiting: { icon: Timer, class: 'text-act-read' },
-  done: { icon: CircleCheck, class: 'text-good' },
-  earlier: { icon: History, class: 'text-muted-foreground' }
+  done: { icon: CircleCheck, class: 'text-good' }
 }
 </script>
 

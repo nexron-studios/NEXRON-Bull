@@ -16,7 +16,7 @@ import { resultsByToolId } from '@/utils/toolPairs'
 import { summarizeToolInput } from '@/utils/toolSummary'
 
 /** The sidebar's groups, in the order they are shown: what needs the user comes first. */
-export const sessionGroupList = ['needs', 'running', 'empty', 'waiting', 'done', 'earlier'] as const
+export const sessionGroupList = ['needs', 'running', 'empty', 'waiting', 'done'] as const
 export type SessionGroup = (typeof sessionGroupList)[number]
 
 /** Shown even when empty, with a line saying so (Figma "02 Desktop"); the others come and go. */
@@ -38,7 +38,6 @@ export const isSortableGroup = (group: SessionGroup): boolean => {
     case 'empty':
     case 'waiting':
     case 'done':
-    case 'earlier':
       return false
     default: {
       const unhandled: never = group
@@ -66,7 +65,7 @@ export interface SessionRow {
   account: string
   status: TabStatus
   group: SessionGroup
-  /** Running since (needs, running) or finished at (done, earlier), in ms; `null` when unknown */
+  /** Running since (needs, running) or finished at (done), in ms; `null` when unknown */
   since: number | null
 }
 
@@ -156,9 +155,9 @@ const groupOfTab = (tab: ChatTabState, finishedAt: number | null, today: number)
       return 'running'
     case 'idle':
     case 'ended':
-      if (!isFinishedToday(tab, finishedAt, today)) return 'earlier'
       // An answer from today that ends on a question waits for the user, like an approval does.
-      return openQuestionOf(tab) ? 'needs' : 'done'
+      // Every other finished tab is "done", whatever day it finished (25.11.2026).
+      return openQuestionOf(tab) && isFinishedToday(tab, finishedAt, today) ? 'needs' : 'done'
     default: {
       const unhandled: never = tab.status
       throw new Error(`Unhandled tab status: ${unhandled}`)

@@ -390,8 +390,7 @@ export default {
       running: 'Läuft',
       empty: 'Noch leer',
       waiting: 'Wartet auf Limit',
-      done: 'Fertig heute',
-      earlier: 'Früher'
+      done: 'Fertig'
     },
     empty_chat: 'wartet auf die erste Anfrage',
     age_running: 'läuft seit {age}',
@@ -421,8 +420,8 @@ export default {
         hint_phone: 'Mit + oben startest du eine neue Session.'
       },
       done: {
-        title: 'Heute noch nichts fertig',
-        hint: 'Was Claude heute abschließt, sammelt sich hier.'
+        title: 'Noch nichts fertig',
+        hint: 'Was Claude abschließt, sammelt sich hier.'
       }
     },
     all_loaded: 'Alle {n} Sessions geladen',

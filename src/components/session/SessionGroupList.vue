@@ -123,10 +123,7 @@ const emptySize = computed(() => (isPhone.value ? 'md' : 'sm'))
 const EMPTY_ENTER = 'motion-stagger [animation-delay:80ms]'
 const shownGroups = computed(() => sliceGroups(groups, limit.value))
 
-/**
- * Per group, its rows whose chat finished and was not seen yet. Mostly "done", but a turn that
- * ended before midnight or a tab restored after a restart sits in "earlier".
- */
+/** Per group, its rows whose chat finished and was not seen yet. */
 const unseenCounts = computed(
   () =>
     new Map(
@@ -137,12 +134,10 @@ const unseenCounts = computed(
     )
 )
 
-const FINISHED_GROUPS: readonly SessionGroup[] = ['done', 'earlier']
-
 // Seen rows step back only beside a numbered one (Figma `.agent.seen`): the dimming tells new from
 // seen. With nothing new, a whole group at 72 % would only look disabled. The open chat never does.
 const isSeenRow = (group: SessionGroup, row: SessionRowItem) =>
-  FINISHED_GROUPS.includes(group) &&
+  group === 'done' &&
   !!unseenCounts.value.get(group) &&
   !(finishRanks.value.has(row.tab.id) || row.tab.id === activeId)
 

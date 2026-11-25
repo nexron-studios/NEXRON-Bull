@@ -27,7 +27,7 @@ const order = useSessionOrder(machine)
 const { finishRanks } = storeToRefs(useChatStore())
 
 // The open tabs in the panel's order; no recent list, search or ticker here. The clock is read
-// when tabs change, it only splits "done today" from "earlier".
+// when tabs change, it only tells whether a question from today still waits under "needs".
 const items = computed(() =>
   withManualOrder(
     groupRows(sessionRowsOf(tabsByMachine.value.get(machine.value) ?? [], [], Date.now())),

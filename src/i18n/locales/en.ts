@@ -385,8 +385,7 @@ export default {
       running: 'Running',
       empty: 'Still empty',
       waiting: 'Waiting for limit',
-      done: 'Done today',
-      earlier: 'Earlier'
+      done: 'Done'
     },
     empty_chat: 'waiting for the first prompt',
     age_running: 'running for {age}',
@@ -416,8 +415,8 @@ export default {
         hint_phone: 'Tap + at the top to start a new session.'
       },
       done: {
-        title: 'Nothing finished today yet',
-        hint: 'What Claude finishes today collects here.'
+        title: 'Nothing finished yet',
+        hint: 'What Claude finishes collects here.'
       }
     },
     all_loaded: 'All {n} sessions loaded',

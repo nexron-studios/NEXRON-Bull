@@ -96,13 +96,18 @@ describe('sessionRowsOf and groupRows', () => {
     ])
   })
 
-  it('should file ended tabs by their transcript time when the app did not see them finish', () => {
-    const tabs = [tab('today', { status: 'ended' }), tab('before', { status: 'ended' })]
+  it('should sort ended tabs by their transcript time when the app did not see them finish', () => {
+    const tabs = [tab('before', { status: 'ended' }), tab('today', { status: 'ended' })]
     const recent = [session('s-today', NOON - 2 * MINUTE), session('s-before', YESTERDAY)]
-    expect(keysByGroup(tabs, recent)).toEqual([
-      ['done', ['today']],
-      ['earlier', ['before']]
-    ])
+    expect(keysByGroup(tabs, recent)).toEqual([['done', ['today', 'before']]])
+  })
+
+  it('should keep a tab finished on an earlier day under "done"', () => {
+    const tabs = [
+      tab('yesterday', { status: 'idle', finishedAt: YESTERDAY }),
+      tab('today', { status: 'idle', finishedAt: NOON - MINUTE })
+    ]
+    expect(keysByGroup(tabs)).toEqual([['done', ['today', 'yesterday']]])
   })
 
   it('should list only open tabs, not sessions closed today', () => {
@@ -198,12 +203,9 @@ describe('an answer that ends on a question', () => {
     expect(rowActivityOf(asking('ask'))).toEqual({ kind: 'ask', reason: 'question' })
   })
 
-  it('should leave an older chat that ended on a question under "earlier"', () => {
+  it('should leave an older chat that ended on a question under "done"', () => {
     const old = { ...asking('old'), status: 'ended' as const, finishedAt: YESTERDAY }
-    expect([keysByGroup([old]), machineStateOf([old], NOON)]).toEqual([
-      [['earlier', ['old']]],
-      null
-    ])
+    expect([keysByGroup([old]), machineStateOf([old], NOON)]).toEqual([[['done', ['old']]], null])
   })
 
   it('should count its time from the answer, not from the turn start', () => {
@@ -290,9 +292,8 @@ describe('a chat that moves to another account', () => {
 
   it('should keep the finish time its transcript had under the old account', () => {
     const moved = tab('moved', { status: 'idle', account: 'gmail', sessionId: 's1' })
-    expect(keysByGroup([moved], [session('s1', YESTERDAY, 'office')])).toEqual([
-      ['earlier', ['moved']]
-    ])
+    const [row] = sessionRowsOf([moved], [session('s1', YESTERDAY, 'office')], NOON)
+    expect([row.group, row.since]).toEqual(['done', YESTERDAY])
   })
 })
 

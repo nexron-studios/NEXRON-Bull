@@ -322,9 +322,12 @@ fn denies_an_open_ask_before_clearing() {
     let (profile, cwd) = (temp_dir("clear-ask-profile"), temp_dir("clear-ask-cwd"));
     let session_id = start_tab(&mut agentd, 24, "t24", &profile, &cwd)["session_id"].clone();
     agentd.send(json!({ "op": "send", "tab": "t24", "content": [{ "type": "text", "text": "please write" }] }));
-    agentd.expect(|e| claude_event(e, "control_request").is_some());
+    let asked = agentd.expect(|e| claude_event(e, "control_request").is_some());
 
     agentd.send(json!({ "id": 25, "op": "clear", "tab": "t24", "session_id": session_id }));
+    // Another app drops its card too.
+    let resolved = agentd.expect(|e| e["type"] == "permission_resolved");
+    assert_eq!((&resolved["tab"], &resolved["request_id"]), (&json!("t24"), &asked["event"]["request_id"]));
     assert_eq!(agentd.expect(|e| claude_event(e, "result").is_some())["event"]["result"], "decision: \"deny\"");
     agentd.expect(|e| claude_event(e, "conversation_reset").is_some());
 }

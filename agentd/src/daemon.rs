@@ -569,6 +569,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 "response": { "subtype": "success", "request_id": ask["request_id"],
                     "response": { "behavior": "deny", "message": CLEAR_DENIAL, "interrupt": true } },
             }))?;
+            // The other apps still show the card; the one that cleared drops it with the chat.
+            if let Some(request_id) = ask["request_id"].as_str() {
+                self.emit(&Event::PermissionResolved { tab: tab.to_string(), request_id: request_id.to_string() });
+            }
         }
         if is_working {
             self.control(tab, json!({ "subtype": "interrupt" }))?;

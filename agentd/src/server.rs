@@ -2,7 +2,7 @@
 //! `agentd connect`, started over SSH, relays one app to it. Claude keeps running when the SSH
 //! connection ends, because only the server, not the relay, is its parent.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -24,6 +24,9 @@ const HANDSHAKE_OK: &[u8; 3] = b"ok\n";
 const START_TIMEOUT: Duration = Duration::from_secs(15);
 const RETRY_DELAY: Duration = Duration::from_millis(200);
 const IDLE_CHECK: Duration = Duration::from_secs(30);
+/// Requests still waiting for their answer, over all apps. An app puts an id only on what answers,
+/// but an op that never does would keep its entry; past this the oldest are given up.
+const MAX_OPEN_ASKS: usize = 4096;
 
 /// Every connected app. An answer goes back only to the app that asked, under the id it asked
 /// with: every app counts its request ids from 1, so the server hands agentd ids of its own.
@@ -35,7 +38,9 @@ struct Clients(Arc<Mutex<Routes>>);
 struct Routes {
     streams: Vec<(u64, TcpStream)>,
     /// Server request id → the app that asked and its own id; gone once answered.
-    asked: HashMap<u64, (u64, u64)>,
+    asked: BTreeMap<u64, (u64, u64)>,
+    /// Ids asked by an app that left before the answer: that answer goes to nobody.
+    orphaned: BTreeSet<u64>,
     next_id: u64,
     /// `emit` may write one event in pieces; it is routed once its line is complete.
     line: Vec<u8>,
@@ -55,6 +60,9 @@ impl Clients {
         routes.next_id += 1;
         let id = routes.next_id;
         routes.asked.insert(id, (client, own));
+        if routes.asked.len() > MAX_OPEN_ASKS {
+            routes.asked.pop_first();
+        }
         request["id"] = Value::from(id);
         request.to_string()
     }
@@ -62,7 +70,14 @@ impl Clients {
     fn leave(&self, client: u64) {
         let mut routes = self.lock();
         routes.streams.retain(|(known, _)| *known != client);
-        routes.asked.retain(|_, (asker, _)| *asker != client);
+        let gone: Vec<u64> = routes.asked.iter().filter(|(_, (asker, _))| *asker == client).map(|(id, _)| *id).collect();
+        for id in gone {
+            routes.asked.remove(&id);
+            routes.orphaned.insert(id);
+        }
+        while routes.orphaned.len() > MAX_OPEN_ASKS {
+            routes.orphaned.pop_first();
+        }
     }
 }
 
@@ -79,6 +94,9 @@ impl Routes {
             Ok(event) => event,
             Err(_) => return self.broadcast(line),
         };
+        if self.orphaned.remove(&id) {
+            return;
+        }
         let Some((client, own)) = self.asked.remove(&id) else {
             // A second event for an answered request: its id means nothing to any app.
             event["id"] = Value::Null;
@@ -254,4 +272,51 @@ fn write_token(token: &str) -> io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     options.open(path)?.write_all(token.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An app's end of a local connection, and what the server writes to it.
+    fn app() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let reader = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (writer, _) = listener.accept().unwrap();
+        reader.set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+        (writer, reader)
+    }
+
+    fn received(reader: &mut TcpStream) -> String {
+        let mut buf = [0u8; 4096];
+        let read = reader.read(&mut buf).unwrap_or(0);
+        String::from_utf8_lossy(&buf[..read]).into_owned()
+    }
+
+    #[test]
+    fn gives_a_late_answer_for_an_app_that_left_to_nobody() {
+        let clients = Clients::default();
+        let ((gone, _), (stays, mut stays_reader)) = (app(), app());
+        clients.lock().streams.extend([(1, gone), (2, stays)]);
+        let asked: Value = serde_json::from_str(&clients.adopt(1, r#"{"id":1,"op":"quota"}"#)).unwrap();
+
+        clients.leave(1);
+        clients.clone().write_all(format!("{}\n", json_line(&asked["id"])).as_bytes()).unwrap();
+
+        assert_eq!(received(&mut stays_reader), "");
+    }
+
+    #[test]
+    fn keeps_open_asks_bounded() {
+        let clients = Clients::default();
+        for own in 0..(MAX_OPEN_ASKS as u64 + 10) {
+            clients.adopt(1, &format!(r#"{{"id":{own},"op":"send"}}"#));
+        }
+
+        assert_eq!(clients.lock().asked.len(), MAX_OPEN_ASKS);
+    }
+
+    fn json_line(id: &Value) -> String {
+        format!(r#"{{"type":"quota","id":{id},"accounts":[]}}"#)
+    }
 }

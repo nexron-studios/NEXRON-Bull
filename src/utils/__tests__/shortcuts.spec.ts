@@ -102,6 +102,10 @@ describe('isRemoveKey', () => {
       isRemoveKey(key({ key: 'x' }))
     ]).toEqual([false, false, false])
   })
+
+  it('should ignore the repeats of a held key', () => {
+    expect(isRemoveKey(key({ key: 'Backspace', repeat: true }))).toBe(false)
+  })
 })
 
 describe('historyStepOf', () => {

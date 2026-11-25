@@ -97,9 +97,13 @@ export const SEND_CHORD: KeyChord = { modifier: 'command', keys: ['Enter'] }
 export const isSendShortcut = (event: KeyInfo) =>
   hasCommandKey(event) && !event.shiftKey && event.key === 'Enter'
 
-/** Backspace or Delete alone, as on a field that is empty already: the thing itself should go. */
+/**
+ * Backspace or Delete alone, as on a field that is empty already: the thing itself should go. Not
+ * a held key's repeats: holding Backspace to clear a note must stop once the note is empty.
+ */
 export const isRemoveKey = (event: KeyInfo) =>
   (event.key === 'Backspace' || event.key === 'Delete') &&
+  !event.repeat &&
   !event.ctrlKey &&
   !event.metaKey &&
   !event.altKey

@@ -5,6 +5,7 @@ import { onKeyStroke } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { isDesktopApp } from '@/lib/platform'
 import NchClawdEmpty from '@/components/common/NchClawdEmpty.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import NchThemeToggle from '@/components/common/NchThemeToggle.vue'
@@ -168,17 +169,17 @@ onKeyStroke(isSidebarShortcut, (event) => {
 })
 // The drawer belongs to the chat on screen; on a phone there is no room under the chat.
 onKeyStroke(isTerminalDrawerShortcut, (event) => {
+  if (!isDesktopApp()) return
   event.preventDefault()
   if (isPhone.value || !isChatRoute.value || shownTerminal.value) return
   toggleDrawer()
 })
 onKeyStroke(isNewTerminalShortcut, (event) => {
+  // A browser keeps its own meaning of the keys: it has no terminals to open.
+  if (!isDesktopApp()) return
   event.preventDefault()
   openHere()
 })
-
-// Claude on another machine outlives the app; restored tabs pick up where it is now.
-chat.reattachAll()
 
 // Resumed tabs and tabs restored after a restart carry no messages yet; load them when shown.
 // Only ended tabs: a session that just started has no transcript to read.

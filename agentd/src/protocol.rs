@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::catalog::{Profile, SessionSummary};
 use crate::chat::ChatMessage;
 use crate::commands::SlashCommand;
+use crate::file_diff::FileDiff;
 use crate::profile_defaults::ProfileDefaults;
 use crate::quota::AccountQuota;
 use crate::rewind::RewindPoint;
@@ -53,6 +54,9 @@ pub enum Request {
     },
     /// Tabs whose Claude is still running here, so a reconnecting app can attach to them.
     Running,
+    /// The running tabs with what an app needs to open them: an app that did not start them (the
+    /// browser) knows nothing else about them.
+    Tabs,
     /// Plan quota of every profile here; `force` asks Anthropic again sooner than every 90 s.
     Quota {
         #[serde(default)]
@@ -97,6 +101,8 @@ pub enum Request {
     /// Sends running Bash calls and subagents to the background, like Ctrl+B in the terminal: only
     /// the one `tool_use_id` started, or every one in the foreground.
     Background { tab: String, tool_use_id: Option<String> },
+    /// A file's changes in the working tree against `HEAD`; `path` may be relative to `cwd`.
+    FileDiff { cwd: String, path: String },
 }
 
 /// The app's limit settings, the same on every machine. Accounts are named by their label
@@ -216,6 +222,23 @@ pub struct StartParams {
     pub effort: Option<String>,
 }
 
+/// A running tab as `tabs` lists it; `None` model, mode or effort is the profile's default.
+#[derive(Debug, Serialize)]
+pub struct TabInfo {
+    pub tab: String,
+    pub session_id: String,
+    /// As the recent list names the session; `None` before Claude wrote its transcript.
+    pub title: Option<String>,
+    pub cwd: PathBuf,
+    pub profile: Option<PathBuf>,
+    pub account: Option<String>,
+    pub model: Option<String>,
+    pub permission_mode: Option<String>,
+    pub effort: Option<String>,
+    /// As the tab was started: its session may have no transcript yet, so `history` must not fail.
+    pub is_fresh: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct HistoryParams {
     pub profile: Option<PathBuf>,
@@ -280,6 +303,9 @@ pub enum Event {
     Cleared { id: Option<u64>, tab: String },
     Deleted { id: Option<u64>, session_id: String },
     Running { id: Option<u64>, tabs: Vec<String> },
+    Tabs { id: Option<u64>, tabs: Vec<TabInfo> },
+    /// A `permission` answer went to Claude; every app drops its card for that ask.
+    PermissionResolved { tab: String, request_id: String },
     Quota { id: Option<u64>, accounts: Vec<AccountQuota> },
     Usage { id: Option<u64>, days: u32, rows: Vec<UsageRow>, tools: Vec<ToolRow>, sessions: Vec<SessionRow> },
     /// `None` outside a repository; a short commit id when `HEAD` is detached.
@@ -303,4 +329,6 @@ pub enum Event {
     /// The control requests of a `configure` are on their way to Claude.
     Configured { id: Option<u64>, tab: String },
     ProfileDefaults { id: Option<u64>, defaults: ProfileDefaults },
+    /// The diff, or why there is none; the app then falls back to the chat's edits.
+    FileDiff { id: Option<u64>, answer: FileDiff },
 }

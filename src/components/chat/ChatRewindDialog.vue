@@ -172,7 +172,7 @@ watch(isOpen, (isNowOpen) => {
           <LoaderCircle v-if="isRewinding" class="size-4 animate-spin" aria-hidden="true" />
           <History v-else class="size-4" aria-hidden="true" />
           {{ t('rewind.submit') }}
-          <NchKbd key-label="Enter" is-on-brand />
+          <NchKbd key-label="Enter" is-on-fill />
         </Button>
       </div>
     </form>

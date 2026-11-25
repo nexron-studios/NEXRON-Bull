@@ -1,6 +1,7 @@
 import type { ChatMessage } from '@/types/agentd.type'
+import { countsOf, withoutNumbers, type DiffHunk } from '@/utils/diffRows'
 import { timeOf } from '@/utils/tabInsights'
-import { diffCountsOf, diffOf, inputRowsOf, patchRowsOf } from '@/utils/toolInput'
+import { hunksOfTool } from '@/utils/toolInput'
 import { resultsByToolId } from '@/utils/toolPairs'
 
 /** A file Claude changed in this chat, with every change to it summed up. */
@@ -29,7 +30,8 @@ const PATH_SEPARATOR = /[\\/]/
 /** A drive letter or a UNC share: a Windows path, where case does not count. */
 const WINDOWS_PATH = /^([a-z]:\/|\/\/)/i
 
-const keyOf = (path: string): string => {
+/** One file however its path was spelled; Windows paths ignore case, POSIX ones do not. */
+export const fileKeyOf = (path: string): string => {
   const slashed = path.replaceAll('\\', '/')
   return WINDOWS_PATH.test(slashed) ? slashed.toLowerCase() : slashed
 }
@@ -46,6 +48,7 @@ interface FileChange {
   removed: number
   cardId: string
   at: number | null
+  hunks: DiffHunk[]
 }
 
 /** The Edit, MultiEdit and Write calls of one source that went through, with their counts. */
@@ -55,11 +58,11 @@ const changesOf = ({ messages, cardId }: ChangeSource): FileChange[] => {
     message.blocks.flatMap((block): FileChange[] => {
       if (block.type !== 'tool_use') return []
       const path = block.input.file_path
-      const lines = diffOf(block.name, block.input)
       const result = results.get(block.id)
-      if (typeof path !== 'string' || !lines || !result || result.is_error) return []
-      const rows = result.patch?.length ? patchRowsOf(result.patch) : inputRowsOf(lines)
-      return [{ path, ...diffCountsOf(rows), cardId: cardId ?? block.id, at: timeOf(message) }]
+      if (typeof path !== 'string' || !result || result.is_error) return []
+      const hunks = hunksOfTool(block.name, block.input, result.patch)
+      if (!hunks) return []
+      return [{ path, ...countsOf(hunks), cardId: cardId ?? block.id, at: timeOf(message), hunks }]
     })
   )
 }
@@ -69,12 +72,15 @@ const changesOf = ({ messages, cardId }: ChangeSource): FileChange[] => {
  * Failed calls changed nothing and are left out, as are calls still waiting for their result.
  * The counts come from Claude Code's patch, else from the call's own input.
  */
+// Stable: changes without a time keep their place in the chat.
+const changesInOrderOf = (sources: ChangeSource[]): FileChange[] =>
+  sources.flatMap(changesOf).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+
 export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
-  // Stable: changes without a time keep their place in the chat.
-  const changes = sources.flatMap(changesOf).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+  const changes = changesInOrderOf(sources)
   const files = new Map<string, ChangedFile>()
   for (const change of changes) {
-    const key = keyOf(change.path)
+    const key = fileKeyOf(change.path)
     const before = files.get(key)
     // Deleted and set again, so the map's order follows the latest change.
     files.delete(key)
@@ -88,4 +94,18 @@ export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
     })
   }
   return [...files.values()].reverse()
+}
+
+/**
+ * Every change to one file as recorded in the chat, oldest first: the review's fallback outside
+ * git. Only the latest keeps its line numbers; a later change may have moved an earlier one's.
+ */
+export const chatHunksOf = (sources: ChangeSource[], key: string): DiffHunk[] => {
+  const changes = changesInOrderOf(sources).filter((change) => fileKeyOf(change.path) === key)
+  const latest = changes.at(-1)
+  if (!latest) return []
+  return [
+    ...withoutNumbers(changes.slice(0, -1).flatMap((change) => change.hunks)),
+    ...latest.hunks
+  ]
 }

@@ -1,0 +1,33 @@
+# Bull from the phone: the web app and the bridge's WebSocket under one name, reachable only
+# from the tailnet. Fill in the placeholders and add the block to the server's Caddyfile:
+#   <BULL_HOST>    the name the phone opens, e.g. bull.example.com (DNS: A record on the
+#                  server's tailnet address)
+#   <TLS_BLOCK>    the same `tls { dns ... }` block the other tailnet-only names use: Let's
+#                  Encrypt cannot reach a tailnet address, so the certificate comes via DNS-01
+#   <SITE_ROOT>    where the built app lies (`npm run build`, then copy `dist/` there)
+# The bridge must allow exactly this origin: BULL_BRIDGE_ORIGINS=https://<BULL_HOST>
+<BULL_HOST> {
+	<TLS_BLOCK>
+
+	# First, before any other handle: Caddy orders `handle` before a bare `abort`, so an abort
+	# outside a handle would never run and the page would answer the public internet.
+	@outside not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+	handle @outside {
+		abort
+	}
+
+	header X-Robots-Tag "noindex, nofollow"
+	encode zstd gzip
+
+	# The bridge listens on localhost only; Caddy passes the Origin header on, which it checks.
+	handle /ws {
+		reverse_proxy 127.0.0.1:3060
+	}
+
+	# The app routes in the browser (`/settings/accounts`): every unknown path is the app.
+	handle {
+		root * <SITE_ROOT>
+		try_files {path} /index.html
+		file_server
+	}
+}

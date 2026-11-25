@@ -203,6 +203,12 @@ const quote = (question: string) => {
   setCaret(quoted.length)
 }
 
+/** A comment on an image or on lines goes in front of the draft; nothing is sent. */
+const prependComment = (line: string) => {
+  draft.value = prependLine(draft.value, line)
+  focusField()
+}
+
 /**
  * A marked image from the preview, its comment in front of the draft; nothing is sent. The comment
  * names the image by a reference, so it follows the chips like any other.
@@ -212,15 +218,22 @@ const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
   const anchorId = incoming[0]?.id ?? sourceId
   const at = images.value.findIndex((image) => image.id === anchorId)
   const anchor = images.value[at]
-  if (comment && anchor) {
-    const ref = references.format.value.render(at + 1, anchor.name)
-    draft.value = prependLine(draft.value, t('images.comment_line', { ref, comment }))
+  if (!comment || !anchor) {
+    focusField()
+    return true
   }
-  focusField()
+  const ref = references.format.value.render(at + 1, anchor.name)
+  prependComment(t('images.comment_line', { ref, comment }))
   return true
 }
 
-defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup })
+/** Line comments from the diff review, by the same path as a marked image's comment. */
+const takeReview = (comments: string) => {
+  isShell.value = false
+  prependComment(comments)
+}
+
+defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup, takeReview })
 </script>
 
 <template>

@@ -202,3 +202,70 @@ fn refuses_a_client_without_the_token() {
     assert_eq!(reply, "");
     server.kill().unwrap();
 }
+
+/// Events until `wait` passes without one.
+fn quiet_for(relay: &Relay, wait: Duration) -> Vec<Value> {
+    let mut seen = Vec::new();
+    while let Ok(event) = relay.events.recv_timeout(wait) {
+        seen.push(event);
+    }
+    seen
+}
+
+#[test]
+fn answers_only_the_app_that_asked_under_its_own_id() {
+    let setup = Setup::new();
+    let mut server = setup.serve();
+    let (mut desktop, mut phone) = (setup.connect(), setup.connect());
+
+    // Both apps count from 1; each must get its own answer, not the other's.
+    desktop.send(json!({ "id": 1, "op": "hello" }));
+    phone.send(json!({ "id": 1, "op": "running" }));
+    assert_eq!(desktop.expect(|e| e["id"] == 1)["type"], "hello");
+    assert_eq!(phone.expect(|e| e["id"] == 1)["type"], "running");
+    let leaked: Vec<Value> = quiet_for(&desktop, Duration::from_millis(500));
+    assert!(leaked.iter().all(|e| e["type"] != "running"), "desktop got the phone's answer: {leaked:?}");
+
+    // Events of a tab still reach every app.
+    desktop.send(start("t1", &setup.home));
+    phone.expect(|e| e["type"] == "started" && e["tab"] == "t1");
+    desktop.send(json!({ "op": "stop", "tab": "t1" }));
+    phone.expect(|e| e["type"] == "exited");
+
+    server.kill().unwrap();
+    for relay in [&mut desktop, &mut phone] {
+        relay.child.wait().unwrap();
+    }
+}
+
+#[test]
+fn lists_running_tabs_and_tells_every_app_when_an_ask_is_answered() {
+    let setup = Setup::new();
+    let mut server = setup.serve();
+    let (mut desktop, mut phone) = (setup.connect(), setup.connect());
+
+    desktop.send(json!({ "op": "start", "tab": "t1", "cwd": setup.home, "profile": null, "resume": null, "model": "haiku", "permission_mode": "default" }));
+    let started = desktop.expect(|e| e["type"] == "started");
+    desktop.send(json!({ "op": "send", "tab": "t1", "content": [{ "type": "text", "text": "please write" }] }));
+    desktop.expect(is_ask);
+
+    phone.send(json!({ "id": 1, "op": "tabs" }));
+    let tabs = phone.expect(|e| e["type"] == "tabs");
+    let tab = &tabs["tabs"][0];
+    assert_eq!((&tab["tab"], &tab["session_id"]), (&json!("t1"), &started["session_id"]));
+    assert_eq!((&tab["model"], &tab["permission_mode"], &tab["profile"]), (&json!("haiku"), &json!("default"), &Value::Null));
+    assert_eq!(tab["is_fresh"], json!(false));
+    assert_eq!(tab["cwd"].as_str().map(PathBuf::from), Some(setup.home.clone()));
+
+    // The phone decides; the desktop hears it so its card goes away.
+    phone.send(json!({ "op": "permission", "tab": "t1", "request_id": "perm-1", "decision": { "behavior": "allow" } }));
+    let resolved = desktop.expect(|e| e["type"] == "permission_resolved");
+    assert_eq!((&resolved["tab"], &resolved["request_id"]), (&json!("t1"), &json!("perm-1")));
+    desktop.send(json!({ "op": "stop", "tab": "t1" }));
+    desktop.expect(|e| e["type"] == "exited");
+
+    server.kill().unwrap();
+    for relay in [&mut desktop, &mut phone] {
+        relay.child.wait().unwrap();
+    }
+}

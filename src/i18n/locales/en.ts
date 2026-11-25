@@ -6,6 +6,18 @@ export default {
     save: 'Save',
     undo: 'Undo'
   },
+  bridge: {
+    title: 'Connect Bull on this device',
+    description:
+      'Bull in the browser reaches your chats through the bridge on the server. It only lets in devices with their own token.',
+    token: 'Device token',
+    token_hint: 'Printed by “npm run token” on the server. Bull keeps it in this browser.',
+    token_empty: 'Enter the token.',
+    token_rejected:
+      'The bridge does not know this token. Make a new one on the server and enter it here.',
+    unreachable: 'The bridge does not answer right now. Bull keeps trying.',
+    connect: 'Connect'
+  },
   chat_search: {
     open: 'Search this chat ({key})',
     placeholder: 'Search this chat …',
@@ -1273,6 +1285,7 @@ export default {
     }
   },
   terminal: {
+    desktop_only: 'This only works in the Bull app on a computer: the browser has no terminal.',
     title: 'Terminal',
     tab: 'Terminal',
     new_tab: 'New tab',
@@ -1338,6 +1351,52 @@ export default {
     retry: 'Try again',
     refused: 'Could not rewind: {reason}',
     refused_code_back: 'The files went back, the chat did not. Claude says: {reason}'
+  },
+  review: {
+    title: 'Review changes',
+    description: 'Pick lines and comment on them. The comments go into the message box together.',
+    all: 'All changes',
+    open_file: 'Review changes to {name}, {added} added, {removed} removed',
+    show_in_chat: 'Show in chat',
+    show_in_chat_of: 'Show {name} in the chat',
+    files: 'Changed files',
+    position: '{n} of {count}',
+    previous: 'Previous file ({key})',
+    next: 'Next file ({key})',
+    status: { added: 'new', deleted: 'deleted' },
+    source: {
+      no_repo: 'Not a git repository. These are the changes Claude made in this chat.',
+      no_git: 'git is missing on this machine. These are the changes Claude made in this chat.',
+      unchanged:
+        'The file matches the last commit. These are the changes Claude made in this chat.',
+      ignored: 'git ignores this file. These are the changes Claude made in this chat.',
+      missing: 'The file is gone. These are the changes Claude made in this chat.',
+      too_big: 'The file is too large to compare. These are the changes Claude made in this chat.',
+      failed: "The machine didn't send the file. These are the changes from the chat."
+    },
+    truncated: 'The file is very large. Only the lines around the changes are shown.',
+    binary_title: 'Binary file',
+    binary_hint: 'This file has no lines to show.',
+    nothing_title: 'No changes',
+    nothing_hint: 'Neither git nor this chat has lines for this file.',
+    nothing_hint_unchanged: 'The file matches the last commit, and the chat has no lines for it.',
+    diff_label: 'Changes in {path}',
+    diff_hint:
+      'Arrow keys pick a line, with Shift several. Enter writes a comment, Esc clears the selection. J and K switch the file.',
+    chosen: '{reference} selected: {text}',
+    unfold: 'Show 1 unchanged line | Show {n} unchanged lines',
+    line_added: 'Added, line {line}:',
+    line_removed: 'Removed, line {line}:',
+    line_kept: 'Line {line}:',
+    old_reference: '{reference} (before)',
+    comment_on: 'Comment',
+    comment_label: 'Comment on {reference}',
+    comment_placeholder: 'What should Claude change here?',
+    comment_cancel: 'Cancel',
+    comment_add: 'Add',
+    comment_remove: 'Remove comment on {reference}',
+    comment_count: 'No comments | 1 comment | {n} comments',
+    insert: 'Into message box'
   },
   context: {
     title: 'Context',

@@ -362,7 +362,8 @@ export default {
     close_warning:
       'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',
     too_large: 'Das markierte Bild ist zu groß für Claude.',
-    marked_limit: 'Höchstens {max} Bilder pro Nachricht. Entferne erst ein Bild.'
+    marked_limit: 'Höchstens {max} Bilder pro Nachricht. Entferne erst ein Bild.',
+    send_empty: 'Das Bild lässt sich nicht mitschicken, und ohne Kommentar bleibt nichts zu senden.'
   },
   sidebar: {
     loading: 'Sessions werden geladen',

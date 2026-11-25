@@ -357,7 +357,8 @@ export default {
     reference: '[Image {n} ({name})]',
     close_warning: 'The comment or markup is not in your message yet. Do it again to discard it.',
     too_large: 'The marked image is too large for Claude.',
-    marked_limit: 'At most {max} images per message. Remove an image first.'
+    marked_limit: 'At most {max} images per message. Remove an image first.',
+    send_empty: 'This image cannot be sent, and without a comment there is nothing to send.'
   },
   sidebar: {
     loading: 'Loading sessions',

@@ -1,7 +1,9 @@
 import { nextTick, type Ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import type { useImageReferences } from '@/composables/useImageReferences'
 import type { MarkupHandoff, MarkupResult } from '@/composables/useMarkupTarget'
+import { MAX_IMAGES_PER_MESSAGE } from '@/utils/attachments'
 import type { PendingImage } from '@/utils/content'
 import { withPlainImageRefs } from '@/utils/imageRefs'
 
@@ -64,6 +66,13 @@ export const useComposerMarkup = ({
     return true
   }
 
+  /** The comment, naming the image it goes with as image 1 of the new message. */
+  const messageTextOf = (image: PendingImage | undefined, comment: string) => {
+    if (!image || !comment) return comment
+    const ref = references.format.value.render(1, image.name)
+    return withPlainImageRefs(t('images.comment_line', { ref, comment }), references.format.value)
+  }
+
   /**
    * "Senden" in the preview: image and comment go out as a message of their own, by the same way
    * as any message (queue, limit). The draft stays for later; only an attachment that just went
@@ -71,12 +80,18 @@ export const useComposerMarkup = ({
    * is written into it.
    */
   const sendMarkup = ({ sourceId, images: outgoing, comment }: MarkupResult) => {
+    if (outgoing.length > MAX_IMAGES_PER_MESSAGE) {
+      toast.error(t('images.marked_limit', { max: MAX_IMAGES_PER_MESSAGE }))
+      return false
+    }
+    // An image Claude would not take (no base64 data URL) cannot go along; its comment still can.
     const [first] = outgoing
-    if (!first) return false
-    const ref = references.format.value.render(1, first.name)
-    const text = comment ? t('images.comment_line', { ref, comment }) : ''
-    send(withPlainImageRefs(text, references.format.value), outgoing)
-    if (sourceId && images.value.some((image) => image.id === sourceId)) remove(sourceId)
+    if (!first && !comment) {
+      toast.error(t('images.send_empty'))
+      return false
+    }
+    send(messageTextOf(first, comment), outgoing)
+    if (first && sourceId && images.value.some((image) => image.id === sourceId)) remove(sourceId)
     return true
   }
 

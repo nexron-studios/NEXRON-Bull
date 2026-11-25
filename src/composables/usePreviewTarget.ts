@@ -33,6 +33,12 @@ const isReachable = (src: string): Promise<boolean> =>
     // A failed request is the answer here, not an error to report.
     .catch(() => false)
 
+/** A query only runs while `enabled` holds, so its value is there; anything else is a bug here. */
+const present = (value: string | null): string => {
+  if (value === null) throw new Error('preview query ran while disabled')
+  return value
+}
+
 /**
  * The page the preview shows for a tab: the newest local address in Claude's answers, or the
  * one the user typed or picked after it. On another machine its `localhost` is that machine, so
@@ -51,7 +57,7 @@ export const usePreviewTarget = (tab: MaybeRefOrGetter<ChatTabState>) => {
   })
   const hostQuery = useQuery({
     queryKey: ['machines', 'host-name', remoteMachine],
-    queryFn: () => machineService.hostName(remoteMachine.value ?? ''),
+    queryFn: () => machineService.hostName(present(remoteMachine.value)),
     enabled: computed(() => !!remoteMachine.value),
     // ssh's config does not change while Bull runs, short of editing it by hand.
     staleTime: Infinity,
@@ -64,7 +70,7 @@ export const usePreviewTarget = (tab: MaybeRefOrGetter<ChatTabState>) => {
   })
   const probe = useQuery({
     queryKey: ['preview', 'reachable', src, reloadCount],
-    queryFn: () => isReachable(src.value ?? ''),
+    queryFn: () => isReachable(present(src.value)),
     enabled: computed(() => !!src.value),
     staleTime: 0,
     // Only a new address or reload asks again: a dev server restarting while Bull regains focus

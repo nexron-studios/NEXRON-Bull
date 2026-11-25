@@ -35,7 +35,7 @@ export interface SavedPreview {
   /** `messageId` of the newest detected address when `url` was set; a later one replaces `url` */
   detectedIn: string | null
   /** When `url` was set (ms): an older answer the history loads afterwards stays behind it */
-  savedAt?: number
+  savedAt: number
 }
 
 const parsed = (text: string): URL | null => {
@@ -45,6 +45,29 @@ const parsed = (text: string): URL | null => {
     // Not a URL at all: the caller treats it like any other text that is no preview address.
     return null
   }
+}
+
+const isSavedPreview = (value: unknown): value is SavedPreview => {
+  if (typeof value !== 'object' || value === null) return false
+  const { url, detectedIn, savedAt } = value as Record<string, unknown>
+  return (
+    typeof url === 'string' &&
+    (typeof detectedIn === 'string' || detectedIn === null) &&
+    typeof savedAt === 'number'
+  )
+}
+
+/** The saved addresses as read from localStorage; entries of another shape are dropped. */
+export const parseSavedPreviews = (raw: string): Record<string, SavedPreview> => {
+  let stored: unknown
+  try {
+    stored = JSON.parse(raw)
+  } catch {
+    // Edited by hand or written by another tool: start over rather than fail on every read.
+    return {}
+  }
+  if (typeof stored !== 'object' || stored === null) return {}
+  return Object.fromEntries(Object.entries(stored).filter(([, entry]) => isSavedPreview(entry)))
 }
 
 /** An http(s) address on the machine itself, the kind a dev server prints. */
@@ -83,7 +106,7 @@ export const latestPreviewOf = (messages: readonly ChatMessage[]): DetectedPrevi
 /** Whether Claude named the address after the user set theirs; unknown times count as later. */
 const isNewerThan = (detected: DetectedPreview, saved: SavedPreview): boolean => {
   if (detected.messageId === saved.detectedIn) return false
-  if (detected.at === null || saved.savedAt === undefined) return true
+  if (detected.at === null) return true
   return detected.at > saved.savedAt
 }
 

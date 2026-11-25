@@ -5,6 +5,7 @@ import {
   isLocalUrl,
   latestPreviewOf,
   loadableUrlOf,
+  parseSavedPreviews,
   previewUrlOf,
   previewUrlOn,
   typedPreviewUrlOf
@@ -96,7 +97,7 @@ describe('latestPreviewOf', () => {
 })
 
 describe('previewUrlOf', () => {
-  const typed = { url: 'http://localhost:5173/b', detectedIn: 'a1' }
+  const typed = { url: 'http://localhost:5173/b', detectedIn: 'a1', savedAt: 0 }
 
   it('should show the detected address while nothing was typed', () => {
     const detected = { url: 'http://localhost:5173/a', messageId: 'a1', at: null }
@@ -196,5 +197,26 @@ describe('frameSandboxOf', () => {
     expect(frameSandboxOf('http://localhost:1460/x', 'http://localhost:1460')).toBe(
       'allow-scripts allow-forms allow-modals allow-downloads'
     )
+  })
+})
+
+describe('parseSavedPreviews', () => {
+  it('should keep entries of the saved shape and drop the rest', () => {
+    const raw = JSON.stringify({
+      t1: { url: 'http://localhost:5173/', detectedIn: null, savedAt: 1 },
+      t2: { url: 'http://localhost:5173/', detectedIn: 'a1' },
+      t3: 'http://localhost:5173/'
+    })
+    expect(parseSavedPreviews(raw)).toEqual({
+      t1: { url: 'http://localhost:5173/', detectedIn: null, savedAt: 1 }
+    })
+  })
+
+  it('should start over from text that is no JSON object', () => {
+    expect([parseSavedPreviews('{'), parseSavedPreviews('[]'), parseSavedPreviews('3')]).toEqual([
+      {},
+      {},
+      {}
+    ])
   })
 })

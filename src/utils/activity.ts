@@ -1,10 +1,5 @@
-import {
-  hasRepliedThisTurn,
-  liveTextOf,
-  liveThinkingOf,
-  turnMessagesOf,
-  type ChatTabState
-} from '@/utils/chatTab'
+import { hasRepliedThisTurn, turnMessagesOf, type ChatTabState } from '@/utils/chatTab'
+import { liveActivityOf } from '@/utils/liveStream'
 import { shortTarget, toolInfoOf, type Activity } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
 import { resultsByToolId, type ToolResultBlock, type ToolUseBlock } from '@/utils/toolPairs'
@@ -39,8 +34,8 @@ export const activityOfTab = (
   results: Map<string, ToolResultBlock>
 ): TabActivity => {
   if (tab.permission) return { kind: 'asking' }
-  if (liveThinkingOf(tab) !== null) return { kind: 'thinking' }
-  if (liveTextOf(tab)) return { kind: 'writing' }
+  const live = liveActivityOf(tab.live)
+  if (live) return { kind: live }
   const call = runningCall(tab, results)
   if (!call) return { kind: 'working' }
   return {

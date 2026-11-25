@@ -215,6 +215,18 @@ export interface ClaudeEvent {
   [key: string]: unknown
 }
 
+/** What a streamed block is: reasoning or the reply. */
+export type LiveBlockKind = 'thinking' | 'writing'
+
+/**
+ * The block Claude is streaming, before its message is complete. One streams at a time: Claude Code
+ * sends each finished block as its own message before the next one starts. `cut`: too long for
+ * agentd to replay on attach, so its further deltas are dropped until its finished message and
+ * the reply never shows starting mid-way.
+ */
+export type LiveBlock =
+  { kind: 'none' } | { kind: LiveBlockKind; text: string } | { kind: 'cut'; of: LiveBlockKind }
+
 export type AgentdEvent =
   /** An older agentd on another machine leaves `id` out: such a hello answers no request */
   | { type: 'hello'; id: number | null; version: string; os: string }
@@ -235,19 +247,15 @@ export type AgentdEvent =
   | { type: 'message'; tab: string; message: ChatMessage }
   | { type: 'claude'; tab: string; event: ClaudeEvent }
   /**
-   * The reply Claude is writing, as far as it streamed since its last finished message; agentd
-   * sends it to an app that attaches mid-turn. `thinking` is `null` while Claude is not thinking.
-   * `is_truncated`: the block outgrew what agentd keeps; `text` is empty and the block's further
-   * deltas are dropped until its finished message.
+   * The block Claude is streaming since its last finished message; agentd sends it to an app that
+   * attaches mid-turn. `message_id` and `chars`: the API call and the characters streamed in it.
    */
   | {
-      type: 'streaming'
+      type: 'stream_replay'
       tab: string
       message_id: string | null
       chars: number
-      text: string
-      thinking: string | null
-      is_truncated: boolean
+      block: LiveBlock
     }
   | { type: 'stderr'; tab: string; text: string }
   | { type: 'exited'; tab: string; code: number | null }

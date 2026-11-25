@@ -151,10 +151,10 @@ fn replays_the_unfinished_reply_to_an_app_that_attaches_mid_stream() {
     let mut second = setup.connect();
     second.send(start("t1", &setup.home));
     second.expect(|e| e["type"] == "started");
-    let replay = second.expect(|e| e["type"] == "streaming");
+    let replay = second.expect(|e| e["type"] == "stream_replay");
     // The reasoning came as its own finished message, which the transcript holds; only the text is open.
-    assert_eq!(replay, json!({ "type": "streaming", "tab": "t1", "message_id": "msg_stream", "chars": 17,
-        "text": "Hallo ", "thinking": null, "is_truncated": false }));
+    assert_eq!(replay, json!({ "type": "stream_replay", "tab": "t1", "message_id": "msg_stream", "chars": 17,
+        "block": { "kind": "writing", "text": "Hallo " } }));
 
     send_text(&mut second, "finish");
     let mut events = Vec::new();
@@ -165,7 +165,7 @@ fn replays_the_unfinished_reply_to_an_app_that_attaches_mid_stream() {
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0]["message"]["blocks"], json!([{ "type": "text", "text": "Hallo Welt" }]));
     assert!(events.iter().any(|e| is_text_delta(e, "Welt")));
-    assert!(!events.iter().any(|e| e["type"] == "streaming"));
+    assert!(!events.iter().any(|e| e["type"] == "stream_replay"));
 
     // Finished: an app attaching now has no half-written text to show, so nothing is replayed.
     second.send(start("t1", &setup.home));
@@ -175,7 +175,7 @@ fn replays_the_unfinished_reply_to_an_app_that_attaches_mid_stream() {
         attached.push(second.expect(|_| true));
     }
     assert!(attached.iter().any(|e| e["type"] == "started"));
-    assert!(!attached.iter().any(|e| e["type"] == "streaming"));
+    assert!(!attached.iter().any(|e| e["type"] == "stream_replay"));
 
     second.send(json!({ "op": "stop", "tab": "t1" }));
     second.expect(|e| e["type"] == "exited");

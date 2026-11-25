@@ -26,7 +26,6 @@ import {
   hasRepliedThisTurn,
   isBusyStatus,
   newTab,
-  NO_LIVE_BLOCK,
   savedTabOf,
   stampArrival,
   withAgentNotices,
@@ -53,6 +52,7 @@ import {
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
 import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
+import { NO_LIVE_BLOCK } from '@/utils/liveStream'
 import { moveItem } from '@/utils/order'
 import { draftWithUnsent, pendingMessageOf, type SentDraft } from '@/utils/pendingPrompts'
 import { shellPromptBlocks } from '@/utils/shellBlocks'

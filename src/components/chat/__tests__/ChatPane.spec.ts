@@ -85,7 +85,7 @@ describe('ChatPane', () => {
     const firstFrame = scroller.box.top
     scroller.box.height = 10_300
     await wrapper.setProps({
-      tab: { ...tab, live: { kind: 'live', text: 'Noch ein Absatz', thinking: null } }
+      tab: { ...tab, live: { kind: 'writing', text: 'Noch ein Absatz' } }
     })
     await flushPromises()
     vi.advanceTimersByTime(FOLLOW_SETTLE_MS)
@@ -113,7 +113,7 @@ describe('ChatPane', () => {
     vi.advanceTimersByTime(48)
     scroller.scrollTo(8_600, 'scroll')
     await wrapper.setProps({
-      tab: { ...tab, live: { kind: 'live', text: 'Fertig.', thinking: null } }
+      tab: { ...tab, live: { kind: 'writing', text: 'Fertig.' } }
     })
     await flushPromises()
     vi.advanceTimersByTime(FOLLOW_SETTLE_MS)
@@ -134,7 +134,7 @@ describe('ChatPane', () => {
 
     scroller.box.height = 10_100
     await wrapper.setProps({
-      tab: { ...tab, live: { kind: 'live', text: 'Eine neue Zeile', thinking: null } }
+      tab: { ...tab, live: { kind: 'writing', text: 'Eine neue Zeile' } }
     })
     await flushPromises()
     vi.advanceTimersByTime(16)
@@ -159,7 +159,7 @@ describe('ChatPane', () => {
 
     scroller.box.height = 11_000
     await wrapper.setProps({
-      tab: { ...tab, live: { kind: 'live', text: 'Ein langer Codeblock', thinking: null } }
+      tab: { ...tab, live: { kind: 'writing', text: 'Ein langer Codeblock' } }
     })
     await flushPromises()
     vi.advanceTimersByTime(48)
@@ -185,7 +185,7 @@ describe('ChatPane', () => {
     for (let chunk = 1; chunk <= 5; chunk++) {
       scroller.box.height = 10_000 + chunk * 100
       await wrapper.setProps({
-        tab: { ...tab, live: { kind: 'live', text: 'Zeile '.repeat(chunk), thinking: null } }
+        tab: { ...tab, live: { kind: 'writing', text: 'Zeile '.repeat(chunk) } }
       })
       await flushPromises()
       for (let frame = 0; frame < 3; frame++) {
@@ -214,7 +214,7 @@ describe('ChatPane', () => {
 
     scroller.box.height = 10_400
     await wrapper.setProps({
-      tab: { ...tab, live: { kind: 'live', text: 'Ein Absatz', thinking: null } }
+      tab: { ...tab, live: { kind: 'writing', text: 'Ein Absatz' } }
     })
     await flushPromises()
     vi.advanceTimersByTime(32)

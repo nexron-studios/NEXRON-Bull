@@ -1,7 +1,14 @@
-import type { AgentdEvent, ChatMessage, ClaudeEvent, LimitState } from '@/types/agentd.type'
+import type {
+  AgentdEvent,
+  ChatMessage,
+  ClaudeEvent,
+  LimitState,
+  LiveBlock
+} from '@/types/agentd.type'
 import type { ApiRetry } from '@/utils/apiRetry'
 import { suggestionsOf, type PermissionUpdate } from '@/utils/approval'
 import { isAgentMessage, withAgentTitles } from '@/utils/agentMessages'
+import { NO_LIVE_BLOCK, withReplay, withStream } from '@/utils/liveStream'
 import { isPromptEcho, withoutEchoed } from '@/utils/pendingPrompts'
 import { withReportedSettings } from '@/utils/sessionSettings'
 import type { LiveSubagents } from '@/utils/subagentActions'
@@ -60,27 +67,6 @@ export interface PermissionAsk {
   /** Rules Claude offers to remember with an allow ("always for git push"), maybe none. */
   suggestions: PermissionUpdate[]
 }
-
-/**
- * The block Claude is streaming. `live`: its text and reasoning so far; `thinking` is `null` while
- * Claude is not thinking. `cut`: too long for agentd to replay on attach, so its further deltas
- * are dropped until its finished message and the reply never shows starting mid-way.
- */
-export type LiveBlock =
-  { kind: 'none' } | { kind: 'live'; text: string; thinking: string | null } | { kind: 'cut' }
-
-export const NO_LIVE_BLOCK: LiveBlock = { kind: 'none' }
-
-/** Text Claude is writing right now; empty while none streams. */
-export const liveTextOf = (tab: Pick<ChatTabState, 'live'>): string =>
-  tab.live.kind === 'live' ? tab.live.text : ''
-
-/** Reasoning Claude is streaming right now; `null` while it is not thinking. */
-export const liveThinkingOf = (tab: Pick<ChatTabState, 'live'>): string | null =>
-  tab.live.kind === 'live' ? tab.live.thinking : null
-
-const liveBlockOf = (text: string, thinking: string | null): LiveBlock =>
-  text === '' && thinking === null ? NO_LIVE_BLOCK : { kind: 'live', text, thinking }
 
 export interface ChatTabState {
   id: string
@@ -328,15 +314,17 @@ export const withTurnCut = (tab: ChatTabState): ChatTabState => {
 export const hasRepliedThisTurn = (tab: ChatTabState): boolean =>
   turnMessagesOf(tab).some((known) => known.role === 'assistant')
 
-/** The tab once the block Claude streamed is finished; unchanged when nothing was live. */
-const withoutLiveText = (tab: ChatTabState): ChatTabState =>
+/** The tab once the block Claude streamed is finished, reply or reasoning; unchanged when none was. */
+const withoutLive = (tab: ChatTabState): ChatTabState =>
   tab.live.kind === 'none' ? tab : { ...tab, live: NO_LIVE_BLOCK }
 
 const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => {
-  if (tab.messages.some((known) => known.uuid === received.uuid))
-    // On reattach the transcript can hold a block before its live message arrives; the block is
-    // finished all the same, so its replayed live text must not stay as a second copy.
-    return received.role === 'assistant' ? withoutLiveText(tab) : tab
+  const isAnswer = received.role === 'assistant'
+  // On reattach the transcript can hold a block before its live message arrives; the block is
+  // finished all the same, so its replayed live text must not stay as a second copy.
+  if (tab.messages.some((known) => known.uuid === received.uuid)) {
+    return isAnswer ? withoutLive(tab) : tab
+  }
   const isPrompt = isPromptEcho(received)
   const isFromAgent = isAgentMessage(received)
   // A prompt that arrives after Claude already answered in this turn was typed while it worked;
@@ -350,80 +338,14 @@ const withMessage = (tab: ChatTabState, received: ChatMessage): ChatTabState => 
     ? (withAgentTitles([...tab.messages, joined]).at(-1) ?? joined)
     : joined
   const prompt = isPrompt ? firstText(message) : undefined
-  return {
+  const added = {
     ...tab,
     messages: [...tab.messages, message],
     pending: withoutEchoed(tab.pending, message),
     isFresh: tab.isFresh && !isPrompt,
-    live: message.role === 'assistant' ? NO_LIVE_BLOCK : tab.live,
     title: tab.title || (prompt ?? '').slice(0, TITLE_CHARS)
   }
-}
-
-/** The characters a streamed delta adds: text, reasoning or a tool call's input. */
-const deltaCharsOf = (delta: Record<string, unknown> | undefined): number => {
-  const piece = delta?.text ?? delta?.thinking ?? delta?.partial_json
-  return typeof piece === 'string' ? piece.length : 0
-}
-
-/** The end of a streamed call: its final output count goes to `outputs`. */
-const withCallEnd = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
-  const usage = inner.usage as { output_tokens?: unknown } | undefined
-  const { messageId } = tab.streamUsage
-  if (!messageId || typeof usage?.output_tokens !== 'number') return tab
-  return {
-    ...tab,
-    outputs: { ...tab.outputs, [messageId]: usage.output_tokens },
-    streamUsage: { messageId, chars: 0 }
-  }
-}
-
-const withStream = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
-  const streamed = withStreamText(tab, inner)
-  if (inner.type === 'message_delta') return withCallEnd(streamed, inner)
-  if (inner.type === 'message_start') {
-    const message = inner.message as { id?: unknown } | undefined
-    const messageId = typeof message?.id === 'string' ? message.id : null
-    // Claude answers again: a retry it announced is over.
-    return { ...streamed, retry: null, streamUsage: { messageId, chars: 0 } }
-  }
-  if (inner.type !== 'content_block_delta') return streamed
-  const chars = deltaCharsOf(inner.delta as Record<string, unknown> | undefined)
-  if (!chars) return streamed
-  const { messageId, chars: before } = streamed.streamUsage
-  return { ...streamed, streamUsage: { messageId, chars: before + chars } }
-}
-
-const withStreamText = (tab: ChatTabState, inner: ClaudeEvent): ChatTabState => {
-  switch (inner.type) {
-    case 'message_start':
-      return { ...tab, live: NO_LIVE_BLOCK, status: 'working' }
-    case 'content_block_start': {
-      const block = inner.content_block as { type?: string } | undefined
-      if (block?.type !== 'thinking' || tab.live.kind === 'cut') return tab
-      const live: LiveBlock = { kind: 'live', text: liveTextOf(tab), thinking: '' }
-      return { ...tab, live, status: 'working' }
-    }
-    case 'content_block_delta': {
-      if (tab.live.kind === 'cut') return tab
-      const delta = inner.delta as { type?: string; text?: string; thinking?: string } | undefined
-      const [text, thinking] = [liveTextOf(tab), liveThinkingOf(tab)]
-      if (delta?.type === 'thinking_delta')
-        return {
-          ...tab,
-          live: { kind: 'live', text, thinking: (thinking ?? '') + (delta.thinking ?? '') },
-          status: 'working'
-        }
-      if (delta?.type !== 'text_delta') return tab
-      return {
-        ...tab,
-        live: { kind: 'live', text: text + (delta.text ?? ''), thinking },
-        status: 'working'
-      }
-    }
-    default:
-      return tab
-  }
+  return isAnswer ? withoutLive(added) : added
 }
 
 const sessionIdOfInit = (event: ClaudeEvent): string | null =>
@@ -559,29 +481,6 @@ export const listedTabOf = (tab: ChatTabState): ChatTabState => {
   return status === tab.status ? tab : { ...tab, status }
 }
 
-/**
- * agentd's own copy of the stream so far, replayed when an app attaches. It replaces the live text
- * rather than adding to it. Every connected app gets it: one that already shows this call live
- * holds all its deltas, more than a cut replay carries, and keeps what it shows. A lost connection
- * clears the live text, so an app attaching again never keeps a stale copy.
- */
-const withReplay = (
-  tab: ChatTabState,
-  event: Extract<AgentdEvent, { type: 'streaming' }>
-): ChatTabState => {
-  if (tab.live.kind !== 'none' && tab.streamUsage.messageId === event.message_id) return tab
-  const live: LiveBlock = event.is_truncated
-    ? { kind: 'cut' }
-    : liveBlockOf(event.text, event.thinking)
-  return {
-    ...tab,
-    live,
-    streamUsage: { messageId: event.message_id, chars: event.chars },
-    // Text on its way means a turn runs, also one Claude started by itself, as a live delta says.
-    status: live.kind === 'none' ? tab.status : 'working'
-  }
-}
-
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
   switch (event.type) {
@@ -601,7 +500,7 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
       return event.session_id === tab.sessionId ? { ...tab, title: event.title } : tab
     case 'claude':
       return withClaude(tab, event.event)
-    case 'streaming':
+    case 'stream_replay':
       return withReplay(tab, event)
     case 'exited':
       return {

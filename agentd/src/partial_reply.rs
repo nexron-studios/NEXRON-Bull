@@ -1,16 +1,17 @@
-//! What Claude has streamed of the reply it is writing right now, so an app that attaches mid-turn
+//! What Claude has streamed of the block it is writing right now, so an app that attaches mid-turn
 //! sees the half-written text instead of nothing until the message is complete. Claude Code sends
 //! each finished content block as an `assistant` message, which the transcript holds too; this
-//! keeps only what came after the last one. It mirrors what the app derives from the same events
-//! (`withStream` in `src/utils/chatTab.ts`), so the replay can replace the app's state outright.
+//! keeps only what came after the last one. It derives the same state the app derives from the
+//! same events (`src/utils/liveStream.ts`); `tests/fixtures/stream_replay.json` holds both sides to
+//! that, so the replay can replace the app's state outright.
 
 use serde_json::Value;
 
-use crate::protocol::Event;
+use crate::protocol::{BlockKind, Event, LiveBlock};
 
-/// Text plus reasoning kept per tab. A reply rarely streams more than a few hundred KB before its
-/// block completes; past this the text is dropped and the replay tells the app the block is cut,
-/// so it shows nothing of it until the finished message instead of a reply that starts mid-way.
+/// Text kept per tab. A block rarely streams more than a few hundred KB before it completes; past
+/// this the text is dropped and the replay tells the app the block is cut, so it shows nothing of
+/// it until the finished message instead of a reply that starts mid-way.
 pub(crate) const MAX_PARTIAL_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Default)]
@@ -19,11 +20,7 @@ pub(crate) struct PartialReply {
     message_id: Option<String>,
     /// Characters streamed in this call (text, reasoning, tool input), for the app's token estimate
     chars: u64,
-    text: String,
-    /// `None` while Claude is not thinking, as in the app
-    thinking: Option<String>,
-    /// More than `MAX_PARTIAL_BYTES` came since the last finished block
-    is_overflowed: bool,
+    block: LiveBlock,
 }
 
 impl PartialReply {
@@ -42,9 +39,7 @@ impl PartialReply {
 
     /// Claude sent a finished assistant message: what streamed so far is in it now.
     pub(crate) fn finish_block(&mut self) {
-        self.text.clear();
-        self.thinking = None;
-        self.is_overflowed = false;
+        self.block = LiveBlock::None;
     }
 
     fn observe_stream(&mut self, inner: &Value) {
@@ -52,7 +47,7 @@ impl PartialReply {
             Some("message_start") => {
                 *self = Self { message_id: inner["message"]["id"].as_str().map(str::to_string), ..Self::default() };
             }
-            Some("content_block_start") if inner["content_block"]["type"] == "thinking" => self.thinking = Some(String::new()),
+            Some("content_block_start") if inner["content_block"]["type"] == "thinking" => self.append(BlockKind::Thinking, ""),
             Some("content_block_delta") => self.add_delta(&inner["delta"]),
             // The call's final output count reaches the app; its estimate starts over.
             Some("message_delta") if self.message_id.is_some() && inner["usage"]["output_tokens"].is_number() => self.chars = 0,
@@ -64,45 +59,60 @@ impl PartialReply {
         let piece = ["text", "thinking", "partial_json"].iter().find_map(|key| delta[*key].as_str()).unwrap_or_default();
         // The app counts JavaScript string length, in UTF-16 units.
         self.chars += piece.encode_utf16().count() as u64;
-        let is_text = match delta["type"].as_str() {
-            Some("text_delta") => true,
-            Some("thinking_delta") => false,
-            _ => return,
-        };
-        let kept = self.text.len() + self.thinking.as_ref().map_or(0, String::len);
-        if self.is_overflowed || kept + piece.len() > MAX_PARTIAL_BYTES {
-            self.is_overflowed = true;
-            self.text = String::new();
-            self.thinking = None;
-            return;
+        match delta["type"].as_str() {
+            Some("text_delta") => self.append(BlockKind::Writing, piece),
+            Some("thinking_delta") => self.append(BlockKind::Thinking, piece),
+            _ => {}
         }
-        let target = if is_text { &mut self.text } else { self.thinking.get_or_insert_with(String::new) };
-        target.push_str(piece);
     }
 
-    /// What an attaching app shows as live text; `None` while nothing streamed, so apps that are
-    /// already attached keep their state. Past the limit it carries no text but `is_truncated`.
+    /// As `appendedTo` in the app, plus the limit: a block past it is cut until it finishes.
+    fn append(&mut self, kind: BlockKind, piece: &str) {
+        let before = match (&self.block, kind) {
+            (LiveBlock::Cut { .. }, _) => return,
+            (LiveBlock::Thinking { text }, BlockKind::Thinking) | (LiveBlock::Writing { text }, BlockKind::Writing) => text.as_str(),
+            (LiveBlock::None | LiveBlock::Thinking { .. } | LiveBlock::Writing { .. }, _) => "",
+        };
+        if before.len() + piece.len() > MAX_PARTIAL_BYTES {
+            self.block = LiveBlock::Cut { of: kind };
+            return;
+        }
+        let text = format!("{before}{piece}");
+        // Reasoning shows from its start ("thinking …"); a reply only once it has text.
+        if kind == BlockKind::Writing && text.is_empty() {
+            return;
+        }
+        self.block = match kind {
+            BlockKind::Thinking => LiveBlock::Thinking { text },
+            BlockKind::Writing => LiveBlock::Writing { text },
+        };
+    }
+
+    /// What an attaching app shows as live; `None` while nothing streamed in this call.
     pub(crate) fn replay(&self, tab: &str) -> Option<Event> {
-        let is_empty = self.text.is_empty() && self.thinking.is_none() && self.chars == 0;
-        if is_empty && !self.is_overflowed {
+        if self.block == LiveBlock::None && self.chars == 0 {
             return None;
         }
-        Some(Event::Streaming {
-            tab: tab.to_string(),
-            message_id: self.message_id.clone(),
-            chars: self.chars,
-            text: self.text.clone(),
-            thinking: self.thinking.clone(),
-            is_truncated: self.is_overflowed,
-        })
+        Some(Event::StreamReplay { tab: tab.to_string(), message_id: self.message_id.clone(), chars: self.chars, block: self.block.clone() })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde::Deserialize;
     use serde_json::{json, Value};
 
     use super::*;
+
+    /// Shared with `src/utils/__tests__/liveStream.spec.ts`: the app folds the same events.
+    const FIXTURE: &str = include_str!("../tests/fixtures/stream_replay.json");
+
+    #[derive(Deserialize)]
+    struct Case {
+        name: String,
+        events: Vec<Value>,
+        replay: Value,
+    }
 
     fn stream(inner: Value) -> Value {
         json!({ "type": "stream_event", "parent_tool_use_id": null, "event": inner })
@@ -113,33 +123,23 @@ mod tests {
     }
 
     fn replayed(partial: &PartialReply) -> Value {
-        serde_json::to_value(partial.replay("t1").expect("a replay")).unwrap()
+        serde_json::to_value(partial.replay("t1")).unwrap()
     }
 
     #[test]
-    fn keeps_reasoning_and_text_of_the_running_call() {
-        let mut partial = PartialReply::default();
-        partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
-        partial.observe(&stream(json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "thinking" } })));
-        partial.observe(&stream(json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "thinking_delta", "thinking": "Erst lesen." } })));
-        partial.observe(&text_delta("Hal"));
-        partial.observe(&text_delta("lo"));
-
-        assert_eq!(replayed(&partial), json!({ "type": "streaming", "tab": "t1", "message_id": "msg_1",
-            "chars": 16, "text": "Hallo", "thinking": "Erst lesen.", "is_truncated": false }));
-    }
-
-    #[test]
-    fn forgets_the_text_once_its_message_or_the_result_came() {
-        let mut partial = PartialReply::default();
-        partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
-        partial.observe(&text_delta("Hallo"));
-        partial.finish_block();
-        partial.observe(&text_delta("Welt"));
-        assert_eq!(replayed(&partial)["text"], "Welt");
-
-        partial.observe(&json!({ "type": "result", "subtype": "success" }));
-        assert!(partial.replay("t1").is_none());
+    fn replays_what_the_app_folds_from_the_same_events() {
+        let cases: Vec<Case> = serde_json::from_str(FIXTURE).unwrap();
+        for case in cases {
+            let mut partial = PartialReply::default();
+            for event in &case.events {
+                if event["type"] == "assistant" {
+                    partial.finish_block();
+                } else {
+                    partial.observe(event);
+                }
+            }
+            assert_eq!(replayed(&partial), case.replay, "{}", case.name);
+        }
     }
 
     #[test]
@@ -152,34 +152,18 @@ mod tests {
     }
 
     #[test]
-    fn leaves_out_what_a_subagent_streams() {
-        let mut partial = PartialReply::default();
-        let mut delta = text_delta("inside the Agent call");
-        delta["parent_tool_use_id"] = json!("toolu_1");
-        partial.observe(&delta);
-        assert!(partial.replay("t1").is_none());
-    }
-
-    #[test]
-    fn replays_nothing_while_nothing_streamed() {
-        let mut partial = PartialReply::default();
-        partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
-        assert!(partial.replay("t1").is_none());
-    }
-
-    #[test]
     fn marks_a_block_past_the_limit_as_cut_until_the_next_block() {
         let mut partial = PartialReply::default();
         partial.observe(&stream(json!({ "type": "message_start", "message": { "id": "msg_1" } })));
         partial.observe(&text_delta(&"x".repeat(MAX_PARTIAL_BYTES)));
-        assert_eq!(replayed(&partial)["is_truncated"], false);
+        assert_eq!(replayed(&partial)["block"]["kind"], "writing");
         partial.observe(&text_delta("y"));
         let chars = MAX_PARTIAL_BYTES as u64 + 1;
-        assert_eq!(replayed(&partial), json!({ "type": "streaming", "tab": "t1", "message_id": "msg_1",
-            "chars": chars, "text": "", "thinking": null, "is_truncated": true }));
+        assert_eq!(replayed(&partial), json!({ "type": "stream_replay", "tab": "t1", "message_id": "msg_1",
+            "chars": chars, "block": { "kind": "cut", "of": "writing" } }));
 
         partial.finish_block();
         partial.observe(&text_delta("neu"));
-        assert_eq!((replayed(&partial)["text"].clone(), replayed(&partial)["is_truncated"].clone()), (json!("neu"), json!(false)));
+        assert_eq!(replayed(&partial)["block"], json!({ "kind": "writing", "text": "neu" }));
     }
 }

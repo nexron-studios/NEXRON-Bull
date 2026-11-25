@@ -51,7 +51,7 @@ import { useDraftStore } from '@/stores/drafts'
 import { useRewindStore } from '@/stores/rewind'
 import type { QueuedPromptProps } from '@/types/agentd.type'
 import { latestAnswerOf } from '@/utils/answerCallouts'
-import { liveTextOf, liveThinkingOf, type ChatTabState } from '@/utils/chatTab'
+import type { ChatTabState } from '@/utils/chatTab'
 import { buildStream } from '@/utils/chatStream'
 import type { PendingImage } from '@/utils/content'
 import { resultsByToolId } from '@/utils/toolPairs'
@@ -89,8 +89,6 @@ const reducedMotion = usePreferredReducedMotion()
 const { hasMoreAbove } = useScrollEdges(scroller)
 
 const isWorking = computed(() => tab.status === 'working' || tab.status === 'asking')
-const liveText = computed(() => liveTextOf(tab))
-const liveThinking = computed(() => liveThinkingOf(tab))
 // Every streamed token replaces the tab object, but not its message lists. These computeds return
 // the same arrays then, so the history is only regrouped when a message actually arrives.
 const known = computed(() => tab.messages)
@@ -203,10 +201,7 @@ const settleArrival = (event: AnimationEvent, key: string) => {
   if (event.target === event.currentTarget && event.animationName === last) arrivals.delete(key)
 }
 
-watch(
-  () => [messages.value.length, liveText.value, liveThinking.value, tab.permission] as const,
-  follow
-)
+watch(() => [messages.value.length, tab.live, tab.permission] as const, follow)
 watch(() => tab.id, scrollToBottom, { immediate: true })
 // Before the render that adds them, so they mount already rising.
 watch(
@@ -289,13 +284,17 @@ watch(
           />
           <ChatRetryCard v-if="tab.retry" :retry="tab.retry" class="message-fade" />
           <ChatReasoning
-            v-if="liveThinking !== null"
-            :text="liveThinking"
+            v-if="tab.live.kind === 'thinking'"
+            :text="tab.live.text"
             is-streaming
             class="message-fade"
           />
           <!-- self-start: as wide as the finished reply that replaces it, so no line rewraps then. -->
-          <ChatMarkdown v-if="liveText" :text="liveText" class="message-fade self-start" />
+          <ChatMarkdown
+            v-if="tab.live.kind === 'writing'"
+            :text="tab.live.text"
+            class="message-fade self-start"
+          />
           <ChatShellRuns :tab-id="tab.id" />
           <ChatQuestionCard
             v-if="approvalKind === 'question' && tab.permission"

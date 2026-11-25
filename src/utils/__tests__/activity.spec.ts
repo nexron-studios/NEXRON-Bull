@@ -65,18 +65,18 @@ describe('activityOfTab', () => {
     })
   })
 
-  it('should prefer thinking over writing', () => {
-    expect(
-      activityOfTab(tab({ live: { kind: 'live', text: 'Hal', thinking: '' } }), noResults)
-    ).toEqual({
-      kind: 'thinking'
-    })
+  it('should name the block Claude streams, also one too long to replay', () => {
+    expect([
+      activityOfTab(tab({ live: { kind: 'thinking', text: '' } }), noResults),
+      activityOfTab(tab({ live: { kind: 'writing', text: 'Hal' } }), noResults),
+      activityOfTab(tab({ live: { kind: 'cut', of: 'writing' } }), noResults)
+    ]).toEqual([{ kind: 'thinking' }, { kind: 'writing' }, { kind: 'writing' }])
   })
 
   it('should report a pending approval first', () => {
     const permission = { requestId: 'r1', toolName: 'Bash', input: {}, suggestions: [] }
     expect(
-      activityOfTab(tab({ permission, live: { kind: 'live', text: '', thinking: '' } }), noResults)
+      activityOfTab(tab({ permission, live: { kind: 'thinking', text: '' } }), noResults)
     ).toEqual({ kind: 'asking' })
   })
 })

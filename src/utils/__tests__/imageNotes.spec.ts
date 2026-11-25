@@ -1,49 +1,75 @@
 import { describe, expect, it } from 'vitest'
-import { noteBlockAfter, noteLinesAfter, withNoteLines, withoutNoteLines } from '../imageNotes'
+import {
+  NOTE_LINE_SLOTS,
+  noteLineFormatOf,
+  notesOfImage,
+  remapNoteLines,
+  withImageNotes
+} from '../imageNotes'
 
-const CHIP = '[Image 1 (shot.png)]'
+const FORMAT = noteLineFormatOf(`Bild ${NOTE_LINE_SLOTS.n}: ${NOTE_LINE_SLOTS.note}`)
+const one = { id: 'a', name: 'a.png' }
+const two = { id: 'b', name: 'b.png' }
+// Two chips on one line, as the draft holds them (their text does not matter here).
+const LINE = '[Bild 1] [Bild 2] compare them'
+const SECOND_CHIP_END = '[Bild 1] [Bild 2]'.length
 
-describe('withNoteLines', () => {
+describe('noteLineFormatOf', () => {
+  it('should read back what it writes, and nothing else', () => {
+    expect(FORMAT.render(2, '① smaller')).toBe('Bild 2: ① smaller')
+    expect(FORMAT.parse('Bild 12: (21) far off')).toEqual({ n: 12, note: '(21) far off' })
+    expect([FORMAT.parse('Bild 2: smaller'), FORMAT.parse('① smaller')]).toEqual([null, null])
+  })
+})
+
+describe('withImageNotes', () => {
   it('should put the notes on lines of their own under the chip, the rest of the text below', () => {
-    const text = `${CHIP} please crop\nthanks`
-
-    expect(withNoteLines(text, CHIP.length, ['① bigger', '② bluer'])).toBe(
-      `${CHIP} please crop\n① bigger\n② bluer\nthanks`
+    expect(withImageNotes(`${LINE}\nthanks`, 8, 1, ['① bigger', '② bluer'], FORMAT)).toBe(
+      `${LINE}\nBild 1: ① bigger\nBild 1: ② bluer\nthanks`
     )
   })
 
-  it('should add a later round after the notes already there', () => {
-    const text = `${CHIP} \n① bigger\nthanks`
+  it('should keep image 1 above image 2 when image 2 was marked first', () => {
+    const second = withImageNotes(LINE, SECOND_CHIP_END, 2, ['① smaller'], FORMAT)
 
-    expect(withNoteLines(text, CHIP.length, ['② bluer'])).toBe(
-      `${CHIP} \n① bigger\n② bluer\nthanks`
+    expect(withImageNotes(second, 8, 1, ['① bigger'], FORMAT)).toBe(
+      `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller`
+    )
+  })
+
+  it('should add a later round of an image after its earlier notes', () => {
+    const text = `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller`
+
+    expect(withImageNotes(text, 8, 1, ['② bluer'], FORMAT)).toBe(
+      `${LINE}\nBild 1: ① bigger\nBild 1: ② bluer\nBild 2: ① smaller`
     )
   })
 })
 
-describe('withoutNoteLines', () => {
-  it('should take the note lines under the chip and keep the text after them', () => {
-    expect(withoutNoteLines(`${CHIP} crop\n① bigger\n(21) far\nthanks`, CHIP.length)).toBe(
-      `${CHIP} crop\nthanks`
+describe('remapNoteLines', () => {
+  const text = `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller\nthanks`
+
+  it('should take only the notes of a removed image and renumber the rest', () => {
+    expect(remapNoteLines(text, [one, two], [two], FORMAT)).toBe(
+      `${LINE}\nBild 1: ① smaller\nthanks`
     )
   })
 
-  it('should leave a text without notes under the chip as it is', () => {
-    expect(withoutNoteLines(`${CHIP} crop\nthanks ①`, CHIP.length)).toBe(`${CHIP} crop\nthanks ①`)
+  it('should keep the notes of an image a marked copy took the place of', () => {
+    const marked = { id: 'm', name: 'a.png' }
+
+    expect(remapNoteLines(text, [one, two], [marked, two], FORMAT, { a: 'm' })).toBe(text)
+  })
+
+  it('should leave a line alone that names no attachment', () => {
+    expect(remapNoteLines('Bild 3: ① stale', [one, two], [two], FORMAT)).toBe('Bild 3: ① stale')
   })
 })
 
-describe('noteLinesAfter', () => {
-  it('should read the note lines under the chip', () => {
-    expect(noteLinesAfter(`${CHIP} crop\n① bigger\n② bluer\nthanks`, CHIP.length)).toEqual([
-      '① bigger',
-      '② bluer'
-    ])
-  })
-})
+describe('notesOfImage', () => {
+  it('should read the notes of one image among others', () => {
+    const text = `${LINE}\nBild 1: ① bigger\nBild 2: ① smaller\nBild 1: ② bluer`
 
-describe('noteBlockAfter', () => {
-  it('should find nothing on the last line', () => {
-    expect(noteBlockAfter(CHIP, 3)).toBeNull()
+    expect(notesOfImage(text, 1, FORMAT)).toEqual(['① bigger', '② bluer'])
   })
 })

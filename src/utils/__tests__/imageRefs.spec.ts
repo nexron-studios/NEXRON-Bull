@@ -99,11 +99,6 @@ describe('remapImageRefs', () => {
     expect(remapImageRefs('see [Bild 1 (logo.png)]\nnext', [logo], [], FORMAT)).toBe('see\nnext')
   })
 
-  it('should take the note lines under a removed image along with its reference', () => {
-    const noted = 'see [Bild 1 (logo.png)] please\n① bigger\n② bluer\nthanks'
-    expect(remapImageRefs(noted, [logo], [], FORMAT)).toBe('see please\nthanks')
-  })
-
   it('should point a replaced image at its successor under the new name', () => {
     const marked = { id: 'm', name: 'Bild 15-01-01.png' }
     expect(remapImageRefs(text, [shot, logo], [marked, shot, logo], FORMAT, { a: 'm' })).toBe(

@@ -362,6 +362,7 @@ export default {
     cancel: 'Cancel',
     comment_line: 'About {ref}: {comment}',
     reference: '[Image {n} ({name})]',
+    note_line: 'Image {n}: {note}',
     close_warning: 'The comment or markup is not in your message yet. Do it again to discard it.',
     too_large: 'The marked image is too large for Claude.',
     marked_limit: 'At most {max} images per message. Remove an image first.',

@@ -38,6 +38,7 @@ const setup = ({
   const draft = ref('')
   const isShell = ref(isShellAtStart)
   let api: ReturnType<typeof useComposerMarkup> | undefined
+  let removeImage: (id: string) => void = () => {}
   mount(
     defineComponent({
       setup: () => {
@@ -45,6 +46,7 @@ const setup = ({
         const attachments = useImageAttachments(images, ref(0), references.follow)
         images.value = attached
         if (hasChips) references.insert(attached, null)
+        removeImage = attachments.remove
         api = useComposerMarkup({
           images,
           isShell,
@@ -63,7 +65,7 @@ const setup = ({
     { global: { plugins: [i18n] } }
   )
   if (!api) throw new Error('composable did not run')
-  return { ...api, sent, draft, images, isShell }
+  return { ...api, sent, draft, images, isShell, removeImage }
 }
 
 const countOf = (text: string, part: string) => text.split(part).length - 1
@@ -146,7 +148,9 @@ describe('useComposerMarkup', () => {
 
     expect(images.value.map((image) => image.id)).toEqual(['m'])
     expect(countOf(draft.value, chipOf(1, 'shot.png'))).toBe(1)
-    expect(draft.value).toBe(`${chipOf(1, 'shot.png')} please crop\n① bigger\n② bluer\nthanks`)
+    expect(draft.value).toBe(
+      `${chipOf(1, 'shot.png')} please crop\nImage 1: ① bigger\nImage 1: ② bluer\nthanks`
+    )
   })
 
   it('should send the notes along when the marked image leaves the draft', () => {
@@ -172,11 +176,55 @@ describe('useComposerMarkup', () => {
     handOver({ sourceId: 'a', images: [first], comment: '', notes: ['① bigger'] }, 'compose')
     handOver({ sourceId: 'm1', images: [second], comment: '', notes: ['② bluer'] }, 'compose')
 
-    expect(draft.value).toBe(`${chipOf(1, 'shot.png')} please crop\n① bigger\n② bluer`)
+    expect(draft.value).toBe(
+      `${chipOf(1, 'shot.png')} please crop\nImage 1: ① bigger\nImage 1: ② bluer`
+    )
 
     handOver({ sourceId: 'm2', images: [second], comment: '', notes: [] }, 'send')
 
     expect(sent).toEqual([['About [Image 1 (shot.png)]: ① bigger ② bluer', ['shot.png']]])
     expect(draft.value).toBe('please crop')
+  })
+
+  describe('with two chips on one line', () => {
+    const one = imageOf('a', 'one.png')
+    const two = imageOf('b', 'two.png')
+    const markedOne = { ...imageOf('m1', 'one.png'), isMarked: true, markCount: 1 }
+    const markedTwo = { ...imageOf('m2', 'two.png'), isMarked: true, markCount: 1 }
+    const LINE = `${chipOf(1, 'one.png')} ${chipOf(2, 'two.png')} compare them`
+
+    it("should keep each note with its image and take only the removed one's along", () => {
+      const { handOver, draft, removeImage } = setup({ attached: [one, two] })
+      draft.value = LINE
+      handOver({ sourceId: 'a', images: [markedOne], comment: '', notes: ['① bigger'] }, 'compose')
+      handOver({ sourceId: 'b', images: [markedTwo], comment: '', notes: ['① smaller'] }, 'compose')
+
+      expect(draft.value).toBe(`${LINE}\nImage 1: ① bigger\nImage 2: ① smaller`)
+
+      removeImage('m1')
+
+      expect(draft.value).toBe(`${chipOf(1, 'two.png')} compare them\nImage 1: ① smaller`)
+    })
+
+    it('should keep image 1 above image 2 when image 2 was marked first', () => {
+      const { handOver, draft } = setup({ attached: [one, two] })
+      draft.value = LINE
+      handOver({ sourceId: 'b', images: [markedTwo], comment: '', notes: ['① smaller'] }, 'compose')
+      handOver({ sourceId: 'a', images: [markedOne], comment: '', notes: ['① bigger'] }, 'compose')
+
+      expect(draft.value).toBe(`${LINE}\nImage 1: ① bigger\nImage 2: ① smaller`)
+    })
+
+    it("should send only the image's own notes along", () => {
+      const { handOver, draft, sent } = setup({ attached: [one, two] })
+      draft.value = LINE
+      handOver({ sourceId: 'a', images: [markedOne], comment: '', notes: ['① bigger'] }, 'compose')
+      handOver({ sourceId: 'b', images: [markedTwo], comment: '', notes: ['① smaller'] }, 'compose')
+
+      handOver({ sourceId: 'm2', images: [markedTwo], comment: '', notes: [] }, 'send')
+
+      expect(sent).toEqual([['About [Image 1 (two.png)]: ① smaller', ['two.png']]])
+      expect(draft.value).toBe(`${chipOf(1, 'one.png')} compare them\nImage 1: ① bigger`)
+    })
   })
 })

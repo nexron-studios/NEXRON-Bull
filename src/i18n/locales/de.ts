@@ -366,6 +366,7 @@ export default {
     cancel: 'Abbrechen',
     comment_line: 'Zu {ref}: {comment}',
     reference: '[Bild {n} ({name})]',
+    note_line: 'Bild {n}: {note}',
     close_warning:
       'Kommentar oder Markierung sind noch nicht im Eingabefeld. Beim zweiten Mal werden sie verworfen.',
     too_large: 'Das markierte Bild ist zu groß für Claude.',

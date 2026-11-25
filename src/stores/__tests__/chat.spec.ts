@@ -521,8 +521,6 @@ describe('useChatStore: in a browser through the bridge', () => {
     cwd: 'C:\work\shop',
     profile: null,
     account: 'office',
-    working: true,
-    asks: 1,
     model: 'haiku',
     permission_mode: 'default',
     effort: null,

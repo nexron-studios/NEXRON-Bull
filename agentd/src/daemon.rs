@@ -455,12 +455,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
         let sessions: Vec<_> = self
             .sessions()
             .iter()
-            .map(|(tab, session)| (tab.clone(), session.session_id.clone(), session.is_working || session.clearing.is_some(), session.asks.len(), session.params.clone()))
+            .map(|(tab, session)| (tab.clone(), session.session_id.clone(), session.params.clone()))
             .collect();
         // Outside the lock: naming the account and the session reads files.
         sessions
             .into_iter()
-            .map(|(tab, session_id, working, asks, params)| {
+            .map(|(tab, session_id, params)| {
                 // The profile as the app started it (`None` for the default), as `start` takes it again.
                 let (_, account) = Self::account_of(params.profile.clone());
                 // Haiku's title first, as `recent` names the session; else the transcript's.
@@ -468,7 +468,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
                     find_transcript(params.profile.clone(), &session_id).ok().flatten().and_then(|path| catalog::title_of(&path))
                 });
                 let StartParams { cwd, profile, model, permission_mode, effort, is_fresh, .. } = params;
-                TabInfo { tab, session_id, title, cwd, profile, account, working, asks, model, permission_mode, effort, is_fresh }
+                TabInfo { tab, session_id, title, cwd, profile, account, model, permission_mode, effort, is_fresh }
             })
             .collect()
     }

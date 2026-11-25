@@ -224,9 +224,6 @@ export interface TabInfoProps {
   cwd: string
   profile: string | null
   account: string | null
-  working: boolean
-  /** Permission asks Claude waits on; `start` on the tab sends them again */
-  asks: number
   model: string | null
   permission_mode: string | null
   effort: string | null

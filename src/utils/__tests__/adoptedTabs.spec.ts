@@ -9,8 +9,6 @@ const info = (fields: Partial<TabInfoProps> = {}): TabInfoProps => ({
   cwd: 'C:\\work\\shop',
   profile: 'C:\\Users\\me\\.claude-work',
   account: 'work',
-  working: true,
-  asks: 1,
   model: 'haiku',
   permission_mode: 'default',
   effort: null,

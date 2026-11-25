@@ -194,7 +194,7 @@ fn lists_running_tabs_and_tells_every_app_when_an_ask_is_answered() {
     phone.send(json!({ "id": 1, "op": "tabs" }));
     let tabs = phone.expect(|e| e["type"] == "tabs");
     let tab = &tabs["tabs"][0];
-    assert_eq!((&tab["tab"], &tab["session_id"], &tab["working"], &tab["asks"]), (&json!("t1"), &started["session_id"], &json!(true), &json!(1)));
+    assert_eq!((&tab["tab"], &tab["session_id"]), (&json!("t1"), &started["session_id"]));
     assert_eq!((&tab["model"], &tab["permission_mode"], &tab["profile"]), (&json!("haiku"), &json!("default"), &Value::Null));
     assert_eq!(tab["is_fresh"], json!(false));
     assert_eq!(tab["cwd"].as_str().map(PathBuf::from), Some(setup.home.clone()));

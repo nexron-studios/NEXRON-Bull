@@ -229,9 +229,6 @@ pub struct TabInfo {
     pub cwd: PathBuf,
     pub profile: Option<PathBuf>,
     pub account: Option<String>,
-    pub working: bool,
-    /// Permission asks Claude waits on; `start` on the tab sends them again.
-    pub asks: usize,
     pub model: Option<String>,
     pub permission_mode: Option<String>,
     pub effort: Option<String>,

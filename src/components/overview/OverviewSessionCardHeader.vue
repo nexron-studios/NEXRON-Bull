@@ -13,7 +13,8 @@ import { chatNameOf, folderNameOf } from '@/utils/sessionList'
 
 // Who the card is about, like the Agent Dashboard's card head: folder › chat name, the account,
 // the status on the right. The name gives way last: the account truncates first. A click on the
-// name copies the full session ID; the card opens on any click outside a button.
+// name copies the full session ID; the card opens on any click outside a button. A tap goes to
+// the card like on a sidebar row: on a phone the name is where a tap to open it lands.
 const { tab, status } = defineProps<{ tab: ChatTabState; status: CardStatus }>()
 
 const { t } = useI18n()
@@ -40,7 +41,7 @@ const copyId = () => {
               <TooltipTrigger as-child>
                 <button
                   type="button"
-                  class="inline cursor-copy rounded-sm font-semibold outline-none hover:text-subtle focus-visible:ring-2 focus-visible:ring-ring"
+                  class="inline cursor-copy rounded-sm font-semibold outline-none hover:text-subtle focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:pointer-events-none"
                   :aria-label="t('overview.card.copy_session_id', { name: chatName })"
                   @click="copyId"
                 >
@@ -48,7 +49,7 @@ const copyId = () => {
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                {{ t('sidebar.session_id_copy', { id: tab.sessionId }) }}
+                {{ t('global.session_id_copy', { id: tab.sessionId }) }}
               </TooltipContent>
             </Tooltip>
           </template>

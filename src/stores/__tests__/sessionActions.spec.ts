@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import { newTab } from '@/utils/chatTab'
 import { targetOfTab } from '@/utils/sessionActions'
@@ -42,10 +42,17 @@ const undoLastToast = () => {
   options.action.onClick()
 }
 
+const START_LOCALE = i18n.global.locale.value
+
 describe('useSessionActionsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     toast.mockClear()
+  })
+
+  afterEach(() => {
+    i18n.global.locale.value = START_LOCALE
+    Reflect.deleteProperty(navigator, 'clipboard')
   })
 
   it('should ask before a finished chat is removed from its tab', async () => {

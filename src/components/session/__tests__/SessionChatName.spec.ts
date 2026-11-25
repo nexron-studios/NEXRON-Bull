@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import SessionChatName from '../SessionChatName.vue'
 import i18n from '@/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -15,6 +15,7 @@ vi.mock('vue-sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } 
 vi.mock('@/lib/platform', () => ({ isDesktopApp: () => true }))
 
 const SESSION_ID = '1a87c3f0-5b2e-4d19-9c6a-0e7f3b2d4a11'
+const START_LOCALE = i18n.global.locale.value
 
 // Inside a row button like the sidebar's: a click on the name must not open the chat.
 const mountInRow = () => {
@@ -31,6 +32,10 @@ const mountInRow = () => {
 }
 
 describe('SessionChatName', () => {
+  afterEach(() => {
+    i18n.global.locale.value = START_LOCALE
+  })
+
   it('should show the folder with the first four characters of the ID', () => {
     const { wrapper } = mountInRow()
 

@@ -345,6 +345,7 @@ export default {
     comment_placeholder: 'What should Claude change here?',
     comment_placeholder_general: 'Anything else? (optional)',
     notes_title: 'Notes on the marks',
+    marks_title: 'Marks',
     note_label: 'Note on this spot',
     note_placeholder: 'What should change here?',
     remove_mark: 'Remove mark {n}',

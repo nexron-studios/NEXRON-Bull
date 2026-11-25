@@ -19,9 +19,10 @@ import { historyStepOf, isSendShortcut } from '@/utils/shortcuts'
 import { isTextField } from '@/utils/textField'
 
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
-// "M20"): view and page, or draw on it; either way a comment can go with it to the composer.
-// `initialMode`: what an opening starts in. The composer's own images open ready to draw on;
-// sent ones open to look at.
+// "M20"): view and page, or draw on it. A sent image can take a comment along to the composer; an
+// image still in the composer only takes its marks and their notes, as it is written about next
+// to its chip there. `initialMode`: what an opening starts in. The composer's own images open
+// ready to draw on; sent ones open to look at.
 const { images, initialMode = 'view' } = defineProps<{
   images: LightboxImage[]
   initialMode?: LightboxMode

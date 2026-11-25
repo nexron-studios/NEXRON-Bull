@@ -348,6 +348,7 @@ export default {
     comment_placeholder: 'Was soll Claude hier ändern?',
     comment_placeholder_general: 'Sonst noch etwas? (optional)',
     notes_title: 'Notizen zu den Markierungen',
+    marks_title: 'Markierungen',
     note_label: 'Notiz zu dieser Stelle',
     note_placeholder: 'Was soll hier anders sein?',
     remove_mark: 'Markierung {n} entfernen',

@@ -12,15 +12,14 @@ import { useMarkup } from '@/composables/useMarkup'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 
-// Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
-// composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
-// `hasComment` false (an image still in the composer): only the marks' notes, no general comment;
-// the draft around the image's chip is where the rest is written.
-// While marking, each numbered mark has its note here as well as on the image, so the text and
-// the spot it is about stay one thing; the field below is then for anything else. "Ins
-// Eingabefeld" hands everything to the composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it
-// as a message of its own. A long note wraps and grows up to a few lines, then scrolls. The × removes the mark
-// with its note; Backspace in a pin's empty note does too, as a pin is nothing without it.
+// Under the desktop preview (Figma "20b"), in the same dialog as the image: the marks' notes and
+// the ways out. While marking, each numbered mark has its note here as well as on the image, so
+// the text and the spot it is about stay one thing. A sent image (`hasComment`) also gets a field
+// for what Claude should change, ready while viewing too; an image still in the composer gets
+// none, as it is written about next to its chip there. "Ins Eingabefeld" hands it to the
+// composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it as a message of its own.
+// A long note wraps and grows up to a few lines, then scrolls. The × removes the mark with its
+// note; Backspace in a pin's empty note does too, as a pin is nothing without it.
 // Past about ten notes the list scrolls instead of squeezing the image, and a new mark's row
 // comes into view, since its note is typed on the image and the list would not follow by itself.
 const {
@@ -67,7 +66,7 @@ watch(
 
 <template>
   <section
-    :aria-label="t(hasComment ? 'images.comment_title' : 'images.notes_title')"
+    :aria-label="t(hasComment ? 'images.comment_title' : 'images.marks_title')"
     class="flex flex-col gap-2 rounded-xl border border-border bg-popover p-2.5 text-popover-foreground shadow-xl"
   >
     <!-- The padding keeps the focus ring of a note inside the scrolling box. -->

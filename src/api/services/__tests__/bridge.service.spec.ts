@@ -151,4 +151,37 @@ describe('bridgeService', () => {
       null
     ])
   })
+  it.each([4408, 4503])('should keep the token after close %i and try again', async (code) => {
+    const { service, socket } = await signedIn()
+
+    socket.drop(code)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect([service.state.status, localStorage.getItem('bull.bridge.token')]).toEqual([
+      'connecting',
+      'device-token'
+    ])
+    expect(FakeSocket.last).not.toBe(socket)
+  })
+
+  it('should say the bridge is out of reach while a new token waits for it', async () => {
+    const service = await loadService()
+    service.signIn('new-token')
+
+    ;(FakeSocket.last as FakeSocket).drop(1006)
+
+    expect([service.state.status, service.state.isSigningIn]).toEqual(['offline', true])
+  })
+
+  it('should leave out a message it does not know instead of failing', async () => {
+    const { service, socket } = await signedIn()
+    const lines: string[] = []
+    service.onLine((line) => lines.push(line))
+
+    socket.receive({ type: 'push_subscribed' })
+    socket.receive({ type: 'event', line: 42 })
+    socket.receive({ type: 'event', line: '{"type":"hello"}' })
+
+    expect(lines).toEqual(['{"type":"hello"}'])
+  })
 })

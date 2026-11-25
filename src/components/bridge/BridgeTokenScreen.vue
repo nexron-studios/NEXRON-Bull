@@ -21,6 +21,7 @@ const status = computed(() => bridgeService.state.status)
 const isConnecting = computed(() => status.value === 'connecting')
 const problem = computed(() => {
   if (isEmpty.value) return t('bridge.token_empty')
+  if (status.value === 'offline') return t('bridge.unreachable')
   return status.value === 'rejected' ? t('bridge.token_rejected') : null
 })
 

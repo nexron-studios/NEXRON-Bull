@@ -15,6 +15,7 @@ export default {
     token_empty: 'Enter the token.',
     token_rejected:
       'The bridge does not know this token. Make a new one on the server and enter it here.',
+    unreachable: 'The bridge does not answer right now. Bull keeps trying.',
     connect: 'Connect'
   },
   chat_search: {

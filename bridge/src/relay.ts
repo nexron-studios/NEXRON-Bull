@@ -17,19 +17,33 @@ export interface BridgeOptions {
   /** Starts `agentd connect` for the machine; throws for one the bridge does not know. */
   spawnAgentd: (machine: Machine) => AgentdProcess
   heartbeatMs?: number
+  authTimeoutMs?: number
 }
 
 export const SOCKET_PATH = '/ws'
 /** A phone may send photos; agentd takes them base64 inside one line. */
 const MAX_MESSAGE_BYTES = 64 * 1024 * 1024
-const AUTH_TIMEOUT_MS = 10_000
+const DEFAULT_AUTH_TIMEOUT_MS = 10_000
 /** A phone that went to sleep never closes its socket; this finds it and frees its agentd. */
 const DEFAULT_HEARTBEAT_MS = 30_000
 
-export const closeReasonList = ['unauthorized', 'bad_message'] as const
+export const closeReasonList = [
+  'unauthorized',
+  'bad_message',
+  'auth_timeout',
+  'auth_unavailable'
+] as const
 export type CloseReason = (typeof closeReasonList)[number]
-/** 4000-4999 is free for applications; the browser hands the code to the app. */
-export const CLOSE_CODE: Record<CloseReason, number> = { unauthorized: 4401, bad_message: 4400 }
+/**
+ * 4000-4999 is free for applications; the browser hands the code to the app. Only `unauthorized`
+ * means the token is wrong: the app forgets it then, and tries again after the others.
+ */
+export const CLOSE_CODE: Record<CloseReason, number> = {
+  unauthorized: 4401,
+  bad_message: 4400,
+  auth_timeout: 4408,
+  auth_unavailable: 4503
+}
 
 type ClientMessage =
   { type: 'auth'; token: string } | { type: 'request'; seq: number; machine: Machine; line: string }
@@ -109,14 +123,21 @@ const serveDevice = (socket: WebSocket, options: BridgeOptions, nextConnection: 
 
   const close = (reason: CloseReason) => socket.close(CLOSE_CODE[reason], reason)
 
-  const authTimer = setTimeout(() => close('unauthorized'), AUTH_TIMEOUT_MS)
+  const authTimer = setTimeout(
+    () => close('auth_timeout'),
+    options.authTimeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS
+  )
 
   const signIn = async (token: string) => {
-    // An unreadable token file locks every device out instead of crashing the bridge.
-    const isKnown = await options.isAuthorized(token).catch((error: unknown) => {
+    let isKnown: boolean
+    try {
+      isKnown = await options.isAuthorized(token)
+    } catch (error) {
+      // An unreadable or half-written token file says nothing about this token: the device keeps
+      // it and tries again, instead of every phone losing its token at once.
       console.error('bull-bridge: cannot check the token:', error)
-      return false
-    })
+      return close('auth_unavailable')
+    }
     if (!isKnown) return close('unauthorized')
     clearTimeout(authTimer)
     isAuthed = true

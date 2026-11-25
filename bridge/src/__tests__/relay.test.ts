@@ -116,6 +116,44 @@ describe('who gets in', () => {
     assert.equal(children.length, 0)
   })
 
+  it('should close with 4503, not 4401, when it cannot check the token', async () => {
+    const broken = createBridge({
+      origins: new Set([ORIGIN]),
+      isAuthorized: () => Promise.reject(new Error('token file half written')),
+      machines: [],
+      spawnAgentd: spawnFake
+    })
+    await new Promise<void>((resolve) => broken.listen(0, '127.0.0.1', resolve))
+    const socket = new WebSocket(`ws://127.0.0.1:${(broken.address() as AddressInfo).port}/ws`, {
+      origin: ORIGIN
+    })
+    socket.on('open', () => socket.send(JSON.stringify({ type: 'auth', token: TOKEN })))
+
+    const code = await new Promise<number>((resolve) => socket.once('close', resolve))
+
+    broken.close()
+    assert.equal(code, 4503)
+  })
+
+  it('should close with 4408, not 4401, when no token comes in time', async () => {
+    const waiting = createBridge({
+      origins: new Set([ORIGIN]),
+      isAuthorized: async () => true,
+      machines: [],
+      spawnAgentd: spawnFake,
+      authTimeoutMs: 50
+    })
+    await new Promise<void>((resolve) => waiting.listen(0, '127.0.0.1', resolve))
+    const socket = new WebSocket(`ws://127.0.0.1:${(waiting.address() as AddressInfo).port}/ws`, {
+      origin: ORIGIN
+    })
+
+    const code = await new Promise<number>((resolve) => socket.once('close', resolve))
+
+    waiting.close()
+    assert.equal(code, 4408)
+  })
+
   it('should close with 4400 for a message it does not know', async () => {
     const device = await open()
     device.socket.send('not json')

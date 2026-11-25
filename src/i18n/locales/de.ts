@@ -16,6 +16,7 @@ export default {
     token_empty: 'Gib das Token ein.',
     token_rejected:
       'Dieses Token kennt die Brücke nicht. Erzeuge auf dem Server ein neues und gib es hier ein.',
+    unreachable: 'Die Brücke antwortet gerade nicht. Bull versucht es weiter.',
     connect: 'Verbinden'
   },
   chat_search: {

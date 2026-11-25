@@ -19,7 +19,10 @@ export type BridgeStatus = (typeof bridgeStatusList)[number]
 
 const TOKEN_KEY = 'bull.bridge.token'
 const SOCKET_PATH = '/ws'
-/** The bridge's close codes for a refused token and a message it could not read. */
+/**
+ * The bridge's close code for a token it does not know. Its other codes (no token in time, the
+ * token file unreadable) say nothing about the token: the app keeps it and tries again.
+ */
 const UNAUTHORIZED = 4401
 const RETRY_FIRST_MS = 1000
 const RETRY_MAX_MS = 30_000
@@ -30,6 +33,38 @@ type BridgeMessage =
   | { type: 'failed'; seq: number; message: string }
   | { type: 'event'; line: string }
   | { type: 'disconnected'; machine: Machine; connection: number }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value)
+
+const isMachine = (value: unknown): value is Machine => value === null || typeof value === 'string'
+
+/**
+ * The one place a message from the bridge is checked; `null` for one this app cannot read or does
+ * not know (a newer bridge may send more), which is then left out.
+ */
+export const parseBridgeMessage = (data: string): BridgeMessage | null => {
+  let value: unknown
+  try {
+    value = JSON.parse(data)
+  } catch {
+    return null
+  }
+  if (!isRecord(value)) return null
+  const { type, seq, connection, machine, machines, message, line } = value
+  if (type === 'ready' && Array.isArray(machines) && machines.every((m) => typeof m === 'string'))
+    return { type, machines }
+  if (type === 'sent' && isCount(seq) && isCount(connection)) return { type, seq, connection }
+  if (type === 'failed' && isCount(seq) && typeof message === 'string')
+    return { type, seq, message }
+  if (type === 'event' && typeof line === 'string') return { type, line }
+  if (type === 'disconnected' && isMachine(machine) && isCount(connection))
+    return { type, machine, connection }
+  return null
+}
 
 interface PendingSend {
   machine: Machine
@@ -125,6 +160,7 @@ const onClose = (code: number) => {
     status.value = 'rejected'
     return
   }
+  // A token just entered stays unconfirmed; the token screen says the bridge is out of reach.
   status.value = 'offline'
   clearTimeout(retryTimer)
   retryTimer = setTimeout(connect, retryDelay)
@@ -144,7 +180,10 @@ const connect = () => {
   socket = opened
   // The token goes in the first message, never in the URL or a cookie another page could use.
   opened.onopen = () => opened.send(JSON.stringify({ type: 'auth', token }))
-  opened.onmessage = ({ data }) => onMessage(JSON.parse(String(data)) as BridgeMessage)
+  opened.onmessage = ({ data }) => {
+    const message = parseBridgeMessage(String(data))
+    if (message) onMessage(message)
+  }
   opened.onclose = ({ code }) => onClose(code)
 }
 

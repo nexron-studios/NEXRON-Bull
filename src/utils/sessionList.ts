@@ -2,7 +2,6 @@ import type { SessionSummaryProps } from '@/types/agentd.type'
 import { activityOfTab } from '@/utils/activity'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import {
-  hasBackgroundWork,
   isBusyStatus,
   listedTabOf,
   turnMessagesOf,
@@ -83,7 +82,7 @@ export interface SearchableRow {
 export type RowActivity =
   | { kind: 'tool'; tool: string; target: string }
   | { kind: 'ask'; reason: 'question' | 'plan' }
-  | { kind: 'state'; state: 'thinking' | 'writing' | 'working' | 'background' }
+  | { kind: 'state'; state: 'thinking' | 'writing' | 'working' }
 
 const PATH_SEPARATOR = /[\\/]/
 
@@ -275,8 +274,6 @@ export const rowActivityOf = (tab: ChatTabState): RowActivity | null => {
     return { kind: 'tool', tool: tab.permission.toolName, target }
   }
   if (openQuestionOf(tab)) return { kind: 'ask', reason: 'question' }
-  // The turn is over, its background agents or shells are not: that is what the chat does now.
-  if (tab.status === 'idle' && hasBackgroundWork(tab)) return { kind: 'state', state: 'background' }
   if (tab.status !== 'working') return null
   // Only the running turn can hold the call in progress, so only its results are needed.
   const activity = activityOfTab(tab, resultsByToolId(turnMessagesOf(tab)))

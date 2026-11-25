@@ -187,7 +187,10 @@ describe('snapshotOf', () => {
 
   it('should show an idle tab whose background agents still run as working', () => {
     const idle = { ...tab(), status: 'idle' as const, permission: null }
-    const working = { ...idle, backgroundTasks: { ids: ['a7f'], at: 1 } }
+    const working = {
+      ...idle,
+      backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
+    }
     expect([snapshotOf(idle, '').status, snapshotOf(working, '').status]).toEqual([
       'idle',
       'working'

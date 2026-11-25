@@ -62,7 +62,7 @@ import { parseSlashInput } from '@/utils/slashCommands'
 import { withSubagentEvent } from '@/utils/subagentActions'
 import {
   agentNoticesOf,
-  backgroundTaskIdsOf,
+  backgroundTasksOf,
   connectorsOfStatus,
   type Connector
 } from '@/utils/tabInsights'
@@ -297,9 +297,9 @@ export const useChatStore = defineStore(
       // An exited Claude took its background agents and shells along; a restart lists none of them.
       const tasks =
         event.type === 'claude'
-          ? backgroundTaskIdsOf(event.event)
+          ? backgroundTasksOf(event.event)
           : event.type === 'exited'
-            ? []
+            ? { ids: [], active: [] }
             : null
       if (tasks) update(id, (tab) => withBackgroundTasks(tab, tasks, now))
       const live =

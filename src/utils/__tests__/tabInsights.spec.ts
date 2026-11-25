@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentNoticesOf,
-  backgroundTaskIdsOf,
+  backgroundTasksOf,
   connectorsOf,
   connectorsOfStatus,
   contextOf,
@@ -223,21 +223,44 @@ describe('agentNoticesOf', () => {
   })
 })
 
-describe('backgroundTaskIdsOf', () => {
-  it('should list the task ids of the running background tasks', () => {
-    const event = {
-      type: 'system',
-      subtype: 'background_tasks_changed',
-      tasks: [
-        { task_id: 'blj8exi1k', task_type: 'local_bash' },
-        { task_id: 'a3cb1f0c2392d1046', task_type: 'local_agent' }
+describe('backgroundTasksOf', () => {
+  // As Claude Code 2.1.332 sends it: every live task with its description.
+  const event = {
+    type: 'system',
+    subtype: 'background_tasks_changed',
+    tasks: [
+      {
+        task_id: 'blj8exi1k',
+        task_type: 'local_bash',
+        description: 'Follow act video generation until done'
+      },
+      {
+        task_id: 'a3cb1f0c2392d1046',
+        task_type: 'local_agent',
+        subagent_type: 'general-purpose',
+        description: 'Check the release'
+      },
+      { task_id: 'w1', task_type: 'local_bash', description: 'Live updates', ambient: true }
+    ]
+  }
+
+  it('should list every task id and name the tasks that count as activity', () => {
+    expect(backgroundTasksOf(event)).toEqual({
+      ids: ['blj8exi1k', 'a3cb1f0c2392d1046', 'w1'],
+      active: [
+        { id: 'blj8exi1k', description: 'Follow act video generation until done' },
+        { id: 'a3cb1f0c2392d1046', description: 'Check the release' }
       ]
-    }
-    expect(backgroundTaskIdsOf(event)).toEqual(['blj8exi1k', 'a3cb1f0c2392d1046'])
+    })
+  })
+
+  it('should keep a task without a description with an empty name', () => {
+    const bare = { ...event, tasks: [{ task_id: 'b1', task_type: 'local_bash' }] }
+    expect(backgroundTasksOf(bare)?.active).toEqual([{ id: 'b1', description: '' }])
   })
 
   it('should ignore other system events', () => {
-    expect(backgroundTaskIdsOf({ type: 'system', subtype: 'init' })).toBeNull()
+    expect(backgroundTasksOf({ type: 'system', subtype: 'init' })).toBeNull()
   })
 })
 
@@ -314,8 +337,8 @@ describe('subagentsOf', () => {
       message('a1', started, [agentCall('toolu_4', { run_in_background: true })]),
       message('u1', started, [result('toolu_4', 'Async agent launched. agentId: a7f')])
     ]
-    const listed = subagentsOf(messages, [], true, { ids: ['a7f'], at: 50 })
-    const gone = subagentsOf(messages, [], true, { ids: ['b1'], at: 60 })
+    const listed = subagentsOf(messages, [], true, { ids: ['a7f'], active: [], at: 50 })
+    const gone = subagentsOf(messages, [], true, { ids: ['b1'], active: [], at: 60 })
     expect([listed[0]?.status, gone[0]?.status, gone[0]?.finishedAt]).toEqual([
       'running',
       'done',
@@ -346,7 +369,7 @@ describe('subagentsOf', () => {
     const firstEnd = { id: 'toolu_5', status: 'failed' as const, at: 10 }
 
     it('should run again under the SendMessage call though its first run failed', () => {
-      const [agent] = subagentsOf(messages, [firstEnd], true, { ids: [], at: 10 })
+      const [agent] = subagentsOf(messages, [firstEnd], true, { ids: [], active: [], at: 10 })
       expect([agent?.status, agent?.runId, agent?.startedAt]).toEqual([
         'running',
         'toolu_send',

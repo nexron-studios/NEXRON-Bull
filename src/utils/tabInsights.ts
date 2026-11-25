@@ -46,10 +46,19 @@ export interface Subagent {
   finishedAt: number | null
 }
 
+/** A background task the user would call work: a shell, an agent, a monitor. */
+export interface BackgroundTask {
+  id: string
+  /** What Claude Code names it, e.g. the `description` of the Bash call; empty when it gave none */
+  description: string
+}
+
 /** The background tasks (shells, agents) the stream last listed as running. */
 export interface BackgroundTasks {
   /** Task ids: the id a shell's start answer names, the `agentId` of an agent */
   ids: string[]
+  /** The tasks that count as activity, in the stream's order; ambient housekeeping left out */
+  active: BackgroundTask[]
   /** When the list arrived (ms since epoch) */
   at: number
 }
@@ -164,17 +173,34 @@ const textOf = (content: unknown): string =>
       ? content.map((part: { text?: string }) => part.text ?? '').join('\n')
       : ''
 
+interface ListedTask {
+  task_id?: unknown
+  description?: unknown
+  ambient?: unknown
+}
+
 /**
- * The ids of the background tasks still running, from the stream's `system` event of subtype
+ * The background tasks still running, from the stream's `system` event of subtype
  * `background_tasks_changed`, which lists all of them on every change. `null` for any other event.
+ * Each entry carries a `description` (Claude Code 2.1.3xx). An `ambient` one is housekeeping such
+ * as a live-update watcher, which Claude Code asks hosts to leave out of activity indicators.
  * Live only: after a reload there is no list until the next change.
  */
-export const backgroundTaskIdsOf = (event: ClaudeEvent): string[] | null => {
+export const backgroundTasksOf = (event: ClaudeEvent): Omit<BackgroundTasks, 'at'> | null => {
   if (event.type !== 'system' || event.subtype !== 'background_tasks_changed') return null
   if (!Array.isArray(event.tasks)) return null
-  return (event.tasks as { task_id?: unknown }[]).flatMap((task) =>
-    typeof task.task_id === 'string' ? [task.task_id] : []
+  const tasks = (event.tasks as ListedTask[]).flatMap((task) =>
+    typeof task.task_id === 'string' ? [{ ...task, id: task.task_id }] : []
   )
+  return {
+    ids: tasks.map((task) => task.id),
+    active: tasks
+      .filter((task) => task.ambient !== true)
+      .map((task) => ({
+        id: task.id,
+        description: typeof task.description === 'string' ? task.description.trim() : ''
+      }))
+  }
 }
 
 const COMPLETED = 'completed'

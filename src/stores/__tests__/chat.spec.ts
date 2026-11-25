@@ -65,7 +65,12 @@ describe('useChatStore: background work', () => {
 
   it('should forget the background tasks of a Claude that exited', () => {
     const chat = useChatStore()
-    chat.tabs = [{ ...liveTab('t1', null), backgroundTasks: { ids: ['a7f'], at: 1 } }]
+    chat.tabs = [
+      {
+        ...liveTab('t1', null),
+        backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
+      }
+    ]
 
     emit({ type: 'exited', tab: 't1', code: 0 })
 

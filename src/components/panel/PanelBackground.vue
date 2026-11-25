@@ -85,7 +85,16 @@ const toggle = () => {
           :style="{ '--stagger-index': staggerIndexOf(shell.id) ?? undefined }"
         >
           <SquareTerminal class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span class="min-w-0 flex-1 truncate font-mono text-meta">{{ shell.command }}</span>
+          <!-- What it is for reads first; the command stays for the one who knows the script. -->
+          <span v-if="shell.description" class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate">{{ shell.description }}</span>
+            <span class="truncate font-mono text-meta text-muted-foreground">
+              {{ shell.command }}
+            </span>
+          </span>
+          <span v-else class="min-w-0 flex-1 truncate font-mono text-meta">{{
+            shell.command
+          }}</span>
           <span v-if="shell.age" class="shrink-0 text-meta text-muted-foreground tabular-nums">
             {{ shell.age }}
           </span>

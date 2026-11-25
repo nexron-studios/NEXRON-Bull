@@ -17,6 +17,7 @@ import {
   contextWindowOf,
   withKnownConnectors,
   type AgentNotice,
+  type BackgroundTask,
   type BackgroundTasks,
   type Connector
 } from '@/utils/tabInsights'
@@ -470,11 +471,15 @@ const movedAccountOf = (
     : { profile: tab.profile, account: tab.account }
 
 /**
- * Claude still runs background agents or shells. The stream's task list (`background_tasks_changed`)
- * names them; an exited Claude runs none.
+ * The background agents or shells Claude still runs. The stream's task list
+ * (`background_tasks_changed`) names them; an exited Claude runs none.
  */
+export const backgroundWorkOf = (
+  tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>
+): BackgroundTask[] => (tab.status === 'ended' ? [] : (tab.backgroundTasks?.active ?? []))
+
 export const hasBackgroundWork = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): boolean =>
-  tab.status !== 'ended' && !!tab.backgroundTasks?.ids.length
+  backgroundWorkOf(tab).length > 0
 
 /**
  * The status the user sees: a chat whose turn ended while its background agents or shells still
@@ -556,11 +561,11 @@ export const withAgentNotices = (tab: ChatTabState, notices: AgentNotice[]): Cha
 /** The background tasks the stream just listed as running. */
 export const withBackgroundTasks = (
   tab: ChatTabState,
-  ids: string[],
+  tasks: Omit<BackgroundTasks, 'at'>,
   now: number
 ): ChatTabState => ({
   ...tab,
-  backgroundTasks: { ids, at: now }
+  backgroundTasks: { ...tasks, at: now }
 })
 
 /** A sent prompt shows at once; `withMessage` swaps in Claude's echo. */

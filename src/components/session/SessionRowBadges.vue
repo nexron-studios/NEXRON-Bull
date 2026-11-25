@@ -28,7 +28,7 @@ const badges = computed(() =>
       iconClass: 'text-muted-foreground',
       count: backgroundShells.value.length,
       label: t('activity.badge_shells', backgroundShells.value.length),
-      items: backgroundShells.value.map((shell) => shell.command)
+      items: backgroundShells.value.map((shell) => shell.description || shell.command)
     }
   ].filter((badge) => badge.count > 0)
 )

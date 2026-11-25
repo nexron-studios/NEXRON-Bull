@@ -141,7 +141,6 @@ export default {
         thinking: 'Claude is thinking',
         writing: 'Claude is writing',
         working: 'Claude is working',
-        background: 'Still running in the background',
         reads: 'Claude is reading {target}',
         searches: 'Claude is searching {target}',
         edits: 'Claude is changing {target}',
@@ -388,6 +387,8 @@ export default {
       done: 'Done'
     },
     empty_chat: 'waiting for the first prompt',
+    background_task: 'In the background: {task}',
+    background_count: 'In the background: {n} task | In the background: {n} tasks',
     age_running: 'running for {age}',
     age_finished: 'finished {age} ago',
     empty_title: 'No chat open',

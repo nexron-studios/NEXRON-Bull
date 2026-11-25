@@ -433,7 +433,7 @@ describe('withTurnClock', () => {
   describe('with a background shell still running', () => {
     const turn = { startedAt: 1000, afterUuid: null }
     // `run_in_background` Bash, listed by `background_tasks_changed` until it ends.
-    const running = { ids: ['b3vtm9fpi'], at: 2000 }
+    const running = { ids: ['b3vtm9fpi'], active: [{ id: 'b3vtm9fpi', description: '' }], at: 2000 }
 
     it('should hold the finish while the answer leaves background work running', () => {
       const ended = withTurnClock(
@@ -447,7 +447,7 @@ describe('withTurnClock', () => {
       const held = { ...tab(), status: 'idle' as const, isFinishHeld: true }
       const reply = withTurnClock({ ...held, status: 'working' }, 7000)
       const ended = withTurnClock(
-        { ...reply, status: 'idle', backgroundTasks: { ids: [], at: 8000 } },
+        { ...reply, status: 'idle', backgroundTasks: { ids: [], active: [], at: 8000 } },
         9000
       )
       expect([ended.finishedAt, ended.isFinishHeld]).toEqual([9000, false])
@@ -458,8 +458,11 @@ describe('withTurnClock', () => {
 describe('shownStatusOf and listedTabOf', () => {
   it('should show an idle chat whose background agents or shells run as working', () => {
     const idle = { ...tab(), status: 'idle' as const }
-    const busy = { ...idle, backgroundTasks: { ids: ['a7f'], at: 1 } }
-    const done = { ...idle, backgroundTasks: { ids: [], at: 2 } }
+    const busy = {
+      ...idle,
+      backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
+    }
+    const done = { ...idle, backgroundTasks: { ids: [], active: [], at: 2 } }
     expect([shownStatusOf(idle), shownStatusOf(busy), shownStatusOf(done)]).toEqual([
       'idle',
       'working',
@@ -469,7 +472,11 @@ describe('shownStatusOf and listedTabOf', () => {
   })
 
   it('should not show an exited Claude as running its background work', () => {
-    const ended = { ...tab(), status: 'ended' as const, backgroundTasks: { ids: ['a7f'], at: 1 } }
+    const ended = {
+      ...tab(),
+      status: 'ended' as const,
+      backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
+    }
     expect(shownStatusOf(ended)).toBe('ended')
   })
 })

@@ -81,6 +81,8 @@ export interface TabActivityView extends Pick<TurnTools, 'tools' | 'recent'> {
 export interface BackgroundShell {
   id: string
   command: string
+  /** What the shell is for: the stream's task name, else the call's `description`; may be empty */
+  description: string
   startedAt: number | null
 }
 
@@ -280,6 +282,16 @@ export const backgroundShellsOf = (
         : text.match(MOVED_ID_PATTERN)?.[1]
     if (!taskId || ended.has(taskId) || (tasks && !tasks.ids.includes(taskId))) return []
     const command = typeof block.input.command === 'string' ? block.input.command : ''
-    return [{ id: block.id, command: command.split('\n')[0] ?? '', startedAt: at }]
+    const ownDescription =
+      typeof block.input.description === 'string' ? block.input.description.trim() : ''
+    const listed = tasks?.active.find((task) => task.id === taskId)?.description
+    return [
+      {
+        id: block.id,
+        command: command.split('\n')[0] ?? '',
+        description: listed || ownDescription,
+        startedAt: at
+      }
+    ]
   })
 }

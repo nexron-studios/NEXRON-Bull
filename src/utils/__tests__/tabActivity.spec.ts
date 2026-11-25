@@ -296,7 +296,7 @@ describe('backgroundShellsOf', () => {
     ]
     const notices = [{ id: 's2', status: 'done' as const, at: ms(6) }]
     expect(backgroundShellsOf(messages, notices, true)).toEqual([
-      { id: 's1', command: 'npm run dev', startedAt: ms(1) }
+      { id: 's1', command: 'npm run dev', description: '', startedAt: ms(1) }
     ])
   })
 
@@ -325,10 +325,40 @@ describe('backgroundShellsOf', () => {
       ...started('s1', 'b1', 'npm run dev', 1),
       ...started('s2', 'b2', 'npm run build', 2)
     ]
-    const tasks = { ids: ['b2', 'a7f'], at: ms(9) }
+    const tasks = { ids: ['b2', 'a7f'], active: [], at: ms(9) }
     expect(backgroundShellsOf(messages, [], true, tasks)).toEqual([
-      { id: 's2', command: 'npm run build', startedAt: ms(2) }
+      { id: 's2', command: 'npm run build', description: '', startedAt: ms(2) }
     ])
+  })
+
+  it('should name a shell by its task in the stream, else by the description of its call', () => {
+    const messages = [
+      call(
+        's1',
+        'Bash',
+        { command: 'node watch.mjs', description: 'Watch the release', run_in_background: true },
+        1
+      ),
+      answer('s1', 'Command running in background with ID: b1. Output is being written to: x', 1),
+      call(
+        's2',
+        'Bash',
+        { command: 'node follow.mjs', description: 'Follow it', run_in_background: true },
+        2
+      ),
+      answer('s2', 'Command running in background with ID: b2. Output is being written to: x', 2)
+    ]
+    const tasks = {
+      ids: ['b1', 'b2'],
+      active: [
+        { id: 'b1', description: '' },
+        { id: 'b2', description: 'Follow act video generation until done' }
+      ],
+      at: ms(3)
+    }
+    expect(backgroundShellsOf(messages, [], true, tasks).map((shell) => shell.description)).toEqual(
+      ['Watch the release', 'Follow act video generation until done']
+    )
   })
 
   it('should list nothing once Claude has exited', () => {
@@ -345,7 +375,7 @@ describe('backgroundShellsOf', () => {
       )
     ]
     expect(backgroundShellsOf(messages, [], true)).toEqual([
-      { id: 's3', command: 'npm run e2e', startedAt: ms(1) }
+      { id: 's3', command: 'npm run e2e', description: '', startedAt: ms(1) }
     ])
   })
 

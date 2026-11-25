@@ -349,11 +349,6 @@ describe('rowActivityOf', () => {
   it('should say nothing once the tab is idle', () => {
     expect(rowActivityOf(tab('i', { status: 'idle' }))).toBe(null)
   })
-
-  it('should say that something still runs in the background after the turn', () => {
-    const idle = tab('b', { status: 'idle', backgroundTasks: { ids: ['a7f'], at: NOON } })
-    expect(rowActivityOf(idle)).toEqual({ kind: 'state', state: 'background' })
-  })
 })
 
 describe('a chat whose turn ended while something runs in the background', () => {
@@ -365,14 +360,21 @@ describe('a chat whose turn ended while something runs in the background', () =>
     const idle = tab('b', {
       status: 'idle',
       finishedAt: null,
-      backgroundTasks: { ids: [taskId], at: NOON }
+      backgroundTasks: { ids: [taskId], active: [{ id: taskId, description: '' }], at: NOON }
     })
     const [row] = sessionRowsOf([idle], [], NOON)
     expect([row?.group, row?.status]).toEqual(['running', 'working'])
   })
 
   it('should light the machine dot as running', () => {
-    const idle = tab('b', { status: 'idle', backgroundTasks: { ids: ['b3vtm9fpi'], at: NOON } })
+    const idle = tab('b', {
+      status: 'idle',
+      backgroundTasks: {
+        ids: ['b3vtm9fpi'],
+        active: [{ id: 'b3vtm9fpi', description: '' }],
+        at: NOON
+      }
+    })
     expect(machineStateOf([idle], NOON)).toBe('running')
   })
 })

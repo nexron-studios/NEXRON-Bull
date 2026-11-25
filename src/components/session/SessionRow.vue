@@ -8,13 +8,14 @@ import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
 import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import SessionChatName from '@/components/session/SessionChatName.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
+import SessionRowBackground from '@/components/session/SessionRowBackground.vue'
 import SessionRowBadges from '@/components/session/SessionRowBadges.vue'
 import SessionRowLive from '@/components/session/SessionRowLive.vue'
 import { useActivityLabel } from '@/composables/useActivityLabel'
 import { useAgeFormat } from '@/composables/useAgeFormat'
 import { useChatStore } from '@/stores/chat'
 import { openQuestionOf } from '@/utils/answerCallouts'
-import { isBusyStatus } from '@/utils/chatTab'
+import { backgroundWorkOf, isBusyStatus } from '@/utils/chatTab'
 import { targetOfTab } from '@/utils/sessionActions'
 import { rowActivityOf, type SessionRow } from '@/utils/sessionList'
 
@@ -57,6 +58,8 @@ const activity = computed(() => {
   const current = isBusy.value ? rowActivityOf(row.tab) : null
   return current ? activityLabel(current) : ''
 })
+// Claude's turn is over, shells or agents it started are not: they get the activity's line.
+const background = computed(() => (activity.value ? [] : backgroundWorkOf(row.tab)))
 </script>
 
 <template>
@@ -128,7 +131,7 @@ const activity = computed(() => {
             <span v-if="isEmpty" class="text-meta text-muted-foreground">
               {{ t('sidebar.empty_chat') }}
             </span>
-            <SessionRowLive v-else :key="row.tab.id" :tab-id="row.tab.id" :activity />
+            <SessionRowLive v-else :key="row.tab.id" :tab-id="row.tab.id" :activity :background />
           </span>
         </span>
         <span v-else class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -166,6 +169,11 @@ const activity = computed(() => {
           <span v-else-if="activity" class="truncate font-mono text-meta text-muted-foreground">
             {{ activity }}
           </span>
+          <SessionRowBackground
+            v-else-if="background.length"
+            :tasks="background"
+            class="text-meta text-muted-foreground"
+          />
         </span>
         <span
           v-if="age"

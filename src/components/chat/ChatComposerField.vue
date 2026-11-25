@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
 import ChatTextPieces from '@/components/chat/ChatTextPieces.vue'
 import { mentionRangesOf } from '@/utils/fileMentions'
 import { imageRefNumberAt, type ImageRefBox, type TextSelection } from '@/utils/imageRefs'
@@ -68,13 +69,31 @@ const handleFocus = () => {
   hasCaret.value = true
   reportCaret()
 }
-const chipBoxes = (): ImageRefBox[] =>
-  [...(mirror.value?.querySelectorAll<HTMLElement>('[data-image-ref]') ?? [])].map((chip) => ({
-    n: Number(chip.dataset.imageRef),
-    rect: chip.getBoundingClientRect()
-  }))
-const chipAt = (event: MouseEvent) =>
-  hasChip.value ? imageRefNumberAt(chipBoxes(), event.clientX, event.clientY) : null
+// The chips' boxes relative to the mirror, measured once per layout: the pointer moves far more
+// often than the text, its scroll or the field's width change, which are what forget them.
+let chipBoxes: ImageRefBox[] | null = null
+const forgetChipBoxes = () => {
+  chipBoxes = null
+}
+const measureChipBoxes = (origin: DOMRect): ImageRefBox[] =>
+  [...(mirror.value?.querySelectorAll<HTMLElement>('[data-image-ref]') ?? [])].map((chip) => {
+    const { left, right, top, bottom } = chip.getBoundingClientRect()
+    return {
+      n: Number(chip.dataset.imageRef),
+      rect: {
+        left: left - origin.left,
+        right: right - origin.left,
+        top: top - origin.top,
+        bottom: bottom - origin.top
+      }
+    }
+  })
+const chipAt = (event: MouseEvent) => {
+  if (!hasChip.value || !mirror.value) return null
+  const origin = mirror.value.getBoundingClientRect()
+  chipBoxes ??= measureChipBoxes(origin)
+  return imageRefNumberAt(chipBoxes, event.clientX - origin.left, event.clientY - origin.top)
+}
 
 const trackChip = (event: MouseEvent) => {
   isOverChip.value = chipAt(event) !== null
@@ -86,11 +105,14 @@ const handleClick = (event: MouseEvent) => {
   reportCaret()
   if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return
   if (field.value && field.value.selectionStart !== field.value.selectionEnd) return
+  // A click is rare enough to measure afresh, so it never trusts a layout that moved unnoticed.
+  forgetChipBoxes()
   const n = chipAt(event)
   if (n !== null) emit('openImage', n)
 }
 
 const syncScroll = () => {
+  forgetChipBoxes()
   if (mirror.value && field.value) mirror.value.scrollTop = field.value.scrollTop
 }
 const focus = () => field.value?.focus()
@@ -112,6 +134,7 @@ const setCaret = async (at: number) => {
 
 // A mirror that just appeared, or text that changed the height, starts at the field's scroll.
 watch(pieces, syncScroll, { flush: 'post' })
+useResizeObserver(mirror, forgetChipBoxes)
 
 defineExpose({ focus, isFocused, selection, setCaret, field })
 </script>

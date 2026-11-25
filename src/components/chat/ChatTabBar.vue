@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { nextTick, onMounted, useTemplateRef, watch } from 'vue'
 import { X } from '@lucide/vue'
 import { useResizeObserver } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
@@ -14,6 +14,7 @@ import TerminalTabList from '@/components/terminal/TerminalTabList.vue'
 import { useDragOptions } from '@/composables/useDragOptions'
 import { useFlipMove } from '@/composables/useFlipMove'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
+import { useSlidingMarker } from '@/composables/useSlidingMarker'
 import { useChatStore } from '@/stores/chat'
 import type { TerminalRequest } from '@/stores/terminalRequests'
 import { useTerminalStore } from '@/stores/terminals'
@@ -41,17 +42,25 @@ const emit = defineEmits<{
 
 const bar = useTemplateRef<HTMLElement>('bar')
 const list = useTemplateRef('list')
-/** Where the underline of the active tab sits, in px from the bar's left edge */
-const underline = ref<{ x: number; width: number } | null>(null)
+const line = useTemplateRef<HTMLElement>('line')
 
 const { t } = useI18n()
 const { ariaOf } = useShortcutLabels()
 const dragOptions = useDragOptions('x')
 const { finishRanks } = storeToRefs(useChatStore())
 const { tabs: terminalTabs } = storeToRefs(useTerminalStore())
+const tabOrder = () => tabs.map((tab) => tab.id).join('|')
+const activeCell = () =>
+  activeId ? (bar.value?.querySelector<HTMLElement>(`[data-tab-cell="${activeId}"]`) ?? null) : null
 // A chat that finishes moves to its place in the finish order; the tabs slide there.
-const { skipNext: skipNextMove } = useFlipMove(bar, 'data-tab-cell', () =>
-  tabs.map((tab) => tab.id).join('|')
+const { skipNext: skipNextMove } = useFlipMove(bar, 'data-tab-cell', tabOrder)
+// The underline glides to a newly selected tab and along with the active tab when the order
+// changes, on the same spring as the tabs.
+const { box: underline, measure: measureUnderline } = useSlidingMarker(
+  bar,
+  line,
+  () => `${activeId}|${tabOrder()}`,
+  activeCell
 )
 
 const handleDrop = (moved: ChatTabState[]) => {
@@ -61,9 +70,10 @@ const handleDrop = (moved: ChatTabState[]) => {
     moved.map((tab) => tab.id)
   )
 }
-// Any tab that changes width (a title, a status icon, the font arriving) resizes the whole list,
-// and only a tab left of the active one can move it.
-useResizeObserver(list, () => measureUnderline())
+// The active tab changing width (a title, a status icon, the font arriving) resizes itself; a chat
+// tab left of it moves it and resizes the whole list.
+useResizeObserver(activeCell, measureUnderline)
+useResizeObserver(list, measureUnderline)
 
 // Ctrl+Shift+Left/Right is the keyboard way of dragging; focus stays on the moved tab.
 const handleKeydown = async (event: KeyboardEvent, id: string) => {
@@ -75,24 +85,11 @@ const handleKeydown = async (event: KeyboardEvent, id: string) => {
   bar.value?.querySelector<HTMLElement>(`[data-tab-id="${id}"]`)?.focus()
 }
 
-const measureUnderline = () => {
-  const cell = activeId
-    ? bar.value?.querySelector<HTMLElement>(`[data-tab-cell="${activeId}"]`)
-    : null
-  underline.value = cell ? { x: cell.offsetLeft, width: cell.offsetWidth } : null
-}
-
-// After the render that moved, renamed or selected a tab, so the new geometry is measured.
+// After the render that renamed, opened or closed a tab, so the new geometry is measured.
 watch(
-  () => [
-    activeId,
-    [...tabs, ...terminalTabs.value].map((tab) => `${tab.id}:${tab.title}`).join('|')
-  ],
+  () => [...tabs, ...terminalTabs.value].map((tab) => `${tab.id}:${tab.title}`).join('|'),
   measureUnderline,
-  {
-    flush: 'post',
-    immediate: true
-  }
+  { flush: 'post' }
 )
 
 // A tab selected out of sight (a new terminal at the end, a chat picked in the sidebar) scrolls
@@ -123,11 +120,17 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
     class="relative flex min-w-0 flex-1 scrollbar-none items-center gap-1 self-stretch overflow-x-auto"
     :aria-label="t('global.app_name')"
   >
-    <!-- One 1 px line scaled to the tab's width: it slides with transform only (Figma "16 Motion"). -->
+    <!-- Drawn in the tab's own width; only the glide scales it (Figma "16 Motion"). A 1 px line
+         scaled to the width also scaled its pixel rounding under the UI zoom and fell short. -->
     <span
-      v-if="underline"
-      class="pointer-events-none absolute bottom-0 left-0 h-0.5 w-px origin-left bg-brand transition-transform duration-200 ease-out-soft"
-      :style="{ transform: `translateX(${underline.x}px) scaleX(${underline.width})` }"
+      ref="line"
+      class="pointer-events-none absolute bottom-0 left-0 h-0.5 origin-left bg-brand"
+      :class="{ invisible: !underline }"
+      :style="
+        underline
+          ? { width: `${underline.width}px`, transform: `translateX(${underline.x}px)` }
+          : undefined
+      "
       aria-hidden="true"
     />
     <VueDraggable

@@ -37,7 +37,7 @@ const markerStyle = computed(() =>
     <span
       ref="marker"
       class="pointer-events-none absolute inset-y-0.5 left-0 origin-left rounded-md bg-background shadow-sm"
-      :class="{ hidden: !box }"
+      :class="{ invisible: !box }"
       :style="markerStyle"
       aria-hidden="true"
     />

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendedKeys,
   isAnimatedOnArrival,
+  layoutLeftOf,
   markerGlideOf,
   springStepOf,
   tabDirectionOf
@@ -88,6 +89,24 @@ describe('markerGlideOf', () => {
 
   it('should not glide from or to a hidden choice of zero width', () => {
     expect(markerGlideOf({ x: 0, width: 0 }, { x: 42, width: 80 })).toBeNull()
+  })
+})
+
+describe('layoutLeftOf', () => {
+  it('should be the drawn edge of an element without a transform', () => {
+    expect(layoutLeftOf({ drawnLeft: 40.5, shift: 0, scale: 1, origin: 50 })).toBe(40.5)
+  })
+
+  it('should take out a slide', () => {
+    expect(layoutLeftOf({ drawnLeft: 52, shift: 12, scale: 1, origin: 0 })).toBe(40)
+  })
+
+  it('should take out a scale around the centre', () => {
+    expect(layoutLeftOf({ drawnLeft: 45, shift: 0, scale: 0.9, origin: 50 })).toBeCloseTo(40)
+  })
+
+  it('should take out a glide scaled from the left edge', () => {
+    expect(layoutLeftOf({ drawnLeft: 132, shift: 132, scale: 0.5, origin: 0 })).toBe(0)
   })
 })
 

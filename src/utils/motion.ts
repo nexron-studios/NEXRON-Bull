@@ -52,6 +52,21 @@ export const markerGlideOf = (from: MarkerBox | null, to: MarkerBox): Keyframe[]
   ]
 }
 
+/** An element's drawn left edge and its own 2D transform: translation, scale and origin, in px. */
+export interface DrawnLeft {
+  drawnLeft: number
+  shift: number
+  scale: number
+  origin: number
+}
+
+/**
+ * Where an element is laid out, from where it is drawn: its own transform (a FLIP slide, a press
+ * scale around its origin) taken out again.
+ */
+export const layoutLeftOf = ({ drawnLeft, shift, scale, origin }: DrawnLeft): number =>
+  drawnLeft - shift - origin * (1 - scale)
+
 /** Where a spring stands relative to its target, in px, and how fast it moves, in px/s. */
 export interface SpringState {
   offset: number

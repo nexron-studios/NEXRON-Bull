@@ -534,8 +534,6 @@ export default {
   panel: {
     label: 'Chat details',
     resize: 'Details width',
-    width_px: '{width} px',
-    close_hint: 'Hide',
     open_items: 'Open',
     open_items_count: '{open} of {all}',
     show: 'Show details ({key})',
@@ -1234,6 +1232,41 @@ export default {
   finish: {
     rank: 'Finished, not seen yet, place {n}',
     new_count: '{n} new'
+  },
+  side_column: {
+    width_px: '{width} px',
+    close_hint: 'Hide'
+  },
+  preview: {
+    label: 'Preview',
+    show: 'Show preview ({key})',
+    hide: 'Hide preview ({key})',
+    toolbar: 'Preview address',
+    url_label: 'Address',
+    url_placeholder: 'localhost:5173/page',
+    url_invalid: 'That is no http or https address.',
+    reload: 'Reload',
+    open_external: 'Open in browser',
+    close: 'Close preview',
+    resize: 'Preview width',
+    open_in_preview: 'Open in preview',
+    open_in_preview_short: 'Preview',
+    frame_title: 'Preview of {url}',
+    sheet_hint: 'The page from this chat, as the browser shows it.',
+    empty_title: 'No page yet',
+    empty_hint: 'When Claude names a localhost address, the page shows up here. Or type one above.',
+    remote_hint: 'localhost is {machine} here. Bull loads {src}.',
+    app_only_title: 'Preview only in the Bull app',
+    app_only_hint:
+      'In this browser localhost would be this device, not the machine running the chat. Open the preview in Bull on that machine.',
+    no_host_title: '{machine} is not directly reachable from here',
+    no_host_hint:
+      'ssh has no direct name for the machine, as behind a proxy or a forwarded port. Open the page in a browser there.',
+    unreachable_title: 'Page does not answer',
+    unreachable_hint: 'Nothing runs at this address right now. Start the dev server and reload.',
+    unreachable_remote_hint:
+      'Dev servers often listen on localhost only. Start it on {machine} with --host (Vite: npm run dev -- --host) and reload.',
+    retry: 'Try again'
   },
   session_actions: {
     menu: {

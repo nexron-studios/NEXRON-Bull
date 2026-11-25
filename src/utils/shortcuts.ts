@@ -28,6 +28,12 @@ export const INFO_PANEL_CHORD: KeyChord = { modifier: 'command', keys: ['.'] }
 export const isInfoPanelShortcut = (event: KeyInfo): boolean =>
   hasCommandKey(event) && !event.shiftKey && !event.repeat && event.key === '.'
 
+export const PREVIEW_CHORD: KeyChord = { modifier: 'command', keys: ['P'], hasShift: true }
+
+/** Ctrl+Shift+P shows and hides the preview beside the chat; Ctrl+P stays WebView2's print. */
+export const isPreviewShortcut = (event: KeyInfo): boolean =>
+  hasCommandKey(event) && event.shiftKey && !event.repeat && event.key.toLowerCase() === 'p'
+
 export const CHAT_SEARCH_CHORD: KeyChord = { modifier: 'command', keys: ['F'] }
 
 /** Ctrl+F searches the shown chat; Bull takes it over from WebView2's own find bar. */

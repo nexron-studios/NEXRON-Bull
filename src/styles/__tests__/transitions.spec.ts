@@ -55,7 +55,7 @@ describe('layout snap cross-fade', () => {
   it('should carry the session bar buttons as their own part', () => {
     const tools = declarationsOf(
       transitionsCss,
-      'html:is([data-sidebar-snap], [data-panel-snap]) [data-snap-bar-tools]'
+      'html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]) [data-snap-bar-tools]'
     )
 
     expect(tools['view-transition-name']).toBe('session-bar-tools')

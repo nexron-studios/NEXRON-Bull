@@ -546,8 +546,6 @@ export default {
   panel: {
     label: 'Details zum Chat',
     resize: 'Breite der Details',
-    width_px: '{width} px',
-    close_hint: 'Ausblenden',
     open_items: 'Offen',
     open_items_count: '{open} von {all}',
     show: 'Details einblenden ({key})',
@@ -1254,6 +1252,43 @@ export default {
   finish: {
     rank: 'Fertig, noch nicht angesehen, Platz {n}',
     new_count: '{n} neu'
+  },
+  side_column: {
+    width_px: '{width} px',
+    close_hint: 'Ausblenden'
+  },
+  preview: {
+    label: 'Vorschau',
+    show: 'Vorschau einblenden ({key})',
+    hide: 'Vorschau ausblenden ({key})',
+    toolbar: 'Adresse der Vorschau',
+    url_label: 'Adresse',
+    url_placeholder: 'localhost:5173/seite',
+    url_invalid: 'Das ist keine http- oder https-Adresse.',
+    reload: 'Neu laden',
+    open_external: 'Im Browser öffnen',
+    close: 'Vorschau schließen',
+    resize: 'Breite der Vorschau',
+    open_in_preview: 'In Vorschau öffnen',
+    open_in_preview_short: 'Vorschau',
+    frame_title: 'Vorschau von {url}',
+    sheet_hint: 'Die Seite aus diesem Chat, so wie der Browser sie zeigt.',
+    empty_title: 'Noch keine Seite',
+    empty_hint:
+      'Nennt Claude eine localhost-Adresse, erscheint die Seite hier. Oder gib oben eine ein.',
+    remote_hint: 'localhost ist hier {machine}. Bull lädt {src}.',
+    app_only_title: 'Vorschau nur in der Bull-App',
+    app_only_hint:
+      'Hier im Browser wäre localhost dieses Gerät, nicht der Rechner mit dem Chat. Öffne die Vorschau in Bull auf dem Rechner.',
+    no_host_title: '{machine} ist von hier nicht direkt erreichbar',
+    no_host_hint:
+      'ssh kennt keinen direkten Namen für den Rechner, etwa hinter einem Proxy oder einem weitergeleiteten Port. Öffne die Seite dort im Browser.',
+    unreachable_title: 'Seite antwortet nicht',
+    unreachable_hint:
+      'Unter dieser Adresse läuft gerade nichts. Starte den Dev-Server und lade neu.',
+    unreachable_remote_hint:
+      'Ein Dev-Server lauscht oft nur auf localhost. Starte ihn auf {machine} mit --host (Vite: npm run dev -- --host) und lade neu.',
+    retry: 'Erneut versuchen'
   },
   session_actions: {
     menu: {

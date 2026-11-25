@@ -175,13 +175,13 @@ export default {
       points: '{n} Punkt | {n} Punkte'
     },
     machine: 'Rechner',
-    this_machine: 'Dieser PC',
+    this_machine: 'Dieser @:computer',
     no_offered_accounts:
       'Auf diesem Rechner ist kein Konto für Bull eingeschaltet. Das geht in den Einstellungen unter Konten.',
     disconnected:
       'Verbindung zu {machine} getrennt. Claude läuft dort weiter, die App verbindet sich neu.',
     disconnected_local:
-      'Verbindung zu Claude auf diesem PC getrennt. Claude läuft im Hintergrund weiter, die App verbindet sich neu.',
+      'Verbindung zu Claude auf diesem @:computer getrennt. Claude läuft im Hintergrund weiter, die App verbindet sich neu.',
     ended_hint: 'Session beendet. Deine nächste Nachricht setzt sie fort.',
     permission_title: 'Claude möchte {tool} verwenden',
     permission_needed: 'Freigabe nötig',
@@ -889,14 +889,14 @@ export default {
         'Claude Code meldet sich im Browser an. Bull öffnet dafür ein Terminal mit dem Profilordner dieses Kontos.',
       command: 'Befehl für ein eigenes Terminal',
       copy: 'Befehl kopieren',
-      fallback_here: 'Oder den Befehl kopieren und in PowerShell auf diesem PC ausführen.',
+      fallback_here: 'Oder den Befehl kopieren und in PowerShell auf diesem @:computer ausführen.',
       fallback_remote: 'Oder den Befehl kopieren und in PowerShell auf {machine} ausführen.',
       open_terminal: 'Im Terminal anmelden',
       done: 'Fertig'
     },
     machines: {
       description:
-        'Dieser PC und die Rechner, die du mit Bull verbunden hast. Auf jedem kann Claude laufen.',
+        'Dieser @:computer und die Rechner, die du mit Bull verbunden hast. Auf jedem kann Claude laufen.',
       reachable: 'Erreichbar',
       unreachable: 'Nicht erreichbar',
       checking: 'Wird geprüft',
@@ -947,7 +947,7 @@ export default {
         },
         auth_failed: {
           title: '{machine} kennt deinen Schlüssel noch nicht',
-          hint: 'Bull meldet sich ohne Passwort an, mit dem SSH-Schlüssel dieses PCs. Der muss einmal auf den Rechner.'
+          hint: "Bull meldet sich ohne Passwort an, mit dem SSH-Schlüssel dieses @:{'computer'}s. Der muss einmal auf den Rechner."
         },
         host_key_changed: {
           title: '{machine} meldet sich mit einem anderen Schlüssel',
@@ -1002,7 +1002,7 @@ export default {
         reinstall: 'agentd neu aufspielen',
         forget_key: 'Alten Schlüssel vergessen',
         forget_key_hint:
-          'Öffnet ein Terminal auf diesem PC mit dem Befehl. Enter entfernt den alten Schlüssel, danach prüfst du erneut.',
+          'Öffnet ein Terminal auf diesem @:computer mit dem Befehl. Enter entfernt den alten Schlüssel, danach prüfst du erneut.',
         copy: 'Kopieren',
         copied: 'Zeile kopiert',
         key: {
@@ -1016,7 +1016,7 @@ export default {
           admin: 'Das Konto dort ist Administrator',
           admin_hint:
             'Für Administratoren liest Windows den Schlüssel nur aus C:\\ProgramData\\ssh\\administrators_authorized_keys. Die Zeile legt ihn dort ab und setzt die Rechte, die Windows verlangt.',
-          none_title: 'Dieser PC hat noch keinen SSH-Schlüssel',
+          none_title: 'Dieser @:computer hat noch keinen SSH-Schlüssel',
           none_hint:
             'Erzeuge einen im Terminal, Enter bei jeder Frage reicht. Danach geht es hier weiter.',
           make: 'Schlüssel erzeugen'
@@ -1054,7 +1054,8 @@ export default {
       description: 'Wann Bull dich holt, und wie. Die Glocke oben rechts öffnet dasselbe.'
     },
     terminal: {
-      description: 'Gilt für jedes neue Terminal in Bull, auf diesem PC und auf anderen Rechnern.',
+      description:
+        'Gilt für jedes neue Terminal in Bull, auf diesem @:computer und auf anderen Rechnern.',
       shell: 'Shell',
       shells: {
         auto: 'Automatisch',
@@ -1171,7 +1172,7 @@ export default {
   overview: {
     title: 'Übersicht',
     subtitle: 'Alle Sessions auf allen Rechnern',
-    subtitle_single: 'Alle Sessions auf diesem PC',
+    subtitle_single: 'Alle Sessions auf diesem @:computer',
     refresh: 'Übersicht aktualisieren',
     loading: 'Fertige Sessions werden geladen',
     status: { asking: 'Freigabe', working: 'Arbeitet', starting: 'Startet', question: 'Frage' },

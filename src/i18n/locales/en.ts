@@ -879,7 +879,7 @@ export default {
     },
     machines: {
       description:
-        'This PC and the machines you connected to Bull. Claude can run on each of them.',
+        'This @:computer and the machines you connected to Bull. Claude can run on each of them.',
       reachable: 'Reachable',
       unreachable: 'Not reachable',
       checking: 'Checking',
@@ -929,7 +929,7 @@ export default {
         },
         auth_failed: {
           title: '{machine} does not know your key yet',
-          hint: 'Bull logs in without a password, with the SSH key of this PC. It has to get onto the machine once.'
+          hint: 'Bull logs in without a password, with the SSH key of this @:computer. It has to get onto the machine once.'
         },
         host_key_changed: {
           title: '{machine} shows a different key',
@@ -984,7 +984,7 @@ export default {
         reinstall: 'Install agentd again',
         forget_key: 'Forget the old key',
         forget_key_hint:
-          'Opens a terminal on this PC with the command. Enter removes the old key, then check again.',
+          'Opens a terminal on this @:computer with the command. Enter removes the old key, then check again.',
         copy: 'Copy',
         copied: 'Line copied',
         key: {
@@ -998,7 +998,7 @@ export default {
           admin: 'The account there is an administrator',
           admin_hint:
             'For administrators, Windows reads the key only from C:\\ProgramData\\ssh\\administrators_authorized_keys. The line puts it there and sets the rights Windows asks for.',
-          none_title: 'This PC has no SSH key yet',
+          none_title: 'This @:computer has no SSH key yet',
           none_hint:
             'Create one in the terminal, Enter at every question is fine. Then continue here.',
           make: 'Create key'
@@ -1035,7 +1035,8 @@ export default {
       description: 'When Bull calls you, and how. The bell at the top right opens the same.'
     },
     terminal: {
-      description: 'Applies to every new terminal in Bull, on this PC and on other machines.',
+      description:
+        'Applies to every new terminal in Bull, on this @:computer and on other machines.',
       shell: 'Shell',
       shells: {
         auto: 'Automatic',
@@ -1152,7 +1153,7 @@ export default {
   overview: {
     title: 'Overview',
     subtitle: 'Every session on every machine',
-    subtitle_single: 'Every session on this PC',
+    subtitle_single: 'Every session on this @:computer',
     refresh: 'Refresh overview',
     loading: 'Loading finished sessions',
     status: { asking: 'Approval', working: 'Working', starting: 'Starting', question: 'Question' },

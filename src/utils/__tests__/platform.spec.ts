@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { systemNameOf } from '../platform'
+import { computerWordOf, systemNameOf } from '../platform'
 
 const WINDOWS =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36 Edg/131.0'
@@ -20,5 +20,19 @@ describe('systemNameOf', () => {
 
   it('should name no system for an unknown agent', () => {
     expect(systemNameOf('curl/8.4.0')).toBe(null)
+  })
+})
+
+describe('computerWordOf', () => {
+  it('should call a Mac a Mac', () => {
+    expect(computerWordOf('macOS')).toBe('Mac')
+  })
+
+  it('should call every other computer a PC, a phone browser included', () => {
+    expect([computerWordOf('Windows'), computerWordOf('Linux'), computerWordOf(null)]).toEqual([
+      'PC',
+      'PC',
+      'PC'
+    ])
   })
 })

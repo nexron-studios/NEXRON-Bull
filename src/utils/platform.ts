@@ -15,3 +15,10 @@ const SYSTEM_MARKS: [mark: string, name: SystemName | null][] = [
 /** The desktop system a user agent belongs to; `null` for phones and anything unknown. */
 export const systemNameOf = (userAgent: string): SystemName | null =>
   SYSTEM_MARKS.find(([mark]) => userAgent.includes(mark))?.[1] ?? null
+
+/**
+ * What the texts call the computer Bull runs on ("Dieser Mac", "This PC"). The same word in
+ * every language, so it is no locale text. A phone's browser cannot tell and says "PC".
+ */
+export const computerWordOf = (system: SystemName | null): string =>
+  system === 'macOS' ? 'Mac' : 'PC'

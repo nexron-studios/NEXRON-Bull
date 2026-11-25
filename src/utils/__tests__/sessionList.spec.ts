@@ -353,29 +353,47 @@ describe('rowActivityOf', () => {
 
 describe('a chat whose turn ended while something runs in the background', () => {
   // Task ids as Claude Code lists them: a background shell (`local_bash`) and an agent.
+  const backgroundOf = (taskId: string) => ({
+    ids: [taskId],
+    active: [{ id: taskId, description: 'Follow act video generation until done' }],
+    at: NOON
+  })
+
   it.each([
     ['a background shell', 'b3vtm9fpi'],
     ['a background agent', 'a472665f67fbbf6fa']
-  ])('should stay under "running" while %s runs', (_, taskId) => {
+  ])('should be under "done" while %s runs', (_, taskId) => {
     const idle = tab('b', {
       status: 'idle',
-      finishedAt: null,
-      backgroundTasks: { ids: [taskId], active: [{ id: taskId, description: '' }], at: NOON }
+      finishedAt: NOON - MINUTE,
+      backgroundTasks: backgroundOf(taskId)
     })
     const [row] = sessionRowsOf([idle], [], NOON)
-    expect([row?.group, row?.status]).toEqual(['running', 'working'])
+    expect([row.group, row.status, row.since]).toEqual(['done', 'idle', NOON - MINUTE])
   })
 
-  it('should light the machine dot as running', () => {
+  it('should light the machine dot as done', () => {
     const idle = tab('b', {
       status: 'idle',
-      backgroundTasks: {
-        ids: ['b3vtm9fpi'],
-        active: [{ id: 'b3vtm9fpi', description: '' }],
-        at: NOON
-      }
+      finishedAt: NOON - MINUTE,
+      backgroundTasks: backgroundOf('b3vtm9fpi')
     })
-    expect(machineStateOf([idle], NOON)).toBe('running')
+    expect(machineStateOf([idle], NOON)).toBe('done')
+  })
+
+  it('should say nothing as its activity: the row names the task on its own line', () => {
+    const idle = tab('b', { status: 'idle', backgroundTasks: backgroundOf('b3vtm9fpi') })
+    expect(rowActivityOf(idle)).toBe(null)
+  })
+
+  it('should move to "running" when Claude takes up the task that ended', () => {
+    const reply = tab('b', {
+      status: 'working',
+      finishedAt: NOON - 10 * MINUTE,
+      turn: { startedAt: NOON - MINUTE, afterUuid: null },
+      backgroundTasks: { ids: [], active: [], at: NOON - MINUTE }
+    })
+    expect(keysByGroup([reply])).toEqual([['running', ['b']]])
   })
 })
 

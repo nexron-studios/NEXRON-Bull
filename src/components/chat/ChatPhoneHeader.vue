@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
 import { openQuestionOf } from '@/utils/answerCallouts'
-import { shownStatusOf, type ChatTabState } from '@/utils/chatTab'
+import type { ChatTabState } from '@/utils/chatTab'
 import { isEmptyChat } from '@/utils/sessionList'
 import { useMachineLabel } from '@/composables/useMachineLabel'
 
@@ -26,7 +26,7 @@ const { labelOf: machineLabelOf } = useMachineLabel()
       <div class="flex min-w-0 flex-1 flex-col items-center gap-0.5">
         <h1 class="flex max-w-full min-w-0 items-center gap-1.5 text-body font-semibold">
           <ChatStatusIcon
-            :status="shownStatusOf(tab)"
+            :status="tab.status"
             :is-empty="isEmptyChat(tab)"
             :is-failed="tab.notice !== null"
             :is-waiting="tab.limit.kind === 'waiting'"

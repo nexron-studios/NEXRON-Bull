@@ -22,7 +22,7 @@ pub(crate) struct Replayable {
     /// What Claude listed last
     pub(crate) commands: Option<Vec<SlashCommand>>,
     /// Claude's last `background_tasks_changed`: Claude sends it only on a change, and without it
-    /// the app would show a chat whose shells or agents still run as finished.
+    /// the app would not know which shells or agents of a finished chat still run.
     background_tasks: Option<Value>,
 }
 

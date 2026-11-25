@@ -24,7 +24,6 @@ import type { MachineQuota } from '../quota'
 const snap = (fields: Partial<TabSnapshot> = {}): TabSnapshot => ({
   id: 't1',
   status: 'working',
-  isTurnOver: false,
   finishedAt: null,
   requestId: null,
   toolName: null,
@@ -101,12 +100,6 @@ describe('reasonOf', () => {
       expect(reasonOf(snap(), snap({ status: 'idle' }), LIVE)).toBe(null)
     })
 
-    it('should report the finish of background work that ended after the turn', () => {
-      const before = snap({ status: 'working', finishedAt: null })
-      const after = snap({ status: 'idle', finishedAt: FINISHED_AT })
-      expect(reasonOf(before, after, LIVE)).toBe('finished')
-    })
-
     it('should stay quiet when the user interrupted the turn', () => {
       const context = { ...LIVE, isStoppedByUser: true }
       const after = snap({ status: 'idle', finishedAt: FINISHED_AT })
@@ -175,7 +168,6 @@ describe('snapshotOf', () => {
     expect(snapshotOf(tab(), 'Connection lost')).toEqual({
       id: 't1',
       status: 'asking',
-      isTurnOver: false,
       finishedAt: null,
       requestId: 'r1',
       toolName: 'Bash',
@@ -185,16 +177,13 @@ describe('snapshotOf', () => {
     })
   })
 
-  it('should show an idle tab whose background agents still run as working', () => {
+  it('should keep an idle tab idle while its background agents still run', () => {
     const idle = { ...tab(), status: 'idle' as const, permission: null }
-    const working = {
+    const background = {
       ...idle,
       backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
     }
-    expect([snapshotOf(idle, '').status, snapshotOf(working, '').status]).toEqual([
-      'idle',
-      'working'
-    ])
+    expect(snapshotOf(background, '').status).toBe('idle')
   })
 
   it('should mark the connection-lost notice of the tab machine', () => {

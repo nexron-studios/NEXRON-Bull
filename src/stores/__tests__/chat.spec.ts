@@ -76,6 +76,40 @@ describe('useChatStore: background work', () => {
 
     expect(chat.tabs[0].backgroundTasks?.ids).toEqual([])
   })
+
+  it('should finish the turn and keep the name of the shell it left running', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(9000)
+    const chat = useChatStore()
+    chat.tabs = [
+      { ...liveTab('t1', null), status: 'working', turn: { startedAt: 1, afterUuid: null } }
+    ]
+
+    emit({
+      type: 'claude',
+      tab: 't1',
+      event: {
+        type: 'system',
+        subtype: 'background_tasks_changed',
+        tasks: [
+          {
+            task_id: 'b3vtm9fpi',
+            task_type: 'local_bash',
+            description: 'Follow act video generation until done'
+          }
+        ]
+      }
+    })
+    emit({ type: 'claude', tab: 't1', event: { type: 'result', subtype: 'success' } })
+
+    const [tab] = chat.tabs
+    vi.useRealTimers()
+    expect([tab.status, tab.finishedAt, tab.backgroundTasks?.active]).toEqual([
+      'idle',
+      9000,
+      [{ id: 'b3vtm9fpi', description: 'Follow act video generation until done' }]
+    ])
+  })
 })
 
 describe('useChatStore: lost connection to this computer', () => {

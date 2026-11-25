@@ -13,9 +13,9 @@ const shownTextOf = (tasks: BackgroundTask[]) => {
     setup: () => () => h(TooltipProvider, () => h(SessionRowBackground, { tasks }))
   })
   const wrapper = mount(Root, { global: { plugins: [i18n] } })
-  return wrapper.find('[aria-hidden="true"]').exists()
-    ? wrapper.find('[aria-hidden="true"]').text()
-    : wrapper.text()
+  // Named tasks hide the line from screen readers and say the names instead.
+  const visible = wrapper.find('.truncate > [aria-hidden="true"]')
+  return visible.exists() ? visible.text() : wrapper.find('.truncate').text()
 }
 
 describe('SessionRowBackground', () => {

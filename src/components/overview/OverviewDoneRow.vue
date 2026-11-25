@@ -7,9 +7,11 @@ import ChatFinishBadge from '@/components/chat/ChatFinishBadge.vue'
 import { Button } from '@/components/ui/button'
 import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
+import SessionRowBackground from '@/components/session/SessionRowBackground.vue'
 import { useAgeFormat } from '@/composables/useAgeFormat'
 import { useMachineLabel } from '@/composables/useMachineLabel'
 import { useChatStore } from '@/stores/chat'
+import { backgroundWorkOf } from '@/utils/chatTab'
 import { summaryOf } from '@/utils/finishOrder'
 import type { RankedDone } from '@/utils/overview'
 import { targetOfDone } from '@/utils/sessionActions'
@@ -37,6 +39,7 @@ const age = computed(() => formatAge.value(Math.max(0, now - entry.finishedAt)))
 const openTab = computed(() => target.value?.tab ?? null)
 // Only an open tab knows Claude's last answer; a transcript row has no messages loaded.
 const summary = computed(() => (openTab.value ? summaryOf(openTab.value.messages) : ''))
+const background = computed(() => (openTab.value ? backgroundWorkOf(openTab.value) : []))
 
 // An open tab's row opens it on a click anywhere, like the finish strip did; a transcript row
 // starts Claude, so only its button does that. The row's own buttons handle their clicks, and a
@@ -81,6 +84,11 @@ const openRow = (event: MouseEvent) => {
             <span v-if="summary" class="truncate text-meta text-muted-foreground @max-2xl:hidden">
               {{ summary }}
             </span>
+            <SessionRowBackground
+              v-if="background.length"
+              :tasks="background"
+              class="text-meta text-muted-foreground"
+            />
           </span>
           <span class="flex min-w-0 items-center gap-1.5 text-meta text-muted-foreground @2xl:w-56">
             <Folder class="size-3.5 shrink-0" aria-hidden="true" />

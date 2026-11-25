@@ -181,8 +181,7 @@ export const useTabNotifications = () => {
       isReplay,
       isStoppedByUser: stoppedByUser.has(after.id)
     })
-    // The stopped turn is over even while background work runs on; what ends later is news again.
-    if (after.isTurnOver) stoppedByUser.delete(after.id)
+    if (after.status === 'idle' || after.status === 'ended') stoppedByUser.delete(after.id)
     if (!reason) return
     // A question from an ask has its own card; one an answer ends on is said in the notification,
     // and someone who wants finished turns but no questions still hears that the turn finished.

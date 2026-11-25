@@ -99,11 +99,6 @@ export interface ChatTabState {
   /** When the last turn ended here (ms); `null` until one did in this run of the app */
   finishedAt: number | null
   /**
-   * An answer to the user ended while background agents or shells still ran. The chat is not
-   * finished yet: the next turn that ends with nothing left running sets `finishedAt` for it.
-   */
-  isFinishHeld: boolean
-  /**
    * The turn a limit or an account move cut off, in this run of the app. The prompt after the cut
    * (agentd's "go on", or the user's) continues it, so the panel keeps listing its subagents and
    * "Offen" instead of starting over. "Aktivität" shows what runs now and
@@ -258,7 +253,6 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   live: NO_LIVE_BLOCK,
   turn: null,
   finishedAt: null,
-  isFinishHeld: false,
   cutTurn: null,
   pending: [],
   history: fields.sessionId ? 'none' : 'loaded',
@@ -374,7 +368,6 @@ const withEmptyChat = (tab: ChatTabState): ChatTabState => ({
   hasMore: false,
   history: 'loaded',
   finishedAt: null,
-  isFinishHeld: false,
   cutTurn: null,
   unseenAt: null,
   contextWindow: null,
@@ -478,22 +471,9 @@ export const backgroundWorkOf = (
   tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>
 ): BackgroundTask[] => (tab.status === 'ended' ? [] : (tab.backgroundTasks?.active ?? []))
 
-export const hasBackgroundWork = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): boolean =>
-  backgroundWorkOf(tab).length > 0
-
-/**
- * The status the user sees: a chat whose turn ended while its background agents or shells still
- * run is not done, it works on. Status icons, sidebar, overview and
- * notifications read this, never `status` alone.
- */
-export const shownStatusOf = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): TabStatus =>
-  tab.status === 'idle' && hasBackgroundWork(tab) ? 'working' : tab.status
-
 /** The tab as lists show it: during a move to another account, with its status from before. */
-export const listedTabOf = (tab: ChatTabState): ChatTabState => {
-  const status = tab.statusBeforeMove ?? shownStatusOf(tab)
-  return status === tab.status ? tab : { ...tab, status }
-}
+export const listedTabOf = (tab: ChatTabState): ChatTabState =>
+  tab.statusBeforeMove ? { ...tab, status: tab.statusBeforeMove } : tab
 
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
@@ -607,24 +587,20 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
     // Claude took up a subagent's report on its own: the last answer is still news.
     if (isAgentReplyOf(tab, turn)) return { ...tab, turn: { ...turn, isAgentReply: true } }
     // A new turn makes the last answer old news: the tab leaves the finish order.
-    return { ...tab, turn, unseenAt: null, isFinishHeld: false }
+    return { ...tab, turn, unseenAt: null }
   }
   return { ...withTurnEnd(tab, now), turn: null }
 }
 
 /**
  * Only an answer to the user counts as finished; a crash, an exit, an error result mid-turn or the
- * reply to an agent's message does not. While background work still runs the answer waits
- * (`isFinishHeld`): the chat is finished once a turn ends with nothing left running, usually
- * Claude's reply to the last report.
+ * reply to an agent's message does not. Shells or agents left running in the background do not
+ * hold the finish: some never end, and the row says what still runs (Jonas, 25.11.2026).
  */
 const withTurnEnd = (tab: ChatTabState, now: number): ChatTabState => {
-  const hasEndedWell = tab.status === 'idle' && !tab.notice
-  const isAnswered = hasEndedWell && !(tab.turn && isAgentReplyOf(tab, tab.turn))
-  if (hasBackgroundWork(tab)) return { ...tab, isFinishHeld: tab.isFinishHeld || isAnswered }
-  if (isAnswered || (hasEndedWell && tab.isFinishHeld))
-    return { ...tab, finishedAt: now, isFinishHeld: false }
-  return tab
+  const isAnswered =
+    tab.status === 'idle' && !tab.notice && !(tab.turn && isAgentReplyOf(tab, tab.turn))
+  return isAnswered ? { ...tab, finishedAt: now } : tab
 }
 
 /**

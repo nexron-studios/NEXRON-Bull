@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyEvent,
+  backgroundWorkOf,
   listedTabOf,
   newTab,
   savedTabOf,
@@ -10,7 +11,6 @@ import {
   withNewSession,
   withoutPending,
   withPendingPrompt,
-  shownStatusOf,
   withTurnClock,
   type ChatTabState,
   type SavedTab
@@ -433,51 +433,56 @@ describe('withTurnClock', () => {
   describe('with a background shell still running', () => {
     const turn = { startedAt: 1000, afterUuid: null }
     // `run_in_background` Bash, listed by `background_tasks_changed` until it ends.
-    const running = { ids: ['b3vtm9fpi'], active: [{ id: 'b3vtm9fpi', description: '' }], at: 2000 }
+    const running = {
+      ids: ['b3vtm9fpi'],
+      active: [{ id: 'b3vtm9fpi', description: 'Follow act video generation until done' }],
+      at: 2000
+    }
 
-    it('should hold the finish while the answer leaves background work running', () => {
+    it('should finish the chat when the answer ends, whatever still runs', () => {
       const ended = withTurnClock(
         { ...tab(), status: 'idle', turn, backgroundTasks: running },
         5000
       )
-      expect([ended.finishedAt, ended.isFinishHeld]).toEqual([null, true])
+      expect([ended.finishedAt, ended.turn]).toEqual([5000, null])
     })
 
-    it('should finish once a later turn ends with nothing left running', () => {
-      const held = { ...tab(), status: 'idle' as const, isFinishHeld: true }
-      const reply = withTurnClock({ ...held, status: 'working' }, 7000)
+    it('should run again while Claude takes up the shell that ended, and finish anew', () => {
+      const done = { ...tab(), status: 'idle' as const, finishedAt: 5000, unseenAt: 5000 }
+      const reply = withTurnClock({ ...done, status: 'working' }, 7000)
       const ended = withTurnClock(
         { ...reply, status: 'idle', backgroundTasks: { ids: [], active: [], at: 8000 } },
         9000
       )
-      expect([ended.finishedAt, ended.isFinishHeld]).toEqual([9000, false])
+      expect([reply.unseenAt, reply.turn?.startedAt, ended.finishedAt]).toEqual([null, 7000, 9000])
     })
   })
 })
 
-describe('shownStatusOf and listedTabOf', () => {
-  it('should show an idle chat whose background agents or shells run as working', () => {
-    const idle = { ...tab(), status: 'idle' as const }
-    const busy = {
-      ...idle,
-      backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
-    }
-    const done = { ...idle, backgroundTasks: { ids: [], active: [], at: 2 } }
-    expect([shownStatusOf(idle), shownStatusOf(busy), shownStatusOf(done)]).toEqual([
+describe('listedTabOf and backgroundWorkOf', () => {
+  const tasks = {
+    ids: ['a7f', 'w1'],
+    active: [{ id: 'a7f', description: 'Check the release' }],
+    at: 1
+  }
+
+  it('should list an idle chat with background work as idle', () => {
+    const idle = { ...tab(), status: 'idle' as const, backgroundTasks: tasks }
+    expect([listedTabOf(idle).status, backgroundWorkOf(idle)]).toEqual([
       'idle',
-      'working',
-      'idle'
+      [{ id: 'a7f', description: 'Check the release' }]
     ])
-    expect(listedTabOf(busy).status).toBe('working')
   })
 
-  it('should not show an exited Claude as running its background work', () => {
-    const ended = {
-      ...tab(),
-      status: 'ended' as const,
-      backgroundTasks: { ids: ['a7f'], active: [{ id: 'a7f', description: '' }], at: 1 }
-    }
-    expect(shownStatusOf(ended)).toBe('ended')
+  it('should list the status from before while the chat moves to another account', () => {
+    const moving = { ...tab(), status: 'starting' as const, statusBeforeMove: 'idle' as const }
+    expect(listedTabOf(moving).status).toBe('idle')
+  })
+
+  it('should not count the background work of an exited Claude', () => {
+    expect(
+      backgroundWorkOf({ ...tab(), status: 'ended' as const, backgroundTasks: tasks })
+    ).toEqual([])
   })
 })
 

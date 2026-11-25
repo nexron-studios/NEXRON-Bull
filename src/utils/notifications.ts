@@ -1,5 +1,5 @@
 import { openQuestionOf } from '@/utils/answerCallouts'
-import { isBusyStatus, shownStatusOf, type ChatTabState, type TabStatus } from '@/utils/chatTab'
+import { isBusyStatus, type ChatTabState, type TabStatus } from '@/utils/chatTab'
 import { leftPercentOf } from '@/utils/percent'
 import { accountKeyOf, windowOf, type MachineQuota } from '@/utils/quota'
 
@@ -78,10 +78,7 @@ export const isAllOff = (settings: NotificationSettings): boolean =>
 /** The fields of a tab that decide whether something happened worth telling. */
 export interface TabSnapshot {
   id: string
-  /** As the user sees it: background agents or shells still running count as working */
   status: TabStatus
-  /** Claude's own turn is over (idle or ended), whatever still runs in the background */
-  isTurnOver: boolean
   /** When the chat last finished (`withTurnClock`); a new value is a new "finished" */
   finishedAt: number | null
   /** Request id of the open permission ask, if any */
@@ -110,8 +107,7 @@ const PLAN_TOOL = 'ExitPlanMode'
 
 export const snapshotOf = (tab: ChatTabState, disconnectedNotice: string | null): TabSnapshot => ({
   id: tab.id,
-  status: shownStatusOf(tab),
-  isTurnOver: tab.status === 'idle' || tab.status === 'ended',
+  status: tab.status,
   finishedAt: tab.finishedAt,
   requestId: tab.permission?.requestId ?? null,
   toolName: tab.permission?.toolName ?? null,
@@ -128,7 +124,6 @@ export const isSameSnapshots = (before: TabSnapshot[], after: TabSnapshot[]): bo
     return (
       snapshot.id === other.id &&
       snapshot.status === other.status &&
-      snapshot.isTurnOver === other.isTurnOver &&
       snapshot.finishedAt === other.finishedAt &&
       snapshot.requestId === other.requestId &&
       snapshot.notice === other.notice &&
@@ -151,8 +146,8 @@ const outcomeOf = (before: TabSnapshot, after: TabSnapshot): NotifyReason | null
   if (after.notice && after.notice !== before.notice && after.status !== 'ended') return 'failed'
   // Ending in the middle of a turn, or while starting, was not asked for.
   if (after.status === 'ended' && isBusyStatus(before.status)) return 'failed'
-  // The chat finished: the same moment it gets its finish number, so neither the reply to a
-  // subagent's report nor a turn that left background work running tells the user it is done.
+  // The chat finished: the same moment it gets its finish number, so the reply to a subagent's
+  // report does not tell the user it is done.
   // An answer that ends on a question needs the user, not just their attention.
   if (after.finishedAt !== null && after.finishedAt !== before.finishedAt)
     return after.openQuestion ? 'question' : 'finished'

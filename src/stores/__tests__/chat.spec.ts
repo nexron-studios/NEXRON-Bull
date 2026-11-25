@@ -542,6 +542,7 @@ describe('useChatStore: in a browser through the bridge', () => {
     bridgeReady.length = 0
     ask.mockReset()
     send.mockClear()
+    localStorage.clear()
     runtime.isTauri = false
     ask.mockImplementation(async (message: { op: string }, machine: string | null) => {
       if (message.op === 'tabs') return { type: 'tabs', id: 1, tabs: machine ? [] : [running] }
@@ -598,8 +599,27 @@ describe('useChatStore: in a browser through the bridge', () => {
     expect(ask.mock.calls.filter(([message]) => message.op === 'tabs')).toHaveLength(1)
   })
 
-  it('should open a tab another app starts while this one is open', async () => {
+  /** Signed in with nothing running yet; `running` then starts on the local agentd. */
+  const attachedEmpty = async () => {
     const chat = useChatStore()
+    const later = running
+    let isFirst = true
+    ask.mockImplementation(async (message: { op: string }, machine: string | null) => {
+      if (message.op !== 'tabs') return { type: 'history', id: 2, messages: [], has_more: false }
+      const tabs = isFirst || machine ? [] : [later]
+      if (!machine) isFirst = false
+      return { type: 'tabs', id: 1, tabs }
+    })
+    bridgeReady.forEach((ready) => ready(['main-pc']))
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(2))
+    // The attach marks the machines once their answers are in.
+    await new Promise((resolve) => setTimeout(resolve))
+    ask.mockClear()
+    return chat
+  }
+
+  it('should open a tab another app starts while this one is open', async () => {
+    const chat = await attachedEmpty()
 
     emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })
     await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
@@ -607,8 +627,34 @@ describe('useChatStore: in a browser through the bridge', () => {
     expect(ask).toHaveBeenCalledWith({ op: 'tabs' }, null)
   })
 
-  it('should open a tab once when two starts of it arrive before the first answer', async () => {
+  it('should still open the new tab when another machine went away meanwhile', async () => {
+    const chat = await attachedEmpty()
+    ask.mockImplementation(async (message: { op: string }, machine: string | null) => {
+      if (machine) throw new AgentdDisconnectedError(machine)
+      if (message.op === 'tabs') return { type: 'tabs', id: 1, tabs: [running] }
+      return { type: 'history', id: 2, messages: [], has_more: false }
+    })
+
+    emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })
+
+    await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
+  })
+
+  it('should leave a tab closed here closed, and its Claude to the app that started it', async () => {
     const chat = useChatStore()
+    bridgeReady.forEach((ready) => ready([]))
+    await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
+    send.mockClear()
+
+    chat.close('t9')
+    bridgeReady.forEach((ready) => ready([]))
+    await vi.waitFor(() => expect(ask.mock.calls.filter(([m]) => m.op === 'tabs')).toHaveLength(2))
+
+    expect([chat.tabs, send.mock.calls]).toEqual([[], []])
+  })
+
+  it('should open a tab once when two starts of it arrive before the first answer', async () => {
+    const chat = await attachedEmpty()
 
     emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })
     emit({ type: 'started', id: null, tab: 't9', session_id: 's9', working: false })

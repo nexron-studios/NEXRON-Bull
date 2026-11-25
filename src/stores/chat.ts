@@ -1,12 +1,18 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isTauri } from '@tauri-apps/api/core'
-import { AgentdDisconnectedError, agentdService, type Machine } from '@/api/services/agentd.service'
+import {
+  AgentdDisconnectedError,
+  AgentdTimeoutError,
+  agentdService,
+  type Machine
+} from '@/api/services/agentd.service'
 import { bridgeService } from '@/api/services/bridge.service'
 import i18n from '@/i18n'
 import { handleError } from '@/lib/error'
 import { queryClient } from '@/lib/queryClient'
 import { runningTabsOn } from '@/lib/runningTabs'
+import { useBrowserTabsStore } from '@/stores/browserTabs'
 import { useConnectorSetupStore } from '@/stores/connectorSetup'
 import { useDraftStore } from '@/stores/drafts'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
@@ -128,6 +134,8 @@ export const useChatStore = defineStore(
     // The next try per machine. A lost connection reports itself twice (its `disconnected` event
     // and the failed request), and each would otherwise start a try of its own.
     const reconnectTimers = new Map<Machine, ReturnType<typeof setTimeout>>()
+    // Machines attached over a connection that still stands: only these can report a new tab.
+    const attached = new Set<Machine>()
 
     const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeId.value) ?? null)
     /**
@@ -270,8 +278,13 @@ export const useChatStore = defineStore(
      * every answer was computed against the tabs from before its own wait.
      */
     const openAdopted = (adopted: SavedTab[]): ChatTabState[] => {
-      const opened = adopted.filter((tab) => !tabOf(tab.id)).map(newTab)
-      if (opened.length) tabs.value = [...tabs.value, ...opened]
+      const browserTabs = useBrowserTabsStore()
+      const opened = adopted
+        .filter((tab) => !tabOf(tab.id) && !browserTabs.isClosed(tab.id))
+        .map(newTab)
+      if (!opened.length) return opened
+      tabs.value = [...tabs.value, ...opened]
+      browserTabs.markAdopted(opened.map((tab) => tab.id))
       return opened
     }
 
@@ -287,14 +300,26 @@ export const useChatStore = defineStore(
      * Another app started a tab this browser has none for: open it too and attach. Only the new
      * ones; attaching again to the others would reload their chats.
      */
+    const adoptStartedOn = async (machine: Machine) => {
+      const known = new Set(tabs.value.map((tab) => tab.id))
+      const { adopted } = await runningTabsOn(machine, known)
+      for (const tab of openAdopted(adopted)) {
+        void loadHistory(tab.id)
+        start(tab)
+      }
+    }
+
+    // The event does not say its machine, but only an attached one can have sent it. Each is
+    // asked on its own: one that went away meanwhile keeps no other machine's tab closed.
     const adoptStarted = async () => {
-      for (const machine of [null, ...bridgeService.state.machines]) {
-        const known = new Set(tabs.value.map((tab) => tab.id))
-        const { adopted } = await runningTabsOn(machine, known)
-        for (const tab of openAdopted(adopted)) {
-          void loadHistory(tab.id)
-          start(tab)
-        }
+      const results = await Promise.allSettled([...attached].map(adoptStartedOn))
+      for (const result of results) {
+        if (result.status === 'fulfilled') continue
+        const error: unknown = result.reason
+        // Its `disconnected` reattaches it, and that adopts its new tabs as well.
+        if (error instanceof AgentdDisconnectedError || error instanceof AgentdTimeoutError)
+          continue
+        handleError(error)
       }
     }
 
@@ -312,6 +337,7 @@ export const useChatStore = defineStore(
     /** Attaches to the tabs whose Claude still runs on that machine, e.g. after a restart. */
     const attachTo = async (machine: Machine) => {
       const running = await runningOn(machine)
+      attached.add(machine)
       stopReconnecting(machine)
       const notice = disconnectedNotice(machine)
       for (const tab of tabs.value.filter((t) => t.machine === machine)) {
@@ -369,6 +395,7 @@ export const useChatStore = defineStore(
 
     // Claude keeps running on that machine; the app attaches again once it reaches it.
     const markDisconnected = (machine: Machine) => {
+      attached.delete(machine)
       const notice = disconnectedNotice(machine)
       const wasLive = tabs.value.some((tab) => tab.machine === machine && tab.status !== 'ended')
       tabs.value = tabs.value.map((tab) =>
@@ -404,8 +431,7 @@ export const useChatStore = defineStore(
       if (event.type === 'disconnected') return markDisconnected(event.machine)
       if (!('tab' in event) || !event.tab) return
       const id = event.tab
-      if (event.type === 'started' && !tabOf(id) && !isTauri())
-        return void adoptStarted().catch(handleError)
+      if (event.type === 'started' && !tabOf(id) && !isTauri()) return void adoptStarted()
       const now = Date.now()
       const wasBusy = !!tabOf(id)?.turn
       const pendingBefore = tabOf(id)?.pending ?? []
@@ -816,7 +842,13 @@ export const useChatStore = defineStore(
 
     const close = (id: string) => {
       const tab = tabOf(id)
-      if (tab && tab.status !== 'ended') toTab(id, { op: 'stop', tab: id }).catch(handleError)
+      const isBrowser = !isTauri()
+      // A tab another app started is that app's chat: the browser only stops watching it.
+      const isForeign = isBrowser && useBrowserTabsStore().isAdopted(id)
+      if (tab && tab.status !== 'ended' && !isForeign)
+        toTab(id, { op: 'stop', tab: id }).catch(handleError)
+      // Still running there, it would come back with the next `tabs`.
+      if (isBrowser) useBrowserTabsStore().markClosed(id)
       queued.value.delete(id)
       tab?.pending.forEach((prompt) => sentDrafts.delete(prompt.uuid))
       useDraftStore().discard(id)

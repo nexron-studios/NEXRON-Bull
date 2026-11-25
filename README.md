@@ -137,7 +137,8 @@ signs in with its own long token, sent as the first WebSocket message, and the b
 only the page origin it is told. It runs one `agentd connect` per device and machine and ends it
 when the device goes away; Claude keeps running under `agentd serve`. The phone takes over the
 tabs that run there, shows their questions and sends approvals; the desktop drops a card the
-phone decided. Terminals, logging in and the machine setup stay in the desktop app.
+phone decided. Closing such a tab on the phone only stops watching it; the app that started it
+keeps it running. Terminals, logging in and the machine setup stay in the desktop app.
 
 Set it up on the server (Windows, same user as Bull's `agentd`):
 

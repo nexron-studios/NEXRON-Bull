@@ -7,10 +7,18 @@ import { Button } from '@/components/ui/button'
 
 // Under the image on the black phone viewer (Figma "M19"): paging at the thumb, the comment for
 // Claude, then copy and mark. Marking swaps this for the sheet with the drawing tools.
-const { index, total, canMark, isApplying } = defineProps<{
+// `hasComment` false (an image still in the composer): nothing to hand over before marking.
+const {
+  index,
+  total,
+  canMark,
+  hasComment = true,
+  isApplying
+} = defineProps<{
   index: number
   total: number
   canMark: boolean
+  hasComment?: boolean
   isApplying: boolean
 }>()
 const emit = defineEmits<{
@@ -50,7 +58,7 @@ const ON_STAGE =
         <ChevronRight class="size-5" aria-hidden="true" />
       </NchIconButton>
     </nav>
-    <div v-if="canMark" class="px-4 pb-2">
+    <div v-if="canMark && hasComment" class="px-4 pb-2">
       <ChatMarkupPhoneComment :is-applying @apply="emit('apply')" @send="emit('send')" />
     </div>
     <div class="flex gap-2 px-4 pb-3">

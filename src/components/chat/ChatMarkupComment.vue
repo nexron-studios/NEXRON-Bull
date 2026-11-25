@@ -14,6 +14,8 @@ import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 
 // Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
 // composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
+// `hasComment` false (an image still in the composer): only the marks' notes, no general comment;
+// the draft around the image's chip is where the rest is written.
 // While marking, each numbered mark has its note here as well as on the image, so the text and
 // the spot it is about stay one thing; the field below is then for anything else. "Ins
 // Eingabefeld" hands everything to the composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it
@@ -21,7 +23,11 @@ import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 // with its note; Backspace in a pin's empty note does too, as a pin is nothing without it.
 // Past about ten notes the list scrolls instead of squeezing the image, and a new mark's row
 // comes into view, since its note is typed on the image and the list would not follow by itself.
-const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
+const {
+  isMarking,
+  isApplying,
+  hasComment = true
+} = defineProps<{ isMarking: boolean; isApplying: boolean; hasComment?: boolean }>()
 const emit = defineEmits<{ discard: []; apply: []; send: [] }>()
 
 const { t } = useI18n()
@@ -61,12 +67,9 @@ watch(
 
 <template>
   <section
-    aria-labelledby="markup-comment-title"
+    :aria-label="t(hasComment ? 'images.comment_title' : 'images.notes_title')"
     class="flex flex-col gap-2 rounded-xl border border-border bg-popover p-2.5 text-popover-foreground shadow-xl"
   >
-    <Label id="markup-comment-title" for="markup-comment" class="sr-only">
-      {{ t('images.comment_title') }}
-    </Label>
     <!-- The padding keeps the focus ring of a note inside the scrolling box. -->
     <ol
       v-if="hasNotes"
@@ -104,16 +107,19 @@ watch(
         </NchIconButton>
       </li>
     </ol>
-    <Textarea
-      id="markup-comment"
-      v-model="markup.comment.value"
-      :placeholder="
-        t(hasNotes ? 'images.comment_placeholder_general' : 'images.comment_placeholder')
-      "
-      aria-describedby="markup-comment-hint"
-      class="max-h-28 min-h-13 resize-none text-small"
-    />
-    <p id="markup-comment-hint" class="sr-only">{{ t('images.comment_hint') }}</p>
+    <template v-if="hasComment">
+      <Label for="markup-comment" class="sr-only">{{ t('images.comment_title') }}</Label>
+      <Textarea
+        id="markup-comment"
+        v-model="markup.comment.value"
+        :placeholder="
+          t(hasNotes ? 'images.comment_placeholder_general' : 'images.comment_placeholder')
+        "
+        aria-describedby="markup-comment-hint"
+        class="max-h-28 min-h-13 resize-none text-small"
+      />
+      <p id="markup-comment-hint" class="sr-only">{{ t('images.comment_hint') }}</p>
+    </template>
     <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
       <div v-if="isMarking" class="mr-auto flex items-center gap-2">
         <Checkbox

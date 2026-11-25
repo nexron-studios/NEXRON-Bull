@@ -3,15 +3,22 @@ import { ArrowDown, ArrowUp } from '@lucide/vue'
 import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMarkup } from '@/composables/useMarkup'
 
 // The comment on the phone viewer, with the arrow that takes image and comment into the composer
 // (Figma "M20") and, last and filled, the one that sends them as a message of their own. Under the
 // image while viewing and in the markup sheet; on the stage in both themes. The keyboard's "done"
-// keeps meaning into the composer, where the text can still be changed.
-const { isApplying, describedBy = undefined } = defineProps<{
+// keeps meaning into the composer, where the text can still be changed. `hasComment` false (an
+// image still in the composer): only the two ways out, as labelled buttons.
+const {
+  isApplying,
+  hasComment = true,
+  describedBy = undefined
+} = defineProps<{
   isApplying: boolean
+  hasComment?: boolean
   describedBy?: string
 }>()
 const emit = defineEmits<{ apply: []; send: [] }>()
@@ -22,7 +29,28 @@ const id = useId()
 </script>
 
 <template>
-  <form class="relative" @submit.prevent="emit('apply')">
+  <div v-if="!hasComment" class="flex gap-2">
+    <Button
+      variant="outline"
+      class="h-11 flex-1 border-stage-foreground/20 bg-stage-foreground/8 text-body text-stage-foreground hover:bg-stage-foreground/15 hover:text-stage-foreground"
+      :disabled="!markup.isDirty.value"
+      :aria-busy="isApplying"
+      @click="emit('apply')"
+    >
+      <ArrowDown aria-hidden="true" />
+      {{ t('images.apply') }}
+    </Button>
+    <Button
+      class="h-11 flex-1 bg-brand-strong text-body text-brand-foreground hover:bg-brand-strong-hover"
+      :disabled="!markup.isDirty.value"
+      :aria-busy="isApplying"
+      @click="emit('send')"
+    >
+      <ArrowUp aria-hidden="true" />
+      {{ t('images.send') }}
+    </Button>
+  </div>
+  <form v-else class="relative" @submit.prevent="emit('apply')">
     <label :for="id" class="sr-only">{{ t('images.comment_title') }}</label>
     <Input
       :id

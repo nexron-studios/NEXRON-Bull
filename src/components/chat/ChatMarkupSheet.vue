@@ -7,7 +7,11 @@ import { useMarkup } from '@/composables/useMarkup'
 
 // Bottom of the phone markup screen (Figma "M20"): tools, then colours and sizes, then the comment
 // with the arrow that takes image and comment into the composer. On the stage in both themes.
-const { isApplying } = defineProps<{ isApplying: boolean }>()
+// `hasComment` false (an image still in the composer): only the two ways out, no comment.
+const { isApplying, hasComment = true } = defineProps<{
+  isApplying: boolean
+  hasComment?: boolean
+}>()
 const emit = defineEmits<{ apply: []; send: [] }>()
 
 const { t } = useI18n()
@@ -23,6 +27,7 @@ const markup = useMarkup()
     </div>
     <ChatMarkupPhoneComment
       :is-applying
+      :has-comment
       described-by="markup-apply-hint"
       @apply="emit('apply')"
       @send="emit('send')"
@@ -38,7 +43,12 @@ const markup = useMarkup()
         {{ t('images.keep_original') }}
       </label>
     </div>
-    <p id="markup-apply-hint" class="pb-2 text-center text-meta text-stage-foreground/60">
+    <!-- The arrows of the comment field need it; labelled buttons say it themselves. -->
+    <p
+      v-if="hasComment"
+      id="markup-apply-hint"
+      class="pb-2 text-center text-meta text-stage-foreground/60"
+    >
       {{ t('images.apply_phone_hint') }}
     </p>
   </section>

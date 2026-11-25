@@ -43,6 +43,9 @@ const mode = ref<LightboxMode>(startModeOf(initialMode, !!target))
 const current = computed(() => images[index.value] ?? null)
 const hasSeveral = computed(() => images.length > 1)
 const isMarking = computed(() => mode.value === 'mark')
+// An image still in the composer is written about there, next to its chip: the preview only adds
+// marks (and their notes), no comment of its own.
+const isAttachment = computed(() => !!current.value?.id)
 const meta = computed(() =>
   current.value ? imageMeta(current.value.bytes, locale.value, natural.value) : ''
 )
@@ -172,6 +175,7 @@ watch(isOpen, (open) => {
           <ChatMarkupSheet
             v-if="isMarking"
             :is-applying
+            :has-comment="!isAttachment"
             @apply="apply('compose')"
             @send="apply('send')"
           />
@@ -181,6 +185,7 @@ watch(isOpen, (open) => {
             :index
             :total="images.length"
             :can-mark="!!target"
+            :has-comment="!isAttachment"
             :is-applying
             @step="step"
             @copy="copy"
@@ -214,9 +219,10 @@ watch(isOpen, (open) => {
             @download="download"
           />
           <ChatMarkupComment
-            v-if="target"
+            v-if="target && (isMarking || !isAttachment)"
             class="w-full max-w-180 shrink-0"
             :is-marking
+            :has-comment="!isAttachment"
             :is-applying
             @discard="discard"
             @apply="apply('compose')"

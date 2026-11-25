@@ -28,6 +28,9 @@ pub fn run_git(dir: &Path, args: &[&str]) -> Result<Vec<u8>, GitError> {
     git.args(["--no-optional-locks", "--literal-pathspecs", "-c", "core.quotepath=off"])
         .args(args)
         .current_dir(dir)
+        // English messages whatever the user's locale: callers match git's stderr.
+        .env("LC_ALL", "C")
+        .env("LANGUAGE", "C")
         .stdin(Stdio::null());
     hide_console(&mut git);
     let output = git.output().map_err(|err| match err.kind() {

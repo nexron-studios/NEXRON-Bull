@@ -231,8 +231,10 @@ fn cut_to_limit(hunks: &mut Vec<Hunk>) -> bool {
     for (index, hunk) in hunks.iter_mut().enumerate() {
         for (at, line) in hunk.lines.iter().enumerate() {
             if line.len() > budget {
+                // A hunk cut before its first line would only leave a gap marker behind.
+                let kept = if at == 0 { index } else { index + 1 };
                 hunk.lines.truncate(at);
-                hunks.truncate(index + 1);
+                hunks.truncate(kept);
                 return true;
             }
             budget -= line.len();
@@ -295,6 +297,17 @@ mod tests {
         let mut hunks = vec![Hunk { old_start: 1, new_start: 1, lines: vec![long.clone(), long.clone(), long] }];
         assert!(cut_to_limit(&mut hunks));
         assert_eq!(hunks[0].lines.len(), 1);
+    }
+
+    #[test]
+    fn drops_a_hunk_the_cut_reaches_before_its_first_line() {
+        let long = format!("+{}", "x".repeat(MAX_DIFF_BYTES / 2 + 1));
+        let mut hunks = vec![
+            Hunk { old_start: 1, new_start: 1, lines: vec![long.clone()] },
+            Hunk { old_start: 9, new_start: 9, lines: vec![long] },
+        ];
+        assert!(cut_to_limit(&mut hunks));
+        assert_eq!((hunks.len(), hunks[0].lines.len()), (1, 1));
     }
 
     #[test]

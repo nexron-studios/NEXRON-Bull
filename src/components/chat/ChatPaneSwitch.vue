@@ -8,6 +8,7 @@ import { tabDirectionOf, type TabDirection } from '@/utils/motion'
 // fade in from the side of the selected tab (transitions.css, Figma "16 Motion"), so the click
 // answers immediately and nothing the tabs share moves.
 const { tab, tabs } = defineProps<{ tab: ChatTabState; tabs: ChatTabState[] }>()
+const emit = defineEmits<{ preview: [url: string] }>()
 
 const direction = ref<TabDirection>('next')
 
@@ -27,6 +28,11 @@ watch(
 
 <template>
   <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-route-content>
-    <ChatPane :key="tab.id" :tab :class="`tab-in-${direction}`" />
+    <ChatPane
+      :key="tab.id"
+      :tab
+      :class="`tab-in-${direction}`"
+      @preview="emit('preview', $event)"
+    />
   </div>
 </template>

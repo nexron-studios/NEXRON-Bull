@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { PanelLeftOpen, PanelRight, Plus } from '@lucide/vue'
+import { PanelLeftOpen, Plus } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -14,11 +14,11 @@ import ChatNewDialog from '@/components/chat/ChatNewDialog.vue'
 import ChatPaneSwitch from '@/components/chat/ChatPaneSwitch.vue'
 import ChatNotifyToggle from '@/components/chat/ChatNotifyToggle.vue'
 import ChatPhoneScreen from '@/components/chat/ChatPhoneScreen.vue'
+import ChatSideColumns from '@/components/chat/ChatSideColumns.vue'
 import ChatTabBar from '@/components/chat/ChatTabBar.vue'
 import NavBottomBar from '@/components/nav/NavBottomBar.vue'
 import NavRoutePage from '@/components/nav/NavRoutePage.vue'
-import PanelColumn from '@/components/panel/PanelColumn.vue'
-import PreviewColumn from '@/components/preview/PreviewColumn.vue'
+import PanelToggle from '@/components/panel/PanelToggle.vue'
 import PreviewSheet from '@/components/preview/PreviewSheet.vue'
 import PreviewToggle from '@/components/preview/PreviewToggle.vue'
 import SessionRail from '@/components/session/SessionRail.vue'
@@ -32,15 +32,13 @@ import TerminalTabPane from '@/components/terminal/TerminalTabPane.vue'
 import { useBullSlashCommands } from '@/composables/useBullSlashCommands'
 import { useChatNavigation } from '@/composables/useChatNavigation'
 import { useFinishTracking } from '@/composables/useFinishTracking'
-import { INFO_PANEL_TOGGLE_ID, useInfoPanel } from '@/composables/useInfoPanel'
+import { useChatColumns } from '@/composables/useChatColumns'
 import { useLimitPolicySync } from '@/composables/useLimitPolicySync'
 import { usePhoneChatHistory } from '@/composables/usePhoneChatHistory'
-import { usePreviewPane } from '@/composables/usePreviewPane'
 import { useSidebarLayout } from '@/composables/useSidebarLayout'
 import { useTabNotifications } from '@/composables/useTabNotifications'
 import { useTerminals } from '@/composables/useTerminals'
 import { useIsNarrow, useIsPhone } from '@/composables/useViewport'
-import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { useChatStore } from '@/stores/chat'
 import { usePreviewStore } from '@/stores/preview'
 import { useSessionActionsStore } from '@/stores/sessionActions'
@@ -48,13 +46,11 @@ import { foregroundShellOf } from '@/utils/activity'
 import { useTerminalStore } from '@/stores/terminals'
 import { targetOfTab } from '@/utils/sessionActions'
 import {
-  INFO_PANEL_CHORD,
   isNewSessionShortcut,
   isNewTerminalShortcut,
   isSidebarShortcut,
   isTerminalDrawerShortcut
 } from '@/utils/shortcuts'
-import { INFO_PANEL_MIN_WIDTH } from '@/utils/infoPanel'
 import { RAIL_WIDTH } from '@/utils/sidebarLayout'
 
 const isNewOpen = ref(false)
@@ -62,7 +58,6 @@ const isDrawerOpen = ref(false)
 const hasSearchOnOpen = ref(false)
 
 const { t } = useI18n()
-const { labelOf, ariaOf } = useShortcutLabels()
 const route = useRoute()
 const router = useRouter()
 const chat = useChatStore()
@@ -92,26 +87,19 @@ const { here, openHere, toggleDrawer } = useTerminals()
 const isChatShown = computed(() => isNarrow.value || layout.value !== 'full')
 // The drawer covers the chat on a narrow window: what finishes under it is not seen.
 useFinishTracking(() => (isChatShown.value && !isDrawerOpen.value ? shownChatId.value : null))
-const sidebarWidth = () => (layout.value === 'rail' ? RAIL_WIDTH : panelWidth.value)
-const previewStore = usePreviewStore()
-// The preview is read lazily (below): it keeps room for the open panel, the panel fits beside it.
-const infoPanel = useInfoPanel(
-  windowWidth,
-  sidebarWidth,
-  () =>
-    isChatRoute.value &&
-    !!activeTab.value &&
-    !shownTerminal.value &&
-    isChatShown.value &&
-    !isPhone.value,
-  () => previewPane.takenWidth.value
+/** The chat on screen: on the chat page, not covered by a terminal tab */
+const shownChatTab = computed(() =>
+  isChatRoute.value && !shownTerminal.value ? activeTab.value : null
 )
-// Beside the chat, between it and the info panel; the drawer of a narrow window takes no room.
-const previewPane = usePreviewPane(
+const previewStore = usePreviewStore()
+// Preview and info panel right of the chat; the drawer of a narrow window takes no room.
+const { panel: infoPanel, preview: previewColumn } = useChatColumns(
   windowWidth,
-  () => (isNarrow.value ? 0 : sidebarWidth()),
-  () => isChatRoute.value && !!activeTab.value && !shownTerminal.value && isChatShown.value,
-  () => (infoPanel.isShown.value ? INFO_PANEL_MIN_WIDTH : 0)
+  () => {
+    if (isNarrow.value) return 0
+    return layout.value === 'rail' ? RAIL_WIDTH : panelWidth.value
+  },
+  () => !!shownChatTab.value && isChatShown.value
 )
 const asideWidth = computed(() => {
   if (layout.value === 'rail') return `${RAIL_WIDTH}px`
@@ -167,7 +155,7 @@ onKeyStroke(isNewSessionShortcut, (event) => {
 // chat on screen it does that, otherwise it folds the sidebar as before.
 onKeyStroke(isSidebarShortcut, (event) => {
   event.preventDefault()
-  const tab = isChatRoute.value && !shownTerminal.value ? chat.activeTab : null
+  const tab = shownChatTab.value
   const shell = tab ? foregroundShellOf(tab) : null
   if (tab && shell) return void chat.sendToBackground(tab.id, shell.id)
   toggleSidebar()
@@ -340,32 +328,28 @@ watch(
         <ChatNotifyToggle />
         <SettingsLink class="shrink-0" />
         <PreviewToggle
-          v-if="isChatRoute && activeTab && !shownTerminal"
-          :is-pressed="previewPane.isShown.value || previewStore.isSheetOpen"
+          v-if="shownChatTab"
+          :is-pressed="previewColumn.shownAs.value !== 'none'"
+          @toggle="previewColumn.toggle"
         />
-        <NchIconButton
-          v-if="infoPanel.canShow.value"
-          :id="INFO_PANEL_TOGGLE_ID"
-          :label="
-            t(infoPanel.isOpen.value ? 'panel.hide' : 'panel.show', {
-              key: labelOf(INFO_PANEL_CHORD)
-            })
-          "
-          :aria-pressed="infoPanel.isOpen.value"
-          :aria-keyshortcuts="ariaOf(INFO_PANEL_CHORD)"
-          class="shrink-0"
-          @click="infoPanel.toggle"
-        >
-          <PanelRight class="size-4" aria-hidden="true" />
-        </NchIconButton>
+        <PanelToggle
+          v-if="infoPanel.layout.value.canShow"
+          :is-pressed="infoPanel.isOpen.value"
+          @toggle="infoPanel.toggle"
+        />
       </header>
 
       <div class="flex min-h-0 flex-1">
         <NavRoutePage v-if="!isChatRoute" edge="top" @new="openNew" />
         <TerminalTabPane v-else-if="shownTerminal" :entry="shownTerminal" />
-        <div v-else-if="activeTab" class="flex min-w-0 flex-1 flex-col" data-snap-chat-pane>
-          <ChatPaneSwitch :tab="activeTab" :tabs class="min-w-0" />
-          <TerminalDrawer :key="activeTab.id" :chat-id="activeTab.id" :here />
+        <div v-else-if="shownChatTab" class="flex min-w-0 flex-1 flex-col" data-snap-chat-pane>
+          <ChatPaneSwitch
+            :tab="shownChatTab"
+            :tabs
+            class="min-w-0"
+            @preview="previewColumn.show(shownChatTab, $event)"
+          />
+          <TerminalDrawer :key="shownChatTab.id" :chat-id="shownChatTab.id" :here />
         </div>
         <main v-else class="flex min-h-0 flex-1 flex-col p-6">
           <NchClawdEmpty :title="t('chat.empty_title')" :hint="t('chat.empty_hint')">
@@ -375,21 +359,22 @@ watch(
             </Button>
           </NchClawdEmpty>
         </main>
-        <PreviewColumn
-          v-if="activeTab && previewPane.isShown.value"
-          :tab="activeTab"
-          :pane="previewPane"
-        />
-        <PanelColumn
-          v-if="isChatRoute && activeTab && !shownTerminal && infoPanel.isShown.value"
-          :tab="activeTab"
+        <ChatSideColumns
+          v-if="shownChatTab"
+          :tab="shownChatTab"
           :panel="infoPanel"
+          :preview="previewColumn"
         />
       </div>
     </div>
 
     <ChatNewDialog v-model:open="isNewOpen" />
-    <PreviewSheet v-if="activeTab" :tab="activeTab" />
+    <PreviewSheet
+      v-if="activeTab"
+      :tab="activeTab"
+      :is-open="previewColumn.shownAs.value === 'sheet'"
+      @close="previewStore.closeSheet"
+    />
     <SessionConfirmDialog />
   </div>
 </template>

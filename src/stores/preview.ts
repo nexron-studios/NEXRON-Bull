@@ -1,10 +1,11 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { StorageSerializers, useStorage } from '@vueuse/core'
+import { useStorage } from '@vueuse/core'
 import { useLayoutSnap } from '@/composables/useLayoutSnap'
 import { useChatStore } from '@/stores/chat'
 import type { ChatTabState } from '@/utils/chatTab'
-import { latestPreviewOf, type SavedPreview } from '@/utils/previewUrl'
+import { latestPreviewOf, parseSavedPreviews, type SavedPreview } from '@/utils/previewUrl'
+import { parseStoredWidth } from '@/utils/sideColumn'
 
 const URLS_STORAGE_KEY = 'bull.preview.urls'
 const OPEN_STORAGE_KEY = 'bull.preview.open'
@@ -15,21 +16,21 @@ export const PREVIEW_SNAP_ATTRIBUTE = 'data-preview-snap'
 export const PREVIEW_TOGGLE_ID = 'preview-toggle'
 
 /**
- * The preview beside the chat: whether it is open and how wide survive a restart, like the info
- * panel; the URL a tab shows was typed or picked by the user, next to the tab metadata in
- * localStorage. Where the pane has no room beside the chat (a phone, a small window), it opens
- * as a sheet instead (`isSheetOpen`).
+ * The preview beside the chat, as the user wants it: the column open or not and its width survive a
+ * restart like the info panel's, the URL per tab sits next to the tab metadata. Where no column
+ * fits (a phone, a small window) the preview is a sheet, asked for each time (`isSheetRequested`).
+ * Whether a column fits is the caller's to say (`hasRoom`): it depends on the window's layout.
  */
 export const usePreviewStore = defineStore('preview', () => {
-  const saved = useStorage<Record<string, SavedPreview>>(URLS_STORAGE_KEY, {})
-  const isOpen = useStorage(OPEN_STORAGE_KEY, false)
-  /** `null` until the edge is dragged: the pane then takes the roomy width (`clampPreviewWidth`) */
-  const storedWidth = useStorage<number | null>(WIDTH_STORAGE_KEY, null, undefined, {
-    serializer: StorageSerializers.object
+  const saved = useStorage<Record<string, SavedPreview>>(URLS_STORAGE_KEY, {}, undefined, {
+    serializer: { read: parseSavedPreviews, write: JSON.stringify }
   })
-  const isSheetOpen = ref(false)
-  /** Whether the pane fits beside the chat right now; kept up to date by `usePreviewPane` */
-  const hasRoom = ref(false)
+  const isOpen = useStorage(OPEN_STORAGE_KEY, false)
+  /** `null` until the edge is dragged: the pane then leaves the chat its roomy width */
+  const storedWidth = useStorage<number | null>(WIDTH_STORAGE_KEY, null, undefined, {
+    serializer: { read: parseStoredWidth, write: String }
+  })
+  const isSheetRequested = ref(false)
   const { snap } = useLayoutSnap(PREVIEW_SNAP_ATTRIBUTE)
 
   /** Remembers `url` for the tab; tabs that were closed meanwhile drop out. */
@@ -46,24 +47,48 @@ export const usePreviewStore = defineStore('preview', () => {
     }
   }
 
+  // Asked for where no column fits; the column stays wanted too, so it is there once the window
+  // has room again.
+  const requestSheet = () => {
+    isSheetRequested.value = true
+    isOpen.value = true
+  }
+  const closeSheet = () => {
+    isSheetRequested.value = false
+    isOpen.value = false
+  }
+
   // The chat narrows while the pane slides in; flipped when the snap applies, so two toggles in
   // one frame cancel out.
-  const toggle = (): Promise<void> => {
-    if (!hasRoom.value) {
-      isSheetOpen.value = !isSheetOpen.value
+  const toggle = (hasRoom: boolean): Promise<void> => {
+    if (!hasRoom) {
+      if (isSheetRequested.value) closeSheet()
+      else requestSheet()
       return Promise.resolve()
     }
     return snap(() => {
       isOpen.value = !isOpen.value
+      isSheetRequested.value = false
     }, true)
   }
 
   /** Shows `url` for the tab, opening the pane (or the sheet) if it is shut. */
-  const show = (tab: ChatTabState, url: string) => {
+  const show = (tab: ChatTabState, url: string, hasRoom: boolean) => {
     setUrl(tab, url)
-    if (!hasRoom.value) isSheetOpen.value = true
-    else if (!isOpen.value) void toggle()
+    if (!hasRoom) return requestSheet()
+    if (!isOpen.value) void toggle(true)
   }
 
-  return { saved, isOpen, storedWidth, isSheetOpen, hasRoom, snap, setUrl, toggle, show }
+  return {
+    saved,
+    isOpen,
+    storedWidth,
+    isSheetRequested,
+    snap,
+    setUrl,
+    toggle,
+    show,
+    requestSheet,
+    closeSheet
+  }
 })

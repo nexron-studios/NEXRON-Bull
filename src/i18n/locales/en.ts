@@ -522,8 +522,6 @@ export default {
   panel: {
     label: 'Chat details',
     resize: 'Details width',
-    width_px: '{width} px',
-    close_hint: 'Hide',
     open_items: 'Open',
     open_items_count: '{open} of {all}',
     show: 'Show details ({key})',
@@ -1222,6 +1220,10 @@ export default {
   finish: {
     rank: 'Finished, not seen yet, place {n}',
     new_count: '{n} new'
+  },
+  side_column: {
+    width_px: '{width} px',
+    close_hint: 'Hide'
   },
   preview: {
     label: 'Preview',

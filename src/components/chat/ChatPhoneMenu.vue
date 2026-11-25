@@ -74,7 +74,7 @@ const openRewind = () => {
 }
 const openPreview = () => {
   open.value = false
-  preview.isSheetOpen = true
+  preview.requestSheet()
 }
 const openContext = () => {
   open.value = false

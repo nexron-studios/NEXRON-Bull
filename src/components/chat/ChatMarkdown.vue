@@ -5,8 +5,6 @@ import ChatCallout from '@/components/chat/ChatCallout.vue'
 import { copyText } from '@/lib/clipboard'
 import { handleError } from '@/lib/error'
 import { renderSegments } from '@/lib/markdown'
-import { useChatStore } from '@/stores/chat'
-import { usePreviewStore } from '@/stores/preview'
 
 // `small`: inside a compact card (the plan), where headings stay at body size.
 // `hasCalloutActions`: the last answer of a finished turn, whose callouts get their buttons.
@@ -22,9 +20,6 @@ const SIZE_CLASSES = {
 } as const
 const SPACING = { body: 'space-y-3', small: 'space-y-2' } as const
 
-const chat = useChatStore()
-const preview = usePreviewStore()
-
 // Callouts (`> [!question] …`) become components with buttons; the rest stays markdown.
 const segments = computed(() => renderSegments(text))
 
@@ -37,9 +32,6 @@ const handleClick = (event: MouseEvent) => {
   const target = event.target as HTMLElement
   const copyButton = target.closest<HTMLElement>('[data-copy]')
   if (copyButton) return copyCode(copyButton)
-  // Only the shown chat's answers are on screen, so the button belongs to the active tab.
-  const previewUrl = target.closest<HTMLElement>('[data-preview]')?.dataset.preview
-  if (previewUrl && chat.activeTab) return preview.show(chat.activeTab, previewUrl)
   const link = target.closest('a')
   if (!link) return
   event.preventDefault()

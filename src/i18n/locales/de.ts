@@ -533,8 +533,6 @@ export default {
   panel: {
     label: 'Details zum Chat',
     resize: 'Breite der Details',
-    width_px: '{width} px',
-    close_hint: 'Ausblenden',
     open_items: 'Offen',
     open_items_count: '{open} von {all}',
     show: 'Details einblenden ({key})',
@@ -1241,6 +1239,10 @@ export default {
   finish: {
     rank: 'Fertig, noch nicht angesehen, Platz {n}',
     new_count: '{n} neu'
+  },
+  side_column: {
+    width_px: '{width} px',
+    close_hint: 'Ausblenden'
   },
   preview: {
     label: 'Vorschau',

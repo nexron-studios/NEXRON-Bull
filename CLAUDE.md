@@ -67,8 +67,8 @@ one as `agentd.old.exe` / `agentd.old` and checks `hello` afterwards. A Windows 
 sidecar to a Windows machine; every other pairing has the machine download `agentd-<target>`
 from the GitHub release of the app's own version (`curl` to a temporary name, then renamed), so
 a Mac or Linux machine needs a released version. `powershell -File scripts/deploy-agentd.ps1
-<host>` does the same from a fresh build (Windows) or from the release or `-Binary` (macOS,
-Linux). It lands in `%USERPROFILE%\.nexron-chat\agentd.exe` or `~/.nexron-chat/agentd`.
+<host>` does the same from a fresh build (Windows) or from the file given as `-Binary` (macOS,
+Linux; the app installs the release). It lands in `%USERPROFILE%\.nexron-chat\agentd.exe` or `~/.nexron-chat/agentd`.
 
 ## Releases
 

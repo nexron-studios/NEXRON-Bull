@@ -6,15 +6,15 @@ import { installStepList } from '@/types/machine.type'
  * in the app's machine list: every machine listed before systems were known was one.
  */
 export const oldAgentdFileOf = (os: MachineOs | null | undefined): string => {
-  if (!os) return 'agentd.old.exe'
-  switch (os) {
+  const system = os ?? 'windows'
+  switch (system) {
     case 'windows':
       return 'agentd.old.exe'
     case 'macos':
     case 'linux':
       return 'agentd.old'
     default: {
-      const unhandled: never = os
+      const unhandled: never = system
       throw new Error(`Unhandled machine system: ${unhandled}`)
     }
   }

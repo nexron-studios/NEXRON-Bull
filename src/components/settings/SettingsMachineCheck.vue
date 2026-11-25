@@ -50,7 +50,9 @@ const terminals = useTerminalRequestStore()
 
 const action = computed(() => (probe ? probeActionOf(probe.reason) : null))
 const params = computed(() => ({ machine: entry.name, version: probe?.version ?? '' }))
-const oldAgentdFile = computed(() => oldAgentdFileOf(probe?.os ?? entry.os))
+// A refused login finds no system; an earlier check of the listed machine may have.
+const knownOs = computed(() => probe?.os ?? entry.os ?? null)
+const oldAgentdFile = computed(() => oldAgentdFileOf(knownOs.value))
 
 const forgetKey = () =>
   terminals.request({
@@ -100,7 +102,7 @@ const forgetKey = () =>
       </div>
     </div>
 
-    <SettingsMachineKeyHelp v-if="action === 'fix_key'" :entry />
+    <SettingsMachineKeyHelp v-if="action === 'fix_key'" :entry :os="knownOs" />
     <p
       v-if="isAfterInstall && probe.reason === 'agentd_blocked'"
       class="text-meta text-muted-foreground"

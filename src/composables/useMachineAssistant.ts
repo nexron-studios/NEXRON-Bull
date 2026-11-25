@@ -44,8 +44,6 @@ export const useMachineAssistant = () => {
       await refreshList()
       const probe = await machineService.test(entry)
       state.value = { step: 'checked', entry, probe }
-      // The check stored the system it found; the key help reads it from the list.
-      if (probe.os) await refreshList()
       // A host that answers again loads its accounts now, not at the next slow poll of a failed one.
       if (probe.reason === 'ok') await queryClient.invalidateQueries({ queryKey: ['agentd'] })
     } catch (error) {

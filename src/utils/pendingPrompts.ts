@@ -8,12 +8,22 @@ import { parseSlashInput } from '@/utils/slashCommands'
 const PENDING_PREFIX = 'pending:'
 
 /**
- * A message waits above the composer instead of going into the running turn: while Claude waits
- * for an approval or an answer, and a slash command while Claude works (it runs only as a turn
- * of its own; mid-turn Claude would read it as plain text).
+ * When a message sent while Claude is busy goes out (Jonas, 25.11.2026): `afterTurn` (Enter) waits
+ * above the composer for the end of the turn, `intoTurn` (Ctrl/Cmd+Enter, "send now") goes into
+ * the running turn, where Claude reads it at its next tool result. Once Claude is done both send.
  */
-export const isHeldWhile = (status: TabStatus, text: string): boolean =>
-  status === 'asking' || (status === 'working' && parseSlashInput(text) !== null)
+export const deliveryList = ['afterTurn', 'intoTurn'] as const
+export type Delivery = (typeof deliveryList)[number]
+
+/**
+ * A message waits above the composer instead of going out while Claude works or waits for an
+ * approval or an answer, unless it was sent into the turn. A slash command waits either way: it
+ * runs only as a turn of its own; mid-turn Claude would read it as plain text.
+ */
+export const isHeldWhile = (status: TabStatus, text: string, delivery: Delivery): boolean => {
+  if (status !== 'working' && status !== 'asking') return false
+  return delivery === 'afterTurn' || parseSlashInput(text) !== null
+}
 
 /**
  * How many held messages go out together once Claude is done: all up to the first slash command,

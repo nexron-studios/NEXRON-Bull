@@ -28,8 +28,9 @@ import type { ChatTabState } from '@/utils/chatTab'
 import { imageTypeList, type PendingImage } from '@/utils/content'
 import { withPlainImageRefs } from '@/utils/imageRefs'
 import { withPastes } from '@/utils/pastedText'
-import { draftWithUnsent } from '@/utils/pendingPrompts'
+import { draftWithUnsent, type Delivery } from '@/utils/pendingPrompts'
 import { folderNameOf } from '@/utils/sessionList'
+import { isSendShortcut } from '@/utils/shortcuts'
 import { parseSlashInput } from '@/utils/slashCommands'
 
 // Prompt input after prompt-kit (Figma "Prompt Input", Fassung 8: 30 to 32b): held messages and
@@ -40,7 +41,10 @@ const {
   isWorking,
   isCompact = false
 } = defineProps<{ tab: ChatTabState; isWorking: boolean; isCompact?: boolean }>()
-const emit = defineEmits<{ send: [text: string, images: PendingImage[]]; interrupt: [] }>()
+const emit = defineEmits<{
+  send: [text: string, images: PendingImage[], delivery: Delivery]
+  interrupt: []
+}>()
 
 const picker = ref<HTMLInputElement | null>(null)
 const field = useTemplateRef<InstanceType<typeof ChatComposerField>>('field')
@@ -117,7 +121,7 @@ const { handOver } = useComposerMarkup({
   remove,
   prependComment,
   focusField,
-  send: (text, outgoing) => emit('send', text, outgoing)
+  send: (text, outgoing) => emit('send', text, outgoing, 'afterTurn')
 })
 
 const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles: attachFiles })
@@ -143,7 +147,7 @@ const clearDraft = () => {
 }
 
 /** A slash command the app handles runs here; everything else goes to Claude. */
-const submitText = (text: string) => {
+const submitText = (text: string, delivery: Delivery = 'afterTurn') => {
   // Images still being read would otherwise miss this message and turn up in the next one.
   if (isReading.value) return
   const slash = parseSlashInput(text)
@@ -152,7 +156,8 @@ const submitText = (text: string) => {
   emit(
     'send',
     withPlainImageRefs(withPastes(text, pastes.value), references.format.value),
-    images.value
+    images.value,
+    delivery
   )
   clearDraft()
 }
@@ -165,9 +170,9 @@ const runShell = () => {
   isShell.value = false
 }
 
-const submit = () => {
+const submit = (delivery: Delivery = 'afterTurn') => {
   if (isShell.value) return runShell()
-  if (canSend.value) submitText(draft.value.trim())
+  if (canSend.value) submitText(draft.value.trim(), delivery)
 }
 
 // `!` typed into the empty field is the switch, not part of the command; Esc or Backspace in the
@@ -192,7 +197,8 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (textarea && history.handleKey(event, textarea)) return
   if (event.key !== 'Enter' || event.shiftKey) return
   event.preventDefault()
-  submit()
+  // While Claude works, Enter queues for the turn's end and Ctrl/Cmd+Enter sends into the turn.
+  submit(isSendShortcut(event) ? 'intoTurn' : 'afterTurn')
 }
 
 /** A held message goes back into the field to change it; sent again, it queues anew. */
@@ -262,7 +268,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, handOver, 
             ? 'border-act-outside focus-within:ring-act-outside/30'
             : 'border-input focus-within:border-ring focus-within:ring-ring/50'
         "
-        @submit.prevent="submit"
+        @submit.prevent="submit()"
       >
         <div
           v-if="images.length || isReading || pastes.length"

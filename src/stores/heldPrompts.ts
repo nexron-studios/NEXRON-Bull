@@ -3,8 +3,8 @@ import { defineStore } from 'pinia'
 import type { SentDraft } from '@/utils/pendingPrompts'
 
 /**
- * A message held back above the composer until the turn ends: typed while Claude waits for an
- * approval or an answer, or a slash command typed while it works (`isHeldWhile`).
+ * A message held back above the composer until the turn ends: sent with Enter while Claude works
+ * or waits for an approval or an answer, or a slash command sent at all then (`isHeldWhile`).
  */
 export interface HeldPrompt extends SentDraft {
   id: string

@@ -64,6 +64,7 @@ import {
   heldBatchSizeOf,
   isHeldWhile,
   pendingMessageOf,
+  type Delivery,
   type SentDraft
 } from '@/utils/pendingPrompts'
 import { shellPromptBlocks } from '@/utils/shellBlocks'
@@ -492,25 +493,29 @@ export const useChatStore = defineStore(
     }
 
     /**
-     * Enter while Claude works sends at once, as in the terminal: Claude reads the message at its
-     * next tool result, or right after the turn (Jonas, 25.11.2026). Two kinds wait above the
-     * composer instead, still open to change: anything typed while Claude waits for an approval or
-     * an answer, which it would only read after that decision and which is mostly meant for the
-     * card; and a slash command, which Claude Code runs only as a turn of its own.
+     * Enter while Claude works or waits for a decision holds the message above the composer, still
+     * open to change, and it goes out as the next prompt once the turn ends (Jonas, 25.11.2026).
+     * `intoTurn` (Ctrl/Cmd+Enter) sends it into the running turn at once, as in the terminal; only
+     * a slash command still waits, since Claude Code runs it only as a turn of its own.
      */
-    const send = (id: string, text: string, images: PendingImage[]) => {
+    const send = (
+      id: string,
+      text: string,
+      images: PendingImage[],
+      delivery: Delivery = 'afterTurn'
+    ) => {
       const tab = tabOf(id)
       if (!tab) return
       if (queueForLimit(id, text, images)) return
-      if (isHeldWhile(tab.status, text)) return useHeldPromptsStore().hold(id, { text, images })
+      if (isHeldWhile(tab.status, text, delivery))
+        return useHeldPromptsStore().hold(id, { text, images })
       dispatch(id, text, images)
     }
 
     /** "Jetzt einwerfen": a held message goes into the running turn without waiting for its end. */
     const sendHeldNow = (id: string, heldId: string) => {
       const prompt = useHeldPromptsStore().release(id, heldId)
-      if (!prompt || queueForLimit(id, prompt.text, prompt.images)) return
-      dispatch(id, prompt.text, prompt.images)
+      if (prompt) send(id, prompt.text, prompt.images, 'intoTurn')
     }
 
     const dispatch = (id: string, text: string, images: PendingImage[]) => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, useTemplateRef, watch } from 'vue'
 import { ArrowDown, ArrowUp, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
@@ -19,6 +19,8 @@ import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 // Eingabefeld" hands everything to the composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it
 // as a message of its own. A long note wraps and grows up to a few lines, then scrolls. The × removes the mark
 // with its note; Backspace in a pin's empty note does too, as a pin is nothing without it.
+// Past about ten notes the list scrolls instead of squeezing the image, and a new mark's row
+// comes into view, since its note is typed on the image and the list would not follow by itself.
 const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
 const emit = defineEmits<{ discard: []; apply: []; send: [] }>()
 
@@ -45,6 +47,16 @@ const handleNoteKeydown = (event: KeyboardEvent, row: { id: string; isPin: boole
   markup.removeMark(row.id)
 }
 const hasNotes = computed(() => isMarking && rows.value.length > 0)
+
+const noteList = useTemplateRef('noteList')
+watch(
+  () => rows.value.length,
+  async (count, previousCount) => {
+    if (count <= previousCount) return
+    await nextTick()
+    noteList.value?.lastElementChild?.scrollIntoView({ block: 'nearest' })
+  }
+)
 </script>
 
 <template>
@@ -55,7 +67,13 @@ const hasNotes = computed(() => isMarking && rows.value.length > 0)
     <Label id="markup-comment-title" for="markup-comment" class="sr-only">
       {{ t('images.comment_title') }}
     </Label>
-    <ol v-if="hasNotes" :aria-label="t('images.notes_title')" class="flex flex-col gap-1">
+    <!-- The padding keeps the focus ring of a note inside the scrolling box. -->
+    <ol
+      v-if="hasNotes"
+      ref="noteList"
+      :aria-label="t('images.notes_title')"
+      class="-m-1 flex max-h-82 flex-col gap-1 overflow-y-auto overscroll-contain p-1"
+    >
       <li v-for="row in rows" :key="row.id" class="flex items-start gap-2">
         <span
           class="mt-1 grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"

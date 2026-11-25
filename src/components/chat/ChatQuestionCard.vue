@@ -39,7 +39,7 @@ const id = useId()
 
 const questions = computed(() => questionsOf(permission.input))
 const answers = computed(() => answersOf(questions.value, chosen.value, other.value))
-// An own answer chosen but left empty answers nothing.
+// A question with nothing chosen answers nothing.
 const isComplete = computed(() => Object.values(answers.value).every(Boolean))
 // Number keys only where they are unambiguous: one question on the card.
 const keyed = computed(() => (isKeyed && questions.value.length === 1 ? questions.value[0] : null))
@@ -53,6 +53,14 @@ const setChosen = (question: string, choices: string[]) => {
 
 const toggle = (question: string, label: string, isMulti: boolean) =>
   setChosen(question, toggledChoice(chosen.value[question] ?? [], label, isMulti))
+
+// A radio cannot be unchecked natively, so a click on the chosen option's row unchooses it. Only a
+// click on the row: Space on the focused radio (a click on the input itself) keeps the choice.
+const unchooseClicked = (event: MouseEvent, question: string, label: string) => {
+  if (event.target instanceof HTMLInputElement || !isChosen(question, label)) return
+  event.preventDefault()
+  toggle(question, label, false)
+}
 
 // Typing in the own answer chooses it, so the card shows what "answer" sends; emptying it
 // unchooses it. Focus alone only chooses text typed before: tabbing past the field must not drop
@@ -111,6 +119,7 @@ useChoiceKeys(
               ? 'border-brand bg-brand/8'
               : 'border-border bg-card/60 hover:bg-muted'
           "
+          @click="!q.multiSelect && unchooseClicked($event, q.question, option.label)"
         >
           <input
             :type="q.multiSelect ? 'checkbox' : 'radio'"
@@ -118,7 +127,7 @@ useChoiceKeys(
             class="sr-only"
             :checked="isChosen(q.question, option.label)"
             :aria-keyshortcuts="keyed && oIndex < MAX_CHOICE_KEY ? String(oIndex + 1) : undefined"
-            @click="toggle(q.question, option.label, q.multiSelect)"
+            @change="toggle(q.question, option.label, q.multiSelect)"
           />
           <template v-if="q.multiSelect">
             <SquareCheck

@@ -34,6 +34,7 @@ const optionInputs = (wrapper: Card) =>
   wrapper
     .findAll('input')
     .filter((input) => ['radio', 'checkbox'].includes(input.attributes('type') ?? ''))
+const optionRows = (wrapper: Card) => wrapper.findAll('label')
 const otherField = (wrapper: Card) => wrapper.find('input:not([type])')
 const checkedOf = (wrapper: Card) =>
   optionInputs(wrapper).map((input) => (input.element as HTMLInputElement).checked)
@@ -100,17 +101,27 @@ describe('ChatQuestionCard', () => {
     expect(sentAnswer(wrapper)).toEqual({ [SPRACHEN]: 'Ja, Windows machen, Französisch' })
   })
 
-  it('should unchoose a single option clicked again', async () => {
+  it('should unchoose a single option whose row is clicked again', async () => {
     const wrapper = mountCard()
-    await optionInputs(wrapper)[1].trigger('click')
+    await optionRows(wrapper)[1].trigger('click')
 
-    await optionInputs(wrapper)[1].trigger('click')
+    await optionRows(wrapper)[1].trigger('click')
     await submit(wrapper)
 
     expect([checkedOf(wrapper), wrapper.emitted('answer')]).toEqual([
       [false, false, false],
       undefined
     ])
+  })
+
+  it('should keep a single option when its focused radio is pressed again', async () => {
+    const wrapper = mountCard()
+    await optionRows(wrapper)[1].trigger('click')
+
+    await optionInputs(wrapper)[1].trigger('click')
+    await submit(wrapper)
+
+    expect(sentAnswer(wrapper)).toEqual({ [QUESTION]: 'Läuft noch' })
   })
 
   it('should unchoose the own answer once its text is cleared', async () => {

@@ -203,8 +203,8 @@ fn learn_system(app: &AppHandle, systems_asked: &Mutex<HashSet<String>>, machine
     if !should_ask_system(&entry, &mut lock(systems_asked)) {
         return;
     }
-    if let Ok(Some(platform)) = machine_setup::platform(&entry, false) {
-        machines::remember_os(&app.state::<MachineStore>(), &entry, platform.os);
+    if let Ok(platform) = machine_setup::platform(&entry, false) {
+        app.state::<MachineStore>().remember_os(&entry, platform.os);
     }
 }
 

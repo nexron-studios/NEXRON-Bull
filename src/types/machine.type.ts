@@ -8,8 +8,11 @@ export interface MachineEntry {
   host: string
   user?: string
   port?: number
-  /** What the last check found; unknown before the first one got through */
-  os?: MachineOs
+  /**
+   * What the last check found; unknown before the first one got through. Read-only: the backend
+   * sets it from `uname` and ignores what the app sends, so the list never trusts a form.
+   */
+  readonly os?: MachineOs
 }
 
 export const probeReasonList = [
@@ -45,7 +48,10 @@ export type InstallError =
   | { kind: 'tabs_running'; count: number }
   /** agentd runs there but did not say whether chats do */
   | { kind: 'tabs_unknown' }
-  | { kind: 'unreachable'; reason: ProbeReason; detail: string | null }
+  /** The machine did not get through the check: unreachable, refused or no agentd build for it */
+  | { kind: 'check_failed'; reason: ProbeReason; detail: string | null }
+  /** This app could not find the agentd it ships */
+  | { kind: 'own_agentd_missing'; detail: string }
   | { kind: 'copy_failed'; detail: string }
   /** The machine could not fetch agentd from the GitHub release of this Bull version */
   | { kind: 'download_failed'; url: string; detail: string }

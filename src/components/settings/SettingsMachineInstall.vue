@@ -33,8 +33,10 @@ const failureText = computed(() => {
       )
     case 'tabs_unknown':
       return t('settings.machines.assistant.failures.tabs_unknown', { machine: entry.name })
-    case 'unreachable':
+    case 'check_failed':
       return t(`settings.machines.reasons.${failure.reason}.hint`, { machine: entry.name })
+    case 'own_agentd_missing':
+      return t('settings.machines.assistant.failures.own_agentd_missing')
     case 'copy_failed':
       return t('settings.machines.assistant.failures.copy_failed')
     case 'download_failed':

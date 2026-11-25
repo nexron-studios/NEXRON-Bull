@@ -986,6 +986,8 @@ export default {
           copy_failed: 'Copying did not work. Does agentd still run there for another Bull?',
           download_failed:
             '{machine} could not download agentd. Bull fetches it there from the GitHub release of this Bull version. Is the machine online, and is the release with agentd published yet? A draft serves nothing. Address: {url}',
+          own_agentd_missing:
+            'Bull cannot find its own agentd, so it cannot copy it over. Reinstall Bull.',
           invalid: 'Bull cannot connect with these details.'
         },
         old_kept: 'The previous version stays there as {file}.',

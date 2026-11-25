@@ -929,7 +929,7 @@ export default {
         },
         auth_failed: {
           title: '{machine} does not know your key yet',
-          hint: 'Bull logs in without a password, with the SSH key of this @:computer. It has to get onto the machine once.'
+          hint: "Bull logs in without a password, with the SSH key of this @:{'computer'}. It has to get onto the machine once."
         },
         host_key_changed: {
           title: '{machine} shows a different key',

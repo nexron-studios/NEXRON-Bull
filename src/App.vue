@@ -26,8 +26,10 @@ const needsToken = computed(() => {
 <template>
   <TooltipProvider :delay-duration="300">
     <!-- The shell has a fixed height and scrolls inside its panes, never as a document. `relative`
-         makes the clip hold for absolutely positioned descendants too (`sr-only` labels). -->
-    <div class="relative flex h-dvh min-h-0 flex-col overflow-hidden">
+         makes the clip hold for absolutely positioned descendants too (`sr-only` labels). `clip`,
+         not `hidden`: a hidden box can still be scrolled by focus, and a focused hidden input far
+         down a chat once pushed the whole app out of the window, leaving it blank. -->
+    <div class="relative flex h-dvh min-h-0 flex-col overflow-clip">
       <BridgeTokenScreen v-if="needsToken" />
       <RouterView v-else />
     </div>

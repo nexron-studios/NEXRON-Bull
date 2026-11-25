@@ -25,7 +25,9 @@ import {
 import { glowClassOf } from '@/theme/glow'
 
 // Claude's AskUserQuestion (Figma "11", "M07"): the options one under the other as compact rows,
-// then the user's own answer, then skip and answer on the right.
+// then the user's own answer, then skip and answer on the right. Each row is `relative`, so its
+// hidden input sits in the row and scrolls with the chat: placed by a box outside the scroller,
+// focusing it on a click scrolled the app shell and left the window blank (25.11.2026).
 // `isKeyed`: only the chat on screen takes number keys, not one still sliding out.
 const { permission, isKeyed } = defineProps<{ permission: PermissionAsk; isKeyed: boolean }>()
 const emit = defineEmits<{ answer: [answers: Record<string, string>]; skip: [] }>()
@@ -113,7 +115,7 @@ useChoiceKeys(
         <label
           v-for="(option, oIndex) in q.options"
           :key="option.label"
-          class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-1.5 text-small transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring"
+          class="relative flex cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-1.5 text-small transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring"
           :class="
             isChosen(q.question, option.label)
               ? 'border-brand bg-brand/8'

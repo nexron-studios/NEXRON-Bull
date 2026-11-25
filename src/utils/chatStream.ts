@@ -1,6 +1,7 @@
 import type { Block, ChatMessage } from '@/types/agentd.type'
 import { MS_PER_SECOND } from '@/utils/elapsed'
 import { sourcesOfCall, uniqueSources, type Source } from '@/utils/sources'
+import { isPromptEcho } from '@/utils/pendingPrompts'
 import { todosOf, type TaskCall, type Todo } from '@/utils/todos'
 import { isReadOnlyTool, isTaskTool } from '@/utils/toolKind'
 import { hookBlockOf } from '@/utils/toolOutput'
@@ -225,15 +226,16 @@ const opensTurn = (message: ChatMessage): boolean => message.role === 'user' && 
 
 /**
  * Where the first turn of the stream starts, -1 without one. Older messages loaded above can only
- * join, regroup and rekey what comes before it; from here on every item keeps its key.
+ * join, regroup and rekey what comes before it; from here on every item keeps its key. A prompt,
+ * not any user line: a page can start with a tool result whose call is still on the next page.
  */
 export const firstTurnIndexOf = (items: StreamItem[]): number =>
   items.findIndex(
     (item) =>
       item.kind === 'message' &&
       item.key === item.message.uuid &&
-      opensTurn(item.message) &&
-      !joinsRun(item.message)
+      isPromptEcho(item.message) &&
+      !item.message.is_mid_turn
   )
 
 /** Puts a turn's stats on its last answer. */

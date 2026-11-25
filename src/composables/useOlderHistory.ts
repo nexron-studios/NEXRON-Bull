@@ -4,15 +4,16 @@ import type { HistoryState } from '@/utils/chatTab'
 
 /** The next older page is asked for while the top of the loaded history is this close. */
 export const LOAD_AHEAD_PX = 600
-/** How long a landed page keeps the view anchored while its images and code blocks settle. */
-export const ANCHOR_HOLD_MS = 1000
+/**
+ * How long a landed page keeps the view anchored while its images and code blocks settle. In
+ * WebKit an image that took 1.5 s still pushed the view by its height after a 1 s hold.
+ */
+export const ANCHOR_HOLD_MS = 5000
 /**
  * Sits on the stream items whose key stays when older messages load above them and holds that
  * key (`firstTurnIndexOf`). Items before them can be regrouped or folded away by the next page.
  */
 export const SCROLL_ANCHOR_ATTRIBUTE = 'data-scroll-anchor'
-// The reader taking the scroller over ends the hold; their own scroll is never corrected.
-const READER_INPUT_EVENTS = ['wheel', 'touchmove', 'keydown', 'pointerdown']
 
 export interface OlderHistoryState {
   history: HistoryState
@@ -82,10 +83,6 @@ const anchorOf = (scroller: HTMLElement): ScrollAnchor => {
   }
 }
 
-const moveBy = (scroller: HTMLElement, correction: number) => {
-  if (correction) scroller.scrollTop += correction
-}
-
 interface OlderHistoryOptions {
   load: () => void
   /** A follow or glide moves the list (`useChatFollow`) */
@@ -111,9 +108,18 @@ export const useOlderHistory = (
     if (shouldLoadOlder(element.scrollTop, state())) load()
   }
 
-  // The landed page's images, fonts and highlighted code grow after the first render; until the
-  // reader moves, every growth is taken out again above the anchor.
+  // The landed page's images, fonts and highlighted code grow after the first render; for a while
+  // every growth is taken out again above the anchor. The reader's own scroll is never corrected:
+  // it only moves the anchor to what they look at then, as native scroll anchoring does.
   let held: ScrollAnchor | null = null
+  // The scrollTop the last correction left. Its scroll event comes a frame later, in WebKit after
+  // more images grew: measuring the anchor again then would take their growth for the reader's.
+  let corrected: number | null = null
+  const moveBy = (element: HTMLElement, correction: number) => {
+    if (!correction) return
+    element.scrollTop += correction
+    corrected = element.scrollTop
+  }
   const holdTarget = shallowRef<HTMLElement | null>(null)
   const release = () => {
     held = null
@@ -137,8 +143,23 @@ export const useOlderHistory = (
     moveBy(element, anchorCorrectionOf(held, offset, element.scrollHeight))
   })
 
-  useEventListener(scroller, 'scroll', check, { passive: true })
-  useEventListener(scroller, READER_INPUT_EVENTS, release, { passive: true })
+  const remember = () => {
+    const element = scroller.value
+    if (!element || !held || element.scrollTop === corrected) return
+    const anchor = anchorOf(element)
+    if (anchor.key === null) return release()
+    held = anchor
+  }
+
+  useEventListener(
+    scroller,
+    'scroll',
+    () => {
+      remember()
+      check()
+    },
+    { passive: true }
+  )
   onGlideEnd(check)
 
   // Before the render that adds the page, so the anchor is measured where the reader saw it.

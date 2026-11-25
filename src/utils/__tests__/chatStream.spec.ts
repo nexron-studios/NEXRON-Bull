@@ -261,6 +261,10 @@ describe('firstTurnIndexOf', () => {
     expect(firstTurnIndexOf(stream([read, readResult, intro, prompt, answer]))).toBe(2)
   })
 
+  it('should pass a tool result whose call is still on the page before', () => {
+    expect(firstTurnIndexOf(stream([readResult, prompt, answer]))).toBe(1)
+  })
+
   it('should give -1 for a page inside one run', () => {
     expect(firstTurnIndexOf(stream([thinking, read, readResult, answer]))).toBe(-1)
   })

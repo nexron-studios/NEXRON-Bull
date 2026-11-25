@@ -225,7 +225,7 @@ describe('useOlderHistory', () => {
     expect(scroller.scrollTop).toBe(5960)
   })
 
-  it('should take out growth above until the reader scrolls', async () => {
+  it('should take out growth above, anchored on what the reader scrolled to', async () => {
     const { state, scroller } = await mountHistory({ history: 'loading' })
     scroller.scrollTop = 300
     Object.assign(state, { history: 'loaded', count: 80, keys: keysOf(0, 80) })
@@ -235,12 +235,47 @@ describe('useOlderHistory', () => {
     state.keys = ['image', ...state.keys]
     await nextTick()
     resize()
-    scroller.dispatchEvent(new Event('wheel'))
+    // The reader scrolls up to m10 (offset 0); the next image grows above that one.
+    scrollTo(scroller, 550)
     state.keys = ['image2', ...state.keys]
     await nextTick()
     resize()
 
-    expect(scroller.scrollTop).toBe(2350)
+    expect(scroller.scrollTop).toBe(600)
+  })
+
+  it('should not take its own correction, arriving late, for the reader', async () => {
+    const { state, scroller } = await mountHistory({ history: 'loading' })
+    scroller.scrollTop = 300
+    Object.assign(state, { history: 'loaded', count: 80, keys: keysOf(0, 80) })
+    await settle()
+    state.keys = ['image', ...state.keys]
+    await nextTick()
+    resize()
+
+    // The next image grew before the scroll event of that correction (2350) came in.
+    state.keys = ['image2', ...state.keys]
+    await nextTick()
+    scroller.dispatchEvent(new Event('scroll'))
+    resize()
+
+    expect(scroller.scrollTop).toBe(2400)
+  })
+
+  it('should let go of the anchor once the hold is over', async () => {
+    vi.useFakeTimers()
+    const { state, scroller } = await mountHistory({ history: 'loading' })
+    scroller.scrollTop = 300
+    Object.assign(state, { history: 'loaded', count: 80, keys: keysOf(0, 80) })
+    await settle()
+
+    vi.advanceTimersByTime(5000)
+    state.keys = ['image', ...state.keys]
+    await nextTick()
+    resize()
+    vi.useRealTimers()
+
+    expect(scroller.scrollTop).toBe(2300)
   })
 
   it('should ask for the next page when a short one leaves the top close', async () => {

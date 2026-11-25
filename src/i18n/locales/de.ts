@@ -1374,6 +1374,60 @@ export default {
     refused: 'Zurückspulen ging nicht: {reason}',
     refused_code_back: 'Die Dateien sind zurück, der Chat aber nicht. Claude sagt: {reason}'
   },
+  review: {
+    title: 'Änderungen ansehen',
+    description:
+      'Wähle Zeilen und schreib einen Kommentar dazu. Die Kommentare gehen gesammelt ins Eingabefeld.',
+    all: 'Alle Änderungen',
+    open_file: 'Änderungen an {name} ansehen, {added} hinzugefügt, {removed} entfernt',
+    show_in_chat: 'Im Chat zeigen',
+    show_in_chat_of: '{name} im Chat zeigen',
+    files: 'Geänderte Dateien',
+    position: '{n} von {count}',
+    previous: 'Vorherige Datei ({key})',
+    next: 'Nächste Datei ({key})',
+    status: { added: 'neu', deleted: 'gelöscht' },
+    source: {
+      no_repo:
+        'Kein git-Repository. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      no_git:
+        'Auf diesem Rechner fehlt git. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      unchanged:
+        'Die Datei gleicht dem letzten Commit. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      ignored:
+        'git ignoriert diese Datei. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      missing:
+        'Die Datei gibt es nicht mehr. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      too_big:
+        'Die Datei ist zu groß für einen Vergleich. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      failed:
+        'Der Rechner hat den Stand der Datei nicht geschickt. Du siehst die Änderungen aus dem Chat.'
+    },
+    truncated: 'Die Datei ist sehr groß. Du siehst nur die Zeilen um die Änderungen.',
+    binary_title: 'Binärdatei',
+    binary_hint: 'Diese Datei hat keine Zeilen, die sich zeigen lassen.',
+    nothing_title: 'Keine Änderungen',
+    nothing_hint: 'Weder git noch dieser Chat haben Zeilen zu dieser Datei.',
+    nothing_hint_unchanged:
+      'Die Datei gleicht dem letzten Commit, und der Chat hat keine Zeilen dazu.',
+    diff_label: 'Änderungen in {path}',
+    diff_hint:
+      'Pfeiltasten wählen eine Zeile, mit Umschalt mehrere. Eingabe schreibt einen Kommentar, Esc hebt die Auswahl auf. J und K wechseln die Datei.',
+    chosen: '{reference} gewählt: {text}',
+    unfold: '1 unveränderte Zeile zeigen | {n} unveränderte Zeilen zeigen',
+    line_added: 'Hinzugefügt, Zeile {line}:',
+    line_removed: 'Entfernt, Zeile {line}:',
+    line_kept: 'Zeile {line}:',
+    old_reference: '{reference} (vorher)',
+    comment_on: 'Kommentieren',
+    comment_label: 'Kommentar zu {reference}',
+    comment_placeholder: 'Was soll Claude hier ändern?',
+    comment_cancel: 'Abbrechen',
+    comment_add: 'Hinzufügen',
+    comment_remove: 'Kommentar zu {reference} entfernen',
+    comment_count: 'Keine Kommentare | 1 Kommentar | {n} Kommentare',
+    insert: 'Ins Eingabefeld'
+  },
   context: {
     title: 'Kontext',
     description: 'Was den Kontext füllt und wie viel noch frei ist.',

@@ -21,6 +21,7 @@ pub mod tokenscope;
 pub mod transfer;
 pub mod usage;
 pub mod commands;
+pub mod file_diff;
 pub mod files;
 pub mod hooks;
 pub mod profile_defaults;

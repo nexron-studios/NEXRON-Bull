@@ -60,7 +60,7 @@ useChoiceKeys(
       >
         <Check aria-hidden="true" />
         {{ t('chat.plan_accept') }}
-        <NchKbd key-label="1" is-on-brand />
+        <NchKbd key-label="1" is-on-fill />
       </Button>
     </div>
   </section>

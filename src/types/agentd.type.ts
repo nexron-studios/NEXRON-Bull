@@ -44,6 +44,30 @@ export interface PatchHunk {
   lines: string[]
 }
 
+/** How git sees a changed file in the working tree against `HEAD` (`agentd/src/file_diff.rs`). */
+export const changedStatusList = ['modified', 'added', 'untracked', 'deleted'] as const
+export type ChangedStatus = (typeof changedStatusList)[number]
+/** A file with nothing to show against `HEAD`; `missing`: created and removed again */
+export const cleanStatusList = ['unchanged', 'ignored', 'missing'] as const
+export type CleanStatus = (typeof cleanStatusList)[number]
+
+/** agentd's answer to `file_diff`, one variant per case: the diff, or why there is none */
+export type FileDiff =
+  | {
+      state: 'diff'
+      status: ChangedStatus
+      hunks: PatchHunk[]
+      /** Only the lines around each change came, or the lines were cut */
+      is_truncated: boolean
+    }
+  | { state: 'binary'; status: ChangedStatus }
+  /** Too big to send any lines */
+  | { state: 'too_big'; status: ChangedStatus }
+  | { state: 'clean'; status: CleanStatus }
+  | { state: 'not_in_repository' }
+  | { state: 'git_missing' }
+  | { state: 'failed'; message: string }
+
 export const hookOutcomeList = ['blocked', 'failed', 'output'] as const
 export type HookOutcome = (typeof hookOutcomeList)[number]
 
@@ -276,6 +300,8 @@ export type AgentdEvent =
     }
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
   | { type: 'branch'; id: number | null; branch: string | null }
+  /** Without a diff, the review shows the chat's own edits and says why */
+  | { type: 'file_diff'; id: number | null; answer: FileDiff }
   /** Empty while the session has no transcript or never started a subagent */
   | { type: 'subagent_history'; id: number | null; agents: SubagentTranscript[] }
   /** Sent by the app, not agentd: the connection to a machine ended; `null` is this computer. */
@@ -380,6 +406,8 @@ export type AgentdRequest =
   | { op: 'queue_send'; tab: string }
   /** Files of a working folder for the `@` menu, relative with `/`, gitignore respected */
   | { op: 'list_files'; cwd: string; limit: number }
+  /** A file's changes in the working tree against `HEAD`; `path` may be relative to `cwd` */
+  | { op: 'file_diff'; cwd: string; path: string }
   /** One `!` command in the chat's folder, through Git Bash on Windows */
   | { op: 'run_shell'; cwd: string; command: string }
   /** Hands a control request (`get_context_usage`, `rewind_files`, ...) to the tab's Claude */

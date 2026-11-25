@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useSubagentHistory } from '@/composables/useSubagentHistory'
 import { useTabInsights } from '@/composables/useTabInsights'
-import { changedFilesOf, type ChangeSource } from '@/utils/changedFiles'
+import { changedFilesOf, chatHunksOf, type ChangeSource } from '@/utils/changedFiles'
 import type { ChatTabState } from '@/utils/chatTab'
 
 /**
@@ -26,6 +26,8 @@ export const useChangedFiles = (tab: () => ChatTabState) => {
     }))
   ])
   const changedFiles = computed(() => changedFilesOf(sources.value))
+  /** The chat's own edits of one file, read only when the review needs them */
+  const chatHunksOfFile = (key: string) => chatHunksOf(sources.value, key)
 
-  return { changedFiles }
+  return { changedFiles, chatHunksOfFile }
 }

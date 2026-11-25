@@ -17,6 +17,7 @@ use crate::catalog;
 use crate::chat;
 use crate::claude;
 use crate::commands::{self, SlashCommand};
+use crate::file_diff;
 use crate::files;
 use crate::shell;
 use crate::git;
@@ -307,6 +308,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 self.control(&tab, request)
             }
             Request::Configure { tab, permission_mode, model, effort } => self.configure(id, &tab, permission_mode, model, effort),
+            Request::FileDiff { cwd, path } => {
+                self.answer_later(move || Event::FileDiff { id, answer: file_diff::file_diff(&cwd, &path) });
+                Ok(())
+            }
             Request::ProfileDefaults { profile } => profile_dir(profile)
                 .map(|dir| self.emit(&Event::ProfileDefaults { id, defaults: profile_defaults::read(&dir) })),
         };
@@ -744,6 +749,7 @@ fn tab_of(request: &Request) -> Option<String> {
         | Request::Branch { .. }
         | Request::SetLimits { .. }
         | Request::ListFiles { .. }
+        | Request::FileDiff { .. }
         | Request::RunShell { .. }
         | Request::RewindPoints { .. }
         // A refused control request is no failure of the tab, see `control_event`.

@@ -436,6 +436,59 @@ fn lists_files_and_runs_a_shell_command_in_a_folder() {
     assert_eq!(agentd.expect(|e| e["id"] == 62)["message"], "folder relative not found");
 }
 
+fn git_in(dir: &PathBuf, args: &[&str]) -> bool {
+    Command::new("git").args(["-c", "user.name=test", "-c", "user.email=test", "-c", "core.autocrlf=false"]).args(args).current_dir(dir).status().is_ok_and(|status| status.success())
+}
+
+#[test]
+fn diffs_changed_new_and_deleted_files_against_head() {
+    let repo = temp_dir("file-diff");
+    let _ = std::fs::remove_dir_all(repo.join(".git"));
+    if !git_in(&repo, &["init", "-q"]) {
+        return; // No git on this machine: the app then shows the chat's own edits.
+    }
+    std::fs::write(repo.join("kept.txt"), "one\ntwo\nthree\n").unwrap();
+    std::fs::write(repo.join("gone.txt"), "bye\n").unwrap();
+    std::fs::create_dir_all(repo.join("pages")).unwrap();
+    std::fs::write(repo.join("pages/[id].vue"), "id\n").unwrap();
+    std::fs::write(repo.join("pages/i.vue"), "i\n").unwrap();
+    assert!(git_in(&repo, &["add", "."]) && git_in(&repo, &["commit", "-q", "-m", "init"]));
+    std::fs::write(repo.join("pages/i.vue"), "changed\n").unwrap();
+    std::fs::write(repo.join("kept.txt"), "one\n2\nthree\n").unwrap();
+    std::fs::remove_file(repo.join("gone.txt")).unwrap();
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    std::fs::write(repo.join("src/new.ts"), "a\nb\n").unwrap();
+    let mut agentd = Agentd::spawn();
+
+    agentd.send(json!({ "id": 70, "op": "file_diff", "cwd": repo, "path": "kept.txt" }));
+    let modified = agentd.expect(|e| e["id"] == 70);
+    assert_eq!((modified["type"].as_str(), &modified["answer"]["state"]), (Some("file_diff"), &json!("diff")));
+    assert_eq!(modified["answer"]["status"], "modified");
+    assert_eq!(modified["answer"]["hunks"], json!([{ "old_start": 1, "new_start": 1, "lines": [" one", "-two", "+2", " three"] }]));
+
+    agentd.send(json!({ "id": 71, "op": "file_diff", "cwd": repo, "path": repo.join("src/new.ts") }));
+    let untracked = agentd.expect(|e| e["id"] == 71);
+    assert_eq!(untracked["answer"]["status"], "untracked");
+    assert_eq!(untracked["answer"]["hunks"][0]["lines"], json!(["+a", "+b"]));
+
+    agentd.send(json!({ "id": 72, "op": "file_diff", "cwd": repo, "path": "gone.txt" }));
+    let deleted = agentd.expect(|e| e["id"] == 72);
+    assert_eq!((&deleted["answer"]["status"], &deleted["answer"]["hunks"][0]["lines"]), (&json!("deleted"), &json!(["-bye"])));
+
+    // Brackets are part of the name, not a pattern that also matches `i.vue`.
+    agentd.send(json!({ "id": 74, "op": "file_diff", "cwd": repo, "path": "pages/[id].vue" }));
+    let unchanged = agentd.expect(|e| e["id"] == 74);
+    assert_eq!((&unchanged["answer"]["state"], &unchanged["answer"]["status"]), (&json!("clean"), &json!("unchanged")));
+
+    agentd.send(json!({ "id": 75, "op": "file_diff", "cwd": repo, "path": "never.txt" }));
+    assert_eq!(agentd.expect(|e| e["id"] == 75)["answer"]["status"], "missing");
+
+    let plain = temp_dir("file-diff-plain");
+    std::fs::write(plain.join("a.txt"), "a").unwrap();
+    agentd.send(json!({ "id": 73, "op": "file_diff", "cwd": plain, "path": "a.txt" }));
+    assert_eq!(agentd.expect(|e| e["id"] == 73)["answer"]["state"], "not_in_repository");
+}
+
 #[test]
 fn changes_mode_model_and_effort_of_a_running_session() {
     let mut agentd = Agentd::spawn();

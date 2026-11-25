@@ -32,7 +32,8 @@ import {
   type DoneSession,
   type RankedDone
 } from '@/utils/overview'
-import { isBusyStatus, listedTabOf, type ChatTabState } from '@/utils/chatTab'
+import { isBusyStatus, type ChatTabState } from '@/utils/chatTab'
+import { listedTabOf } from '@/utils/shownStatus'
 import { targetOfDone } from '@/utils/sessionActions'
 import { groupRows, isEmptyChat, sessionRowsOf, waitsForAnswer } from '@/utils/sessionList'
 

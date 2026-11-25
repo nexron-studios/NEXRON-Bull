@@ -208,6 +208,18 @@ describe('an answer that ends on a question', () => {
     expect(machineStateOf([asking('ask')], NOON)).toBe('needs')
   })
 
+  it('should wait under "needs" while a background agent still runs', () => {
+    const agent = { id: 'a1', description: 'Review', kind: 'agent' as const }
+    const held = {
+      ...asking('ask'),
+      backgroundTasks: { active: [agent], at: NOON, agentsSince: NOON }
+    }
+    expect([keysByGroup([held]), machineStateOf([held], NOON)]).toEqual([
+      [['needs', ['ask']]],
+      'needs'
+    ])
+  })
+
   it('should say that it waits for an answer', () => {
     expect(rowActivityOf(asking('ask'))).toEqual({ kind: 'ask', reason: 'question' })
   })

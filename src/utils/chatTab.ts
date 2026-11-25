@@ -26,6 +26,14 @@ export const tabStatusList = ['starting', 'idle', 'working', 'asking', 'ended'] 
 export type TabStatus = (typeof tabStatusList)[number]
 
 /** A turn in progress, waiting for the user, or Claude still starting: not done yet. */
+/**
+ * An answer ended while a background agent ran, so the chat is not finished yet. `agents`: Claude
+ * has not replied to the last report; `replied`: it has, while the task list still named an agent.
+ * `since` is when the held turn started, the row's running time.
+ */
+export const finishHoldKindList = ['agents', 'replied'] as const
+export type FinishHold = { kind: (typeof finishHoldKindList)[number]; since: number }
+
 export const isBusyStatus = (status: TabStatus): boolean =>
   status === 'working' || status === 'asking' || status === 'starting'
 
@@ -98,11 +106,8 @@ export interface ChatTabState {
   turn: RunningTurn | null
   /** When the last turn ended here (ms); `null` until one did in this run of the app */
   finishedAt: number | null
-  /**
-   * The answer to the user ended while a background agent still ran: the chat finishes with the
-   * turn that ends once no agent runs, usually Claude's reply to the last report. Live only.
-   */
-  isFinishHeld: boolean
+  /** Why an answered chat is not finished yet; `null` when nothing holds it. Live only. */
+  finishHold: FinishHold | null
   /**
    * The turn a limit or an account move cut off, in this run of the app. The prompt after the cut
    * (agentd's "go on", or the user's) continues it, so the panel keeps listing its subagents and
@@ -258,7 +263,7 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   live: NO_LIVE_BLOCK,
   turn: null,
   finishedAt: null,
-  isFinishHeld: false,
+  finishHold: null,
   cutTurn: null,
   pending: [],
   history: fields.sessionId ? 'none' : 'loaded',
@@ -374,7 +379,7 @@ const withEmptyChat = (tab: ChatTabState): ChatTabState => ({
   hasMore: false,
   history: 'loaded',
   finishedAt: null,
-  isFinishHeld: false,
+  finishHold: null,
   cutTurn: null,
   unseenAt: null,
   contextWindow: null,
@@ -483,23 +488,6 @@ export const backgroundAgentsOf = (
   tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>
 ): BackgroundTask[] => backgroundWorkOf(tab).filter((task) => task.kind === 'agent')
 
-/**
- * The status the user sees: a chat whose turn ended while a background agent still runs works on
- * (Jonas, 25.11.2026: "wenn ein Subagent noch läuft soll es bei Läuft angezeigt werden"). A shell
- * does not hold it, because a dev server never ends; the row names the shell instead.
- */
-export const shownStatusOf = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): TabStatus =>
-  tab.status === 'idle' && backgroundAgentsOf(tab).length > 0 ? 'working' : tab.status
-
-/**
- * The tab as lists show it: with its background agents as work, and during a move to another
- * account with its status from before.
- */
-export const listedTabOf = (tab: ChatTabState): ChatTabState => {
-  const status = tab.statusBeforeMove ?? shownStatusOf(tab)
-  return status === tab.status ? tab : { ...tab, status }
-}
-
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
   switch (event.type) {
@@ -571,7 +559,11 @@ export const withBackgroundTasks = (
 ): ChatTabState => {
   const hasAgents = tasks.active.some((task) => task.kind === 'agent')
   const agentsSince = hasAgents ? (tab.backgroundTasks?.agentsSince ?? now) : null
-  return { ...tab, backgroundTasks: { ...tasks, at: now, agentsSince } }
+  const listed = { ...tab, backgroundTasks: { ...tasks, at: now, agentsSince } }
+  // Claude already replied while the list still named the agent: the list's catch-up finishes.
+  const isReplyDone =
+    tab.finishHold?.kind === 'replied' && !hasAgents && tab.status === 'idle' && !tab.turn
+  return isReplyDone ? { ...listed, finishedAt: now, finishHold: null } : listed
 }
 
 /** A sent prompt shows at once; `withMessage` swaps in Claude's echo. */
@@ -613,7 +605,7 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
     // Claude took up a subagent's report on its own: the last answer is still news.
     if (isAgentReplyOf(tab, turn)) return { ...tab, turn: { ...turn, isAgentReply: true } }
     // A new turn makes the last answer old news: the tab leaves the finish order.
-    return { ...tab, turn, unseenAt: null, isFinishHeld: false }
+    return { ...tab, turn, unseenAt: null, finishHold: null }
   }
   return { ...withTurnEnd(tab, now), turn: null }
 }
@@ -625,14 +617,26 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
  * do not hold it, since some never end and the row says what still runs. Claude's reply to a
  * report finishes the chat again once nothing is left running, since that reply carries the
  * result the user waited for; a reply while shells still run is only a step on the way, unless
- * it is the one an agent held the finish for.
+ * an agent held the finish for it.
  */
 const withTurnEnd = (tab: ChatTabState, now: number): ChatTabState => {
-  if (tab.status !== 'idle' || tab.notice) return tab
+  const hasAgents = backgroundAgentsOf(tab).length > 0
+  // Nothing to finish; with no agent left nothing holds a finish either, or the row would stay.
+  if (tab.status !== 'idle' || tab.notice) return hasAgents ? tab : { ...tab, finishHold: null }
   const isAgentReply = !!tab.turn && isAgentReplyOf(tab, tab.turn)
-  if (backgroundAgentsOf(tab).length > 0) return isAgentReply ? tab : { ...tab, isFinishHeld: true }
-  if (isAgentReply && !tab.isFinishHeld && backgroundWorkOf(tab).length > 0) return tab
-  return { ...tab, finishedAt: now, isFinishHeld: false }
+  if (hasAgents) return { ...tab, finishHold: heldFinishOf(tab, isAgentReply, now) }
+  if (isAgentReply && !tab.finishHold && backgroundWorkOf(tab).length > 0) return tab
+  return { ...tab, finishedAt: now, finishHold: null }
+}
+
+/**
+ * The hold after a turn that ended with agents listed. The user's answer starts it; Claude's
+ * reply to a report while the list still names an agent marks it replied, so the list dropping
+ * the agent finishes the chat (the list may lag behind the reply).
+ */
+const heldFinishOf = (tab: ChatTabState, isAgentReply: boolean, now: number): FinishHold | null => {
+  if (!isAgentReply) return { kind: 'agents', since: tab.turn?.startedAt ?? now }
+  return tab.finishHold && { ...tab.finishHold, kind: 'replied' }
 }
 
 /**

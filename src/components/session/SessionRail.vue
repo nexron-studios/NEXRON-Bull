@@ -13,7 +13,8 @@ import { useSessionOrder } from '@/composables/useSessionOrder'
 import { useSidebarMachine } from '@/composables/useSidebarMachine'
 import { useChatStore } from '@/stores/chat'
 import { openQuestionOf } from '@/utils/answerCallouts'
-import { shownStatusOf, type ChatTabState } from '@/utils/chatTab'
+import type { ChatTabState } from '@/utils/chatTab'
+import { shownStatusOf } from '@/utils/shownStatus'
 import { groupRows, isEmptyChat, sessionRowsOf, withManualOrder } from '@/utils/sessionList'
 
 // The collapsed sidebar: the bull opens it again, then new session, search, the pages, and one

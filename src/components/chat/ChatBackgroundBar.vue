@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useAgeFormat } from '@/composables/useAgeFormat'
 import { useMinuteClock } from '@/composables/useClock'
 import { useTabInsights } from '@/composables/useTabInsights'
+import { useChatStore } from '@/stores/chat'
+import { backgroundAgentsOf } from '@/utils/chatTab'
 
 // Above the composer once Claude's turn is over but agents or shells it started still run, so a
 // build or a subagent is not mistaken for done (Jonas, 25.11.2026). Each task with how long it
@@ -25,7 +27,19 @@ const ageOf = (startedAt: number | null): string =>
         age: formatAge.value(Math.max(0, now.value.getTime() - startedAt))
       })
 
-const agents = computed(() => runningSubagents.value.filter((agent) => agent.isBackground))
+// Only agents the stream's task list names: after a reload the notices of agents that ended are
+// gone, and the messages alone would show them as running for ever.
+const chat = useChatStore()
+const listedAgentIds = computed(() => {
+  const tab = chat.tabs.find((candidate) => candidate.id === tabId)
+  return new Set(tab ? backgroundAgentsOf(tab).map((task) => task.id) : [])
+})
+const agents = computed(() =>
+  runningSubagents.value.filter(
+    (agent) =>
+      agent.isBackground && agent.agentId !== null && listedAgentIds.value.has(agent.agentId)
+  )
+)
 const tasks = computed(() => [
   ...agents.value.map((agent) => ({
     id: agent.id,

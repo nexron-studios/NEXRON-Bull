@@ -1,14 +1,9 @@
 import type { SessionSummaryProps } from '@/types/agentd.type'
 import { activityOfTab } from '@/utils/activity'
 import { openQuestionOf } from '@/utils/answerCallouts'
-import {
-  isBusyStatus,
-  listedTabOf,
-  turnMessagesOf,
-  type ChatTabState,
-  type TabStatus
-} from '@/utils/chatTab'
+import { isBusyStatus, turnMessagesOf, type ChatTabState, type TabStatus } from '@/utils/chatTab'
 import { askReasonOf } from '@/utils/notifications'
+import { listedTabOf, runningSinceOf } from '@/utils/shownStatus'
 import { applyManualOrder } from '@/utils/order'
 import { shortTarget } from '@/utils/toolKind'
 import { resultsByToolId } from '@/utils/toolPairs'
@@ -185,8 +180,7 @@ const rowOfTab = (tab: ChatTabState, modified: Map<string, number>, today: numbe
     account: tab.account,
     status: listed.status,
     group,
-    // A chat held by a background agent has no turn: it runs since the agent does.
-    since: isBusy ? (tab.turn?.startedAt ?? tab.backgroundTasks?.agentsSince ?? null) : finishedAt
+    since: isBusy ? runningSinceOf(tab) : finishedAt
   }
 }
 

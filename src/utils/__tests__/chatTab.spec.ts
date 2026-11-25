@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyEvent,
   backgroundWorkOf,
-  listedTabOf,
-  shownStatusOf,
   withBackgroundTasks,
   newTab,
   savedTabOf,
@@ -17,6 +15,7 @@ import {
   type ChatTabState,
   type SavedTab
 } from '../chatTab'
+import { listedTabOf, shownStatusOf } from '../shownStatus'
 import type { ChatMessage, LiveBlock } from '@/types/agentd.type'
 import { pendingMessageOf } from '../pendingPrompts'
 
@@ -479,6 +478,16 @@ describe('listedTabOf and backgroundWorkOf', () => {
     expect([listedTabOf(idle).status, shownStatusOf(idle)]).toEqual(['working', 'working'])
   })
 
+  it('should show a failed turn as failed while a background agent runs', () => {
+    const failed = {
+      ...tab(),
+      status: 'idle' as const,
+      notice: 'API error',
+      backgroundTasks: tasks
+    }
+    expect(shownStatusOf(failed)).toBe('idle')
+  })
+
   it('should list an idle chat whose background shell runs as idle', () => {
     const shell = { id: 'b1', description: 'npm run dev', kind: 'shell' as const }
     const idle = {
@@ -554,7 +563,11 @@ describe('a subagent report', () => {
     )
 
     it('should hold the finish of the answer', () => {
-      expect([ended.turn, ended.finishedAt, ended.isFinishHeld]).toEqual([null, null, true])
+      expect([ended.turn, ended.finishedAt, ended.finishHold]).toEqual([
+        null,
+        null,
+        { kind: 'agents', since: 1000 }
+      ])
     })
 
     it('should finish once the reply to the last report ends, even with a shell left', () => {
@@ -564,10 +577,10 @@ describe('a subagent report', () => {
       }
       const working = withTurnClock({ ...reported, status: 'working' }, 9000)
       const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
-      expect([working.turn?.isAgentReply, idle.finishedAt, idle.isFinishHeld]).toEqual([
+      expect([working.turn?.isAgentReply, idle.finishedAt, idle.finishHold]).toEqual([
         true,
         12000,
-        false
+        null
       ])
     })
 
@@ -579,7 +592,39 @@ describe('a subagent report', () => {
       }
       const working = withTurnClock({ ...reported, status: 'working' }, 9000)
       const idle = withTurnClock({ ...working, status: 'idle' }, 12000)
-      expect([idle.finishedAt, idle.isFinishHeld]).toEqual([null, true])
+      expect([idle.finishedAt, idle.finishHold]).toEqual([null, { kind: 'replied', since: 1000 }])
+    })
+
+    it('should finish once the task list drops the agent after Claude already replied', () => {
+      const reported = arrived(ended, 'r1')
+      const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+      // The reply ends while the list still names a444; the list catches up later.
+      const replied = withTurnClock({ ...working, status: 'idle' }, 12000)
+      const caughtUp = withBackgroundTasks(replied, { active: [shell] }, 13000)
+      expect([replied.finishedAt, caughtUp.finishedAt, caughtUp.finishHold]).toEqual([
+        null,
+        13000,
+        null
+      ])
+    })
+
+    it('should show the chat as working between the agent end and Claude reply', () => {
+      const agentEnded = withBackgroundTasks(ended, { active: [shell] }, 8000)
+      expect([agentEnded.finishedAt, shownStatusOf(agentEnded)]).toEqual([null, 'working'])
+    })
+
+    it('should let go of the hold when the reply fails with no agent left', () => {
+      const reported = {
+        ...arrived(ended, 'r1'),
+        backgroundTasks: { active: [], at: 8000, agentsSince: null }
+      }
+      const working = withTurnClock({ ...reported, status: 'working' }, 9000)
+      const failed = withTurnClock({ ...working, status: 'idle', notice: 'API error' }, 12000)
+      expect([failed.finishedAt, failed.finishHold, shownStatusOf(failed)]).toEqual([
+        null,
+        null,
+        'idle'
+      ])
     })
   })
 

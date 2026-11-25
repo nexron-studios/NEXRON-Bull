@@ -272,7 +272,7 @@ const sidebar5 = (opts = {}) => `
   ${agentRow5('working', 'PWA installierbar', 'nexron-chat', 'work', '6 min', 'Edit · site.webmanifest', { agents: 2 })}
   ${agentRow5('working', 'Kalender Wochenansicht', 'kramlos', 'own', '12 min', 'Read · CalendarWeek.vue', { on: opts.sel === 'cal' })}
   ${agentRow5('waiting', 'Homeserver Deploy', 'homeserver', 'work', '3 min', 'wartet auf Shell', { shells: 1 })}
-  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig heute</span><span class="count">2</span><span class="newc">2 neu</span><span class="grow"></span><span class="link">${ic('list-x', 12, C.ink3)}Alle entfernen</span></div>
+  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig</span><span class="count">2</span><span class="newc">2 neu</span><span class="grow"></span><span class="link">${ic('list-x', 12, C.ink3)}Alle entfernen</span></div>
   ${agentRow5('done', 'Blender Reel Shots', 'reels', 'own', 'gerade', '', { finish: 1 })}
   ${agentRow5('done', 'Quota-Header fixen', 'agentdashboard', 'work', 'vor 9 min', '', { finish: 2 })}
   <div class="grow"></div>
@@ -979,7 +979,7 @@ const mobileList = phone(
   <div class="mtop"><span class="brandrow">${bull(20)}<span class="wordmark" style="font-size:17px">Bull</span></span><span class="grow"></span>${iconBtn('search')}${iconBtn('plus')}</div>
   <div class="mstream"><div class="seg full"><span class="on">Dieser PC</span><span>nexron-server</span></div>
   ${agentRow('approval', 'Bull-Brand: Figma-Design', 'nexron-chat', 'work', '24 min', 'Bash · git push', true)}${agentRow('working', 'PWA installierbar', 'nexron-chat', 'work', '6 min', 'Edit · site.webmanifest')}${agentRow('working', 'Kalender Wochenansicht', 'kramlos', 'own', '12 min', 'Read · CalendarWeek.vue')}
-  <div class="sect">Fertig heute</div>${agentRow('done', 'Quota-Header fixen', 'agentdashboard', 'work', '18 min')}${agentRow('done', 'Blender Reel Shots', 'reels', 'own', '41 min')}</div>`,
+  <div class="sect">Fertig</div>${agentRow('done', 'Quota-Header fixen', 'agentdashboard', 'work', '18 min')}${agentRow('done', 'Blender Reel Shots', 'reels', 'own', '41 min')}</div>`,
   `<div class="mnav">${[
     ['messages-square', 'Chats', true],
     ['layout-dashboard', 'Übersicht'],
@@ -1093,7 +1093,7 @@ const mSessions = mScreen(
   <div class="grp">${ic('loader-circle', 13, C.warn)}<span>Läuft</span><span class="count">2</span></div>
   ${agentRow('working', 'PWA installierbar', 'nexron-chat', 'work', '6 min', 'Edit · site.webmanifest')}
   ${agentRow('working', 'Kalender Wochenansicht', 'kramlos', 'own', '12 min', 'Read · CalendarWeek.vue')}
-  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig heute</span><span class="count">3</span></div>
+  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig</span><span class="count">3</span></div>
   ${agentRow('done', 'Quota-Header fixen', 'agentdashboard', 'work', '18 min')}
   ${agentRow('done', 'Blender Reel Shots', 'reels', 'own', '41 min')}
   <span class="link" style="padding:2px 10px">${ic('chevron-down', 12, C.ink3)}Alle anzeigen (1)</span>`,
@@ -1808,7 +1808,7 @@ const activityBoard = frame(
       ${agentRow5('working', 'PWA installierbar', 'nexron-chat', 'work', '6 min', 'Edit · site.webmanifest', { agents: 2 })}
       ${agentRow5('waiting', 'Homeserver Deploy', 'homeserver', 'work', '3 min', 'wartet auf Shell', { shells: 1 })}
       <div class="tipbox"><b>PWA installierbar</b><span>2 Subagents laufen: Explore · Manifest-Felder, general-purpose · Icons</span></div>
-      <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig heute</span><span class="count">3</span><span class="newc">2 neu</span></div>
+      <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig</span><span class="count">3</span><span class="newc">2 neu</span></div>
       ${agentRow5('done', 'Blender Reel Shots', 'reels', 'own', 'gerade', '', { finish: 1 })}
       ${agentRow5('done', 'Quota-Header fixen', 'agentdashboard', 'work', 'vor 9 min', '', { finish: 2 })}
       ${agentRow5('done', 'README-Banner', 'nexron-chat', 'work', 'vor 1 h', '', { seen: true })}
@@ -1888,7 +1888,7 @@ const mSessions5 = mScreen(
   <div class="grp">${ic('loader-circle', 13, C.warn)}<span>Läuft</span><span class="count">2</span></div>
   ${agentRow5('working', 'PWA installierbar', 'nexron-chat', 'work', '6 min', 'Edit · site.webmanifest', { agents: 2 })}
   ${agentRow5('waiting', 'Homeserver Deploy', 'homeserver', 'work', '3 min', 'wartet auf Shell', { shells: 1 })}
-  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig heute</span><span class="count">3</span><span class="newc">2 neu</span></div>
+  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig</span><span class="count">3</span><span class="newc">2 neu</span></div>
   ${agentRow5('done', 'Blender Reel Shots', 'reels', 'own', 'gerade', '', { finish: 1 })}
   ${agentRow5('done', 'Quota-Header fixen', 'agentdashboard', 'work', 'vor 9 min', '', { finish: 2 })}
   ${agentRow5('done', 'README-Banner', 'nexron-chat', 'work', 'vor 1 h', '', { seen: true })}`,
@@ -2714,10 +2714,10 @@ const queuedSidebar = (html) =>
       '<span>Läuft</span><span class="count">1</span>'
     )
     .replace(
-      `<div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig heute</span>`,
+      `<div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig</span>`,
       `<div class="grp">${ic('timer', 13, C.read)}<span>Wartet auf Limit</span><span class="count">1</span></div>
   ${agentRow5('queued', 'Kalender Wochenansicht', 'kramlos', 'own', '03:25', 'sendet beim Reset · 1 Nachricht', { on: true })}
-  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig heute</span>`
+  <div class="grp">${ic('circle-check', 13, C.good)}<span>Fertig</span>`
     )
     .replace(
       `<span class="tab on">${statusIcon('working', 14)}<span>Kalender</span>`,
@@ -3635,7 +3635,7 @@ const btn9 = (P, label, icon) =>
 const TEXT_9 = {
   warning: () => 'build.mjs hatte einen Konflikt. Ich habe die Fassung aus main behalten.',
   preview: (P) =>
-    `${link9(P, 'localhost:1460/overview')} · Die zwei Design-Sessions sind aus „Fertig heute“ verschwunden.`,
+    `${link9(P, 'localhost:1460/overview')} · Die zwei Design-Sessions sind aus „Fertig“ verschwunden.`,
   todo: (P) =>
     `<ul style="padding-left:18px;display:flex;flex-direction:column;gap:2px"><li>${link9(P, 'Figma')} zeigt noch Fassung 7.</li><li>agentd auf nexron-server nicht neu verteilt.</li></ul>`,
   tip: () => 'Soll ich preview jetzt neu bauen? Dauert etwa eine Minute.',

@@ -134,8 +134,9 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) titles: TitleStore,
     /// Tabs with a title call running, each with the newest message sent meanwhile.
     title_waiting: Mutex<HashMap<String, Option<TitleRequest>>>,
-    /// Tabs whose worktree is being made before their Claude starts, see `worktree_flow`.
-    creating_worktrees: Mutex<HashSet<String>>,
+    /// Tabs whose worktree is being made before their Claude starts, each with whether a stop
+    /// came meanwhile; see `worktree_flow`.
+    creating_worktrees: Mutex<HashMap<String, bool>>,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -154,7 +155,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             carried: Mutex::new(HashMap::new()),
             titles: TitleStore::load(home().as_deref()),
             title_waiting: Mutex::new(HashMap::new()),
-            creating_worktrees: Mutex::new(HashSet::new()),
+            creating_worktrees: Mutex::new(HashMap::new()),
         });
         daemon.start_limit_clock();
         daemon
@@ -268,7 +269,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 self.answer_later(move || {
                     let checkout = git::checkout_of(&cwd);
                     let worktree_root = checkout.as_ref().and_then(|c| c.worktree_root.as_ref()).map(|top| top.to_string_lossy().into_owned());
-                    Event::Branch { id, branch: checkout.and_then(|c| c.branch), worktree_root }
+                    let is_submodule = checkout.as_ref().is_some_and(|c| c.is_submodule);
+                    Event::Branch { id, branch: checkout.and_then(|c| c.branch), worktree_root, is_submodule }
                 });
                 Ok(())
             }
@@ -320,8 +322,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 self.merge_into_preview(id, worktree);
                 Ok(())
             }
-            Request::RemoveWorktree { worktree } => {
-                self.remove_worktree(id, worktree);
+            Request::RemoveWorktree { worktree, dry_run } => {
+                self.remove_worktree(id, worktree, dry_run);
                 Ok(())
             }
         };
@@ -671,7 +673,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.controls.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    pub(crate) fn creating_worktrees(&self) -> MutexGuard<'_, HashSet<String>> {
+    pub(crate) fn creating_worktrees(&self) -> MutexGuard<'_, HashMap<String, bool>> {
         self.creating_worktrees.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 

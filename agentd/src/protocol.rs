@@ -104,8 +104,13 @@ pub enum Request {
     Background { tab: String, tool_use_id: Option<String> },
     /// Merges the worktree's branch into `preview` in the main checkout.
     MergeIntoPreview { worktree: String },
-    /// Removes the worktree and its branch; refuses while anything in it could be lost.
-    RemoveWorktree { worktree: String },
+    /// Removes the worktree and its branch; refuses while anything in it could be lost. With
+    /// `dry_run` it only says whether it would (`removable`), whether or not a chat runs there.
+    RemoveWorktree {
+        worktree: String,
+        #[serde(default)]
+        dry_run: bool,
+    },
     /// A file's changes in the working tree against `HEAD`; `path` may be relative to `cwd`.
     FileDiff { cwd: String, path: String },
 }
@@ -329,8 +334,8 @@ pub enum Event {
     Usage { id: Option<u64>, days: u32, rows: Vec<UsageRow>, tools: Vec<ToolRow>, sessions: Vec<SessionRow> },
     /// `None` outside a repository; a short commit id when `HEAD` is detached.
     /// `worktree_root`: the top folder of the linked git worktree the folder is in (the one a removal
-    /// deletes); `null` in a main checkout.
-    Branch { id: Option<u64>, branch: Option<String>, worktree_root: Option<String> },
+    /// deletes); `null` in a main checkout. `is_submodule`: neither, it can have no chat worktree.
+    Branch { id: Option<u64>, branch: Option<String>, worktree_root: Option<String>, is_submodule: bool },
     PreviewMerged {
         id: Option<u64>,
         #[serde(flatten)]

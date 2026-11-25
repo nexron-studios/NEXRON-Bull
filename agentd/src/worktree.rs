@@ -9,6 +9,7 @@ mod naming;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::Serialize;
 
@@ -26,6 +27,10 @@ const REMOTE_INTEGRATION: [&str; 3] = ["origin/dev", "origin/main", "origin/mast
 const LOCAL_INTEGRATION: [&str; 3] = ["dev", "main", "master"];
 /// Git config key on a chat branch naming the tab it was made for, so a retry finds it again.
 const TAB_KEY: &str = "bulltab";
+
+/// Picking a free name and taking it is one step: two chats with the same topic started at once
+/// would both pick `feat/x`, and the second `worktree add` would fail.
+static NAMING: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorktreeError {
@@ -92,6 +97,8 @@ pub enum MergeOutcome {
     /// Nothing merged: `preview` is missing, and the main checkout has uncommitted changes to
     /// switch away from.
     MainDirty,
+    /// Nothing merged: a merge someone else started is still open in the main checkout.
+    MainMerging,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -108,6 +115,8 @@ pub struct PreviewMerge {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RemoveOutcome {
     Removed { branch: String },
+    /// A dry run: the removal would go through.
+    Removable { branch: String },
     /// Nothing was removed: these files are changed or new.
     Uncommitted { files: Vec<String> },
     /// Nothing was removed: the branch has work the integration branch does not have yet.
@@ -136,12 +145,18 @@ pub fn create(cwd: &Path, hint: &str, root: Option<&str>, tab: &str) -> Result<P
     fetch(&main);
     let base = integration_of(&main)?;
     let repo = main.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    let _naming = NAMING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let (branch, top) = naming::free_name(&main, &root, &repo, &slug_of(hint))?;
     fs::create_dir_all(&root)?;
     let top_text = top.to_string_lossy().into_owned();
     // No upstream: a `git push` from the chat must never land on the integration branch.
     git(&main, &["worktree", "add", "--no-track", "-b", &branch, &top_text, &base])?;
-    git(&main, &["config", &format!("branch.{branch}.{TAB_KEY}"), tab])?;
+    // Untagged, a retry for the tab would not find it and make `feat/x-2` beside it.
+    if let Err(err) = git(&main, &["config", &format!("branch.{branch}.{TAB_KEY}"), tab]) {
+        let _ = git(&main, &["worktree", "remove", "--force", &top_text]);
+        let _ = git(&main, &["branch", "-D", &branch]);
+        return Err(err);
+    }
     Ok(chat_folder_of(top, &prefix))
 }
 
@@ -177,6 +192,10 @@ fn made_for(main: &Path, tab: &str) -> Option<PathBuf> {
 pub fn merge_into_preview(worktree: &str) -> Result<PreviewMerge, WorktreeError> {
     let (worktree, main, branch) = linked_worktree(worktree)?;
     let has_uncommitted = !changed_files(&worktree)?.is_empty();
+    // Its conflicts would read as ours, and the abort below would throw that merge away.
+    if exists(&main, "MERGE_HEAD") {
+        return Ok(PreviewMerge { branch, outcome: MergeOutcome::MainMerging, created_preview: false, has_uncommitted });
+    }
     let created_preview = match ensure_preview(&main)? {
         Ok(created) => created,
         Err(outcome) => return Ok(PreviewMerge { branch, outcome, created_preview: false, has_uncommitted }),
@@ -219,15 +238,8 @@ pub fn remove(worktree: &str, is_in_use: impl Fn(&Path) -> bool) -> Result<Remov
     if is_in_use(&worktree) {
         return Ok(RemoveOutcome::InUse);
     }
-    let files = changed_files(&worktree)?;
-    if !files.is_empty() {
-        return Ok(RemoveOutcome::Uncommitted { files });
-    }
-    fetch(&main);
-    let integration = integration_of(&main)?;
-    let commits = count(&main, &format!("{integration}..{branch}"))?;
-    if commits > 0 && !is_content_merged(&main, &integration, &branch) {
-        return Ok(RemoveOutcome::Unmerged { commits, integration });
+    if let Some(refusal) = refusal_to_remove(&worktree, &main, &branch)? {
+        return Ok(refusal);
     }
     remove_junctions(&worktree)?;
     // Nothing in it can be lost any more. A file a process still holds makes git give up halfway
@@ -241,6 +253,29 @@ pub fn remove(worktree: &str, is_in_use: impl Fn(&Path) -> bool) -> Result<Remov
     git(&main, &["worktree", "prune"])?;
     git(&main, &["branch", "-D", &branch])?;
     Ok(RemoveOutcome::Removed { branch })
+}
+
+/// Whether `remove` would go through, without a chat's Claude counting: the app asks before it
+/// stops one for nothing.
+pub fn check_removal(worktree: &str) -> Result<RemoveOutcome, WorktreeError> {
+    let (worktree, main, branch) = linked_worktree(worktree)?;
+    Ok(refusal_to_remove(&worktree, &main, &branch)?.unwrap_or(RemoveOutcome::Removable { branch }))
+}
+
+/// Work the removal would lose: uncommitted files, or commits the integration branch lacks (a
+/// squash-merged branch counts as merged).
+fn refusal_to_remove(worktree: &Path, main: &Path, branch: &str) -> Result<Option<RemoveOutcome>, WorktreeError> {
+    let files = changed_files(worktree)?;
+    if !files.is_empty() {
+        return Ok(Some(RemoveOutcome::Uncommitted { files }));
+    }
+    fetch(main);
+    let integration = integration_of(main)?;
+    let commits = count(main, &format!("{integration}..{branch}"))?;
+    if commits > 0 && !is_content_merged(main, &integration, branch) {
+        return Ok(Some(RemoveOutcome::Unmerged { commits, integration }));
+    }
+    Ok(None)
 }
 
 /// `cwd` is the folder of a worktree or inside one; the same folder written either way.

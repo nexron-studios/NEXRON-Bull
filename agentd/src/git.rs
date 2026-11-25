@@ -54,8 +54,11 @@ const HEADS_PREFIX: &str = "refs/heads/";
 pub struct Checkout {
     /// `feat/chat-panel`, a short commit id when `HEAD` is detached, `None` when unreadable.
     pub branch: Option<String>,
-    /// `None` in a main checkout.
+    /// `None` in a main checkout or a submodule.
     pub worktree_root: Option<PathBuf>,
+    /// A submodule: its repository lives in the parent's `.git/modules`, so it has no main
+    /// checkout of its own to hold `preview` or worktrees.
+    pub is_submodule: bool,
 }
 
 /// `None` outside a repository.
@@ -72,7 +75,11 @@ pub fn checkout_of(cwd: &str) -> Option<Checkout> {
     // A linked worktree's `.git` file points into the main repository's `worktrees/`, a
     // submodule's into `modules/`.
     let is_linked = git.is_file() && git_dir.parent().and_then(Path::file_name).is_some_and(|name| name == "worktrees");
-    Some(Checkout { branch: head_of(&git_dir), worktree_root: is_linked.then(|| git.parent().map(Path::to_path_buf)).flatten() })
+    Some(Checkout {
+        branch: head_of(&git_dir),
+        worktree_root: is_linked.then(|| git.parent().map(Path::to_path_buf)).flatten(),
+        is_submodule: git.is_file() && !is_linked,
+    })
 }
 
 fn head_of(git_dir: &Path) -> Option<String> {
@@ -154,6 +161,20 @@ mod tests {
         fs::write(repo.join(".git/HEAD"), "d5454e3c9f1a2b3c4d5e6f708192a3b4c5d6e7f8\n").unwrap();
 
         assert_eq!(branch_of(&text(&repo)).as_deref(), Some("d5454e3"));
+    }
+
+    #[test]
+    fn tells_a_submodule_from_a_main_checkout_and_a_worktree() {
+        let base = temp_dir("submodule");
+        let modules = base.join("repo/.git/modules/lib");
+        fs::create_dir_all(&modules).unwrap();
+        fs::write(modules.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        let lib = base.join("repo/lib");
+        fs::create_dir_all(&lib).unwrap();
+        fs::write(lib.join(".git"), "gitdir: ../.git/modules/lib\n").unwrap();
+
+        let checkout = checkout_of(&text(&lib)).unwrap();
+        assert_eq!((checkout.is_submodule, checkout.worktree_root), (true, None));
     }
 
     #[test]

@@ -290,6 +290,89 @@ fn a_stop_while_the_worktree_is_made_starts_no_claude_and_takes_it_away() {
 }
 
 #[test]
+fn a_start_after_a_stop_takes_the_stop_back_and_makes_one_worktree() {
+    let (base, app) = repository("revived");
+    let mut agentd = Agentd::spawn();
+
+    writeln!(agentd.stdin, "{}", start_in_worktree("t1", &app, "Again", None)).unwrap();
+    writeln!(agentd.stdin, "{}", json!({ "op": "stop", "tab": "t1" })).unwrap();
+    writeln!(agentd.stdin, "{}", start_in_worktree("t1", &app, "Again", None)).unwrap();
+    let started = loop {
+        let event = agentd.events.recv_timeout(WAIT).expect("started before timeout");
+        assert_ne!(event["type"], "exited", "the second start must win over the stop");
+        if event["type"] == "started" && event["tab"] == "t1" {
+            break event;
+        }
+    };
+    assert_eq!(PathBuf::from(started["cwd"].as_str().unwrap()), base.join("worktrees").join("app-again"));
+    assert!(!base.join("worktrees").join("app-again-2").exists());
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
+fn a_stop_while_the_worktree_fails_still_ends_with_exited() {
+    let (_base, app) = repository("stopped-failing");
+    // No integration branch anywhere: the creation fails after a few git calls.
+    git(&app, &["branch", "-m", "main", "work"]);
+    git(&app, &["remote", "remove", "origin"]);
+    let mut agentd = Agentd::spawn();
+
+    writeln!(agentd.stdin, "{}", start_in_worktree("t1", &app, "Never", None)).unwrap();
+    writeln!(agentd.stdin, "{}", json!({ "op": "stop", "tab": "t1" })).unwrap();
+    let mut seen = Vec::new();
+    while !seen.contains(&"exited".to_string()) {
+        let event = agentd.events.recv_timeout(WAIT).expect("exited before timeout");
+        if event["tab"] == "t1" {
+            seen.push(event["type"].as_str().unwrap_or_default().to_string());
+        }
+    }
+    assert_eq!(seen, ["worktree_refused", "exited"]);
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
+fn a_merge_someone_left_open_in_the_main_checkout_is_left_alone() {
+    let (_base, app) = repository("open-merge");
+    let mut agentd = Agentd::spawn();
+    let worktree = create(&mut agentd, 1, &app, "Footer");
+    commit(&worktree, "footer.txt", "footer\n");
+    git(&app, &["switch", "--quiet", "-c", "side"]);
+    commit(&app, "side.txt", "side\n");
+    git(&app, &["switch", "--quiet", "main"]);
+    git(&app, &["merge", "--quiet", "--no-ff", "--no-commit", "side"]);
+
+    let merge = agentd.ask(2, json!({ "op": "merge_into_preview", "worktree": worktree }));
+    assert_eq!(merge["outcome"], json!({ "kind": "main_merging" }));
+    assert!(!git(&app, &["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]).is_empty());
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
+fn a_dry_run_says_whether_a_removal_would_go_through_while_the_chat_runs() {
+    let (_base, app) = repository("dry-run");
+    let mut agentd = Agentd::spawn();
+    let worktree = create(&mut agentd, 1, &app, "Sidebar");
+    agentd.ask(2, json!({ "op": "start", "tab": "t2", "cwd": worktree, "profile": null, "resume": null, "model": null, "permission_mode": null }));
+    let dry = |id: u64| json!({ "id": id, "op": "remove_worktree", "worktree": worktree, "dry_run": true });
+
+    std::fs::write(worktree.join("draft.txt"), "wip").unwrap();
+    assert_eq!(agentd.ask(3, dry(3))["outcome"], json!({ "kind": "uncommitted", "files": ["draft.txt"] }));
+    std::fs::remove_file(worktree.join("draft.txt")).unwrap();
+    assert_eq!(agentd.ask(4, dry(4))["outcome"], json!({ "kind": "removable", "branch": "feat/sidebar" }));
+    assert!(worktree.exists());
+    stop(&mut agentd, "t2");
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
 fn a_default_branch_with_another_name_is_the_integration_branch() {
     let (base, app) = repository("trunk");
     git(&app, &["push", "--quiet", "origin", "main:trunk"]);

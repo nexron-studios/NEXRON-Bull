@@ -91,6 +91,10 @@ describe('markdown', () => {
     ])
   })
 
+  it('should leave a link without an address without the button', () => {
+    expect(markdown.render('[leer]()')).not.toContain('data-preview')
+  })
+
   it('should leave links to other hosts without the button', () => {
     expect(markdown.render('[Doku](https://vuejs.org)')).toBe(
       '<p><a href="https://vuejs.org">Doku</a></p>\n'

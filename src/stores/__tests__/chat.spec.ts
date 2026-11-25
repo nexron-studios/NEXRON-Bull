@@ -7,29 +7,17 @@ import { AgentdDisconnectedError } from '@/api/services/agentd.service'
 import { newTab } from '@/utils/chatTab'
 import { useChatStore } from '../chat'
 
-const { ask, send, listeners, runtime, bridgeReady } = vi.hoisted(() => ({
+const { ask, send, listeners, runtime, ready } = vi.hoisted(() => ({
   ask: vi.fn(),
   send: vi.fn(() => Promise.resolve()),
   listeners: [] as ((event: AgentdEvent) => void)[],
   /** The app window by default; the browser tests switch it off. */
-  runtime: { isTauri: true },
-  bridgeReady: [] as ((machines: string[]) => void)[]
+  runtime: { isDesktopApp: true },
+  /** What the transport calls once the app may attach; the tests decide when. */
+  ready: [] as ((machines: (string | null)[]) => void)[]
 }))
 
-vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tauri-apps/api/core')>()),
-  isTauri: () => runtime.isTauri
-}))
-
-vi.mock('@/api/services/bridge.service', () => ({
-  bridgeService: {
-    state: { status: 'connecting', machines: [] },
-    onReady: (listener: (machines: string[]) => void) => {
-      bridgeReady.push(listener)
-      return () => {}
-    }
-  }
-}))
+vi.mock('@/lib/platform', () => ({ isDesktopApp: () => runtime.isDesktopApp }))
 
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
@@ -39,6 +27,10 @@ vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
     waitFor: vi.fn(),
     onEvent: (listener: (event: AgentdEvent) => void) => {
       listeners.push(listener)
+      return () => {}
+    },
+    onReady: (listener: (machines: (string | null)[]) => void) => {
+      ready.push(listener)
       return () => {}
     }
   }
@@ -146,7 +138,8 @@ describe('useChatStore: lost connection to this computer', () => {
     chat.tabs = [liveTab('local', null)]
 
     emit({ type: 'disconnected', machine: null, connection: 1 })
-    chat.reattachAll()
+    // The app window says once that it may attach; the newest store is this test's.
+    ready.at(-1)?.([])
     await vi.advanceTimersByTimeAsync(250)
 
     expect(ask).toHaveBeenCalledTimes(1)
@@ -539,11 +532,11 @@ describe('useChatStore: in a browser through the bridge', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     listeners.length = 0
-    bridgeReady.length = 0
+    ready.length = 0
     ask.mockReset()
     send.mockClear()
     localStorage.clear()
-    runtime.isTauri = false
+    runtime.isDesktopApp = false
     ask.mockImplementation(async (message: { op: string }, machine: string | null) => {
       if (message.op === 'tabs') return { type: 'tabs', id: 1, tabs: machine ? [] : [running] }
       return { type: 'history', id: 2, messages: [], has_more: false }
@@ -551,13 +544,12 @@ describe('useChatStore: in a browser through the bridge', () => {
   })
 
   afterEach(() => {
-    runtime.isTauri = true
+    runtime.isDesktopApp = true
   })
 
-  it('should wait for the bridge before it attaches anything', () => {
-    const chat = useChatStore()
-
-    chat.reattachAll()
+  it('should wait for the bridge before it attaches anything', async () => {
+    useChatStore()
+    await Promise.resolve()
 
     expect(ask).not.toHaveBeenCalled()
   })
@@ -565,7 +557,7 @@ describe('useChatStore: in a browser through the bridge', () => {
   it('should open and attach the tabs another app runs, on every machine the bridge reaches', async () => {
     const chat = useChatStore()
 
-    bridgeReady.forEach((ready) => ready(['main-pc']))
+    ready.forEach((attach) => attach([null, 'main-pc']))
     await vi.waitFor(() => expect(send).toHaveBeenCalled())
 
     expect(ask).toHaveBeenCalledWith({ op: 'tabs' }, null)
@@ -592,8 +584,8 @@ describe('useChatStore: in a browser through the bridge', () => {
   it('should ask once while an attach to the machine is still under way', async () => {
     useChatStore()
 
-    bridgeReady.forEach((ready) => ready([]))
-    bridgeReady.forEach((ready) => ready([]))
+    ready.forEach((attach) => attach([null]))
+    ready.forEach((attach) => attach([null]))
     await vi.waitFor(() => expect(send).toHaveBeenCalled())
 
     expect(ask.mock.calls.filter(([message]) => message.op === 'tabs')).toHaveLength(1)
@@ -610,7 +602,7 @@ describe('useChatStore: in a browser through the bridge', () => {
       if (!machine) isFirst = false
       return { type: 'tabs', id: 1, tabs }
     })
-    bridgeReady.forEach((ready) => ready(['main-pc']))
+    ready.forEach((attach) => attach([null, 'main-pc']))
     await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(2))
     // The attach marks the machines once their answers are in.
     await new Promise((resolve) => setTimeout(resolve))
@@ -642,12 +634,12 @@ describe('useChatStore: in a browser through the bridge', () => {
 
   it('should leave a tab closed here closed, and its Claude to the app that started it', async () => {
     const chat = useChatStore()
-    bridgeReady.forEach((ready) => ready([]))
+    ready.forEach((attach) => attach([null]))
     await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
     send.mockClear()
 
     chat.close('t9')
-    bridgeReady.forEach((ready) => ready([]))
+    ready.forEach((attach) => attach([null]))
     await vi.waitFor(() => expect(ask.mock.calls.filter(([m]) => m.op === 'tabs')).toHaveLength(2))
 
     expect([chat.tabs, send.mock.calls]).toEqual([[], []])

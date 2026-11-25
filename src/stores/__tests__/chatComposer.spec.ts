@@ -23,7 +23,8 @@ vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
     onEvent: (listener: (event: AgentdEvent) => void) => {
       listeners.push(listener)
       return () => {}
-    }
+    },
+    onReady: () => () => {}
   }
 }))
 

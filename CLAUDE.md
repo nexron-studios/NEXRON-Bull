@@ -31,11 +31,14 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
   (release) into `src-tauri/binaries/` as the sidecar (`bundle.externalBin`); tauri-build puts it next to the app exe.
 - `src/`: Vue frontend.
 - `bridge/`: the phone bridge (TypeScript on Node 22.6+, `node:test`, own `package.json`). A
-  browser has no Tauri: `src/api/services/agentd.service.ts` switches on `isTauri()` to a
-  WebSocket (`bridge.service.ts`) that carries the same lines and connection ids. The bridge
+  browser has no Tauri: `src/api/services/agentd.service.ts` picks its transport once
+  (`tauriTransport` or the WebSocket in `bridge.service.ts`, same lines and connection ids;
+  `bridge/src/protocol.ts` is shared as `@bridge/protocol`). What only the app window can do
+  asks `isDesktopApp()` in `src/lib/platform.ts`. The bridge
   checks `Origin` and a device token (first message), runs one `agentd connect` per device and
   machine and kills it when the socket goes. The browser asks `tabs` instead of `running` and
-  opens the tabs other apps started (`src/lib/runningTabs.ts`). Terminal, login and the machine
+  opens the tabs other apps started (`src/lib/runningTabs.ts`, attaching in
+  `src/stores/chatAttach.ts`). Terminal, login and the machine
   settings are desktop only (`offeredSettingsSectionsOf`, `terminal.desktop_only`).
 
 ## This machine and other machines

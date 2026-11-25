@@ -44,30 +44,26 @@ export interface PatchHunk {
   lines: string[]
 }
 
-/** How git sees a file in the working tree against `HEAD` (`agentd/src/file_diff.rs`). */
-export const fileStatusList = [
-  'modified',
-  'added',
-  'untracked',
-  'deleted',
-  'unchanged',
-  'ignored',
-  /** Neither on disk nor in `HEAD`: created and removed again */
-  'missing'
-] as const
-export type FileStatus = (typeof fileStatusList)[number]
+/** How git sees a changed file in the working tree against `HEAD` (`agentd/src/file_diff.rs`). */
+export const changedStatusList = ['modified', 'added', 'untracked', 'deleted'] as const
+export type ChangedStatus = (typeof changedStatusList)[number]
+/** A file with nothing to show against `HEAD`; `missing`: created and removed again */
+export const cleanStatusList = ['unchanged', 'ignored', 'missing'] as const
+export type CleanStatus = (typeof cleanStatusList)[number]
 
-export interface FileDiffProps {
-  status: FileStatus
-  hunks: PatchHunk[]
-  is_binary: boolean
-  /** Only the lines around each change came, the file was cut, or (no hunks) it was too big */
-  is_truncated: boolean
-}
-
-/** agentd's answer to `file_diff`: the diff, or why there is none */
-export type FileDiffAnswer =
-  | ({ state: 'diff' } & FileDiffProps)
+/** agentd's answer to `file_diff`, one variant per case: the diff, or why there is none */
+export type FileDiff =
+  | {
+      state: 'diff'
+      status: ChangedStatus
+      hunks: PatchHunk[]
+      /** Only the lines around each change came, or the lines were cut */
+      is_truncated: boolean
+    }
+  | { state: 'binary'; status: ChangedStatus }
+  /** Too big to send any lines */
+  | { state: 'too_big'; status: ChangedStatus }
+  | { state: 'clean'; status: CleanStatus }
   | { state: 'not_in_repository' }
   | { state: 'git_missing' }
   | { state: 'failed'; message: string }
@@ -286,7 +282,7 @@ export type AgentdEvent =
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
   | { type: 'branch'; id: number | null; branch: string | null }
   /** Without a diff, the review shows the chat's own edits and says why */
-  | { type: 'file_diff'; id: number | null; answer: FileDiffAnswer }
+  | { type: 'file_diff'; id: number | null; answer: FileDiff }
   /** Empty while the session has no transcript or never started a subagent */
   | { type: 'subagent_history'; id: number | null; agents: SubagentTranscript[] }
   /** Sent by the app, not agentd: the connection to a machine ended; `null` is this computer. */

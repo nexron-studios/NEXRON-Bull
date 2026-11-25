@@ -1,7 +1,7 @@
 import type { ChatMessage } from '@/types/agentd.type'
-import { countsOf, hunksOfChange, withoutNumbers, type DiffHunk } from '@/utils/diffRows'
+import { countsOf, withoutNumbers, type DiffHunk } from '@/utils/diffRows'
 import { timeOf } from '@/utils/tabInsights'
-import { diffOf } from '@/utils/toolInput'
+import { hunksOfTool } from '@/utils/toolInput'
 import { resultsByToolId } from '@/utils/toolPairs'
 
 /** A file Claude changed in this chat, with every change to it summed up. */
@@ -17,11 +17,6 @@ export interface ChangedFile {
   removed: number
   /** The card a click shows: the latest change's own, or the Agent call of the subagent that made it */
   cardId: string
-  /**
-   * Every change as recorded in the chat, oldest first: the review's fallback outside git. Only the
-   * latest keeps its line numbers; a later change may have moved the lines of an earlier one.
-   */
-  hunks: DiffHunk[]
 }
 
 /** Messages that change files, and where a click on such a change goes. */
@@ -63,10 +58,10 @@ const changesOf = ({ messages, cardId }: ChangeSource): FileChange[] => {
     message.blocks.flatMap((block): FileChange[] => {
       if (block.type !== 'tool_use') return []
       const path = block.input.file_path
-      const lines = diffOf(block.name, block.input)
       const result = results.get(block.id)
-      if (typeof path !== 'string' || !lines || !result || result.is_error) return []
-      const hunks = hunksOfChange(block.name, lines, result.patch)
+      if (typeof path !== 'string' || !result || result.is_error) return []
+      const hunks = hunksOfTool(block.name, block.input, result.patch)
+      if (!hunks) return []
       return [{ path, ...countsOf(hunks), cardId: cardId ?? block.id, at: timeOf(message), hunks }]
     })
   )
@@ -77,9 +72,12 @@ const changesOf = ({ messages, cardId }: ChangeSource): FileChange[] => {
  * Failed calls changed nothing and are left out, as are calls still waiting for their result.
  * The counts come from Claude Code's patch, else from the call's own input.
  */
+// Stable: changes without a time keep their place in the chat.
+const changesInOrderOf = (sources: ChangeSource[]): FileChange[] =>
+  sources.flatMap(changesOf).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+
 export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
-  // Stable: changes without a time keep their place in the chat.
-  const changes = sources.flatMap(changesOf).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+  const changes = changesInOrderOf(sources)
   const files = new Map<string, ChangedFile>()
   for (const change of changes) {
     const key = fileKeyOf(change.path)
@@ -92,9 +90,22 @@ export const changedFilesOf = (sources: ChangeSource[]): ChangedFile[] => {
       ...nameAndFolderOf(before?.path ?? change.path),
       added: (before?.added ?? 0) + change.added,
       removed: (before?.removed ?? 0) + change.removed,
-      cardId: change.cardId,
-      hunks: [...withoutNumbers(before?.hunks ?? []), ...change.hunks]
+      cardId: change.cardId
     })
   }
   return [...files.values()].reverse()
+}
+
+/**
+ * Every change to one file as recorded in the chat, oldest first: the review's fallback outside
+ * git. Only the latest keeps its line numbers; a later change may have moved an earlier one's.
+ */
+export const chatHunksOf = (sources: ChangeSource[], key: string): DiffHunk[] => {
+  const changes = changesInOrderOf(sources).filter((change) => fileKeyOf(change.path) === key)
+  const latest = changes.at(-1)
+  if (!latest) return []
+  return [
+    ...withoutNumbers(changes.slice(0, -1).flatMap((change) => change.hunks)),
+    ...latest.hunks
+  ]
 }

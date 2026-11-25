@@ -50,13 +50,21 @@ pub struct Hunk {
     pub lines: Vec<String>,
 }
 
+/// The app's answer, one variant per case it shows differently. Without a diff it falls back to
+/// the edits the chat recorded and says why.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct FileDiff {
-    pub status: FileStatus,
-    pub hunks: Vec<Hunk>,
-    pub is_binary: bool,
-    /// Only the lines around each change came, the file was cut, or (no hunks) it was too big.
-    pub is_truncated: bool,
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum FileDiff {
+    /// `is_truncated`: only the lines around each change came, or the lines were cut.
+    Diff { status: FileStatus, hunks: Vec<Hunk>, is_truncated: bool },
+    Binary { status: FileStatus },
+    /// Too big to send any lines.
+    TooBig { status: FileStatus },
+    /// No change against `HEAD` to show: unchanged, ignored or missing.
+    Clean { status: FileStatus },
+    NotInRepository,
+    GitMissing,
+    Failed { message: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -71,28 +79,21 @@ pub enum FileDiffError {
     Read(io::Error),
 }
 
-/// The app's answer: the diff, or which of the reasons it fell back to the chat's edits.
-#[derive(Debug, Serialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum FileDiffAnswer {
-    Diff(FileDiff),
-    NotInRepository,
-    GitMissing,
-    Failed { message: String },
-}
-
-impl From<Result<FileDiff, FileDiffError>> for FileDiffAnswer {
-    fn from(result: Result<FileDiff, FileDiffError>) -> Self {
-        match result {
-            Ok(diff) => Self::Diff(diff),
-            Err(FileDiffError::NotInRepository) => Self::NotInRepository,
-            Err(FileDiffError::Git(GitError::Missing)) => Self::GitMissing,
-            Err(err) => Self::Failed { message: err.to_string() },
+impl From<FileDiffError> for FileDiff {
+    fn from(err: FileDiffError) -> Self {
+        match err {
+            FileDiffError::NotInRepository => Self::NotInRepository,
+            FileDiffError::Git(GitError::Missing) => Self::GitMissing,
+            err => Self::Failed { message: err.to_string() },
         }
     }
 }
 
-pub fn file_diff(cwd: &str, path: &str) -> Result<FileDiff, FileDiffError> {
+pub fn file_diff(cwd: &str, path: &str) -> FileDiff {
+    read_diff(cwd, path).unwrap_or_else(FileDiff::from)
+}
+
+fn read_diff(cwd: &str, path: &str) -> Result<FileDiff, FileDiffError> {
     let cwd = native_path(cwd);
     // A relative folder would be looked up from agentd's own folder.
     if !cwd.is_absolute() {
@@ -104,12 +105,9 @@ pub fn file_diff(cwd: &str, path: &str) -> Result<FileDiff, FileDiffError> {
     // gone (then the nearest one that is left).
     let dir = file.ancestors().skip(1).find(|dir| dir.is_dir()).ok_or(FileDiffError::NotInRepository)?;
     let spec = pathspec_in(dir, &file);
-    ensure_repository(dir)?;
     let status = status_of(dir, &spec, &file)?;
     match status {
-        FileStatus::Unchanged | FileStatus::Ignored | FileStatus::Missing => {
-            Ok(FileDiff { status, hunks: Vec::new(), is_binary: false, is_truncated: false })
-        }
+        FileStatus::Unchanged | FileStatus::Ignored | FileStatus::Missing => Ok(FileDiff::Clean { status }),
         FileStatus::Untracked => untracked_diff(&file),
         FileStatus::Modified | FileStatus::Added | FileStatus::Deleted => tracked_diff(dir, &spec, &file, status),
     }
@@ -121,16 +119,13 @@ fn pathspec_in(dir: &Path, file: &Path) -> String {
     relative.components().map(|part| part.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
 }
 
-fn ensure_repository(dir: &Path) -> Result<(), FileDiffError> {
-    match run_git(dir, &["rev-parse", "--is-inside-work-tree"]) {
-        Ok(_) => Ok(()),
-        Err(GitError::Failed(message)) if message.contains(NOT_A_REPOSITORY) => Err(FileDiffError::NotInRepository),
-        Err(err) => Err(err.into()),
-    }
-}
-
+/// `run_git` reads git in English, so its "not a git repository" is the same on every machine.
 fn status_of(dir: &Path, spec: &str, file: &Path) -> Result<FileStatus, FileDiffError> {
-    let out = run_git(dir, &["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", "--", spec])?;
+    let out = match run_git(dir, &["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", "--", spec]) {
+        Ok(out) => out,
+        Err(GitError::Failed(message)) if message.contains(NOT_A_REPOSITORY) => return Err(FileDiffError::NotInRepository),
+        Err(err) => return Err(err.into()),
+    };
     let out = String::from_utf8_lossy(&out);
     Ok(status_from_code(out.get(..2), file.exists()))
 }
@@ -157,16 +152,18 @@ fn tracked_diff(dir: &Path, spec: &str, file: &Path, status: FileStatus) -> Resu
     let base = if run_git(dir, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok() { "HEAD" } else { EMPTY_TREE };
     let size = size_of(dir, spec, file, base);
     if size > MAX_FILE_BYTES {
-        return Ok(FileDiff { status, hunks: Vec::new(), is_binary: false, is_truncated: true });
+        return Ok(FileDiff::TooBig { status });
     }
     let is_short = size > MAX_DIFF_BYTES as u64;
     let context = if is_short { SHORT_CONTEXT } else { FULL_CONTEXT };
     let out = run_git(dir, &["diff", "--no-color", "--no-ext-diff", context, base, "--", spec])?;
     let text = String::from_utf8_lossy(&out);
-    let is_binary = text.lines().any(|line| line.starts_with("Binary files "));
+    if text.lines().any(|line| line.starts_with("Binary files ")) {
+        return Ok(FileDiff::Binary { status });
+    }
     let mut hunks = parse_hunks(&text);
     let is_cut = cut_to_limit(&mut hunks);
-    Ok(FileDiff { status, hunks, is_binary, is_truncated: is_short || is_cut })
+    Ok(FileDiff::Diff { status, hunks, is_truncated: is_short || is_cut })
 }
 
 /// The bigger of the file on disk and in the base; a deleted file is only in the base.
@@ -186,7 +183,7 @@ fn untracked_diff(file: &Path) -> Result<FileDiff, FileDiffError> {
     let mut bytes = Vec::new();
     handle.take(MAX_DIFF_BYTES as u64).read_to_end(&mut bytes).map_err(FileDiffError::Read)?;
     if bytes.contains(&0) {
-        return Ok(FileDiff { status: FileStatus::Untracked, hunks: Vec::new(), is_binary: true, is_truncated: false });
+        return Ok(FileDiff::Binary { status: FileStatus::Untracked });
     }
     let is_truncated = size > MAX_DIFF_BYTES as u64;
     if is_truncated {
@@ -196,12 +193,12 @@ fn untracked_diff(file: &Path) -> Result<FileDiff, FileDiffError> {
     let text = String::from_utf8_lossy(&bytes);
     let lines: Vec<String> = text.lines().map(|line| format!("+{line}")).collect();
     let hunks = if lines.is_empty() { Vec::new() } else { vec![Hunk { old_start: 0, new_start: 1, lines }] };
-    Ok(FileDiff { status: FileStatus::Untracked, hunks, is_binary: false, is_truncated })
+    Ok(FileDiff::Diff { status: FileStatus::Untracked, hunks, is_truncated })
 }
 
 /// The hunks of a unified diff; the file headers above the first `@@` and git's
 /// "\ No newline at end of file" notes are left out.
-pub fn parse_hunks(text: &str) -> Vec<Hunk> {
+fn parse_hunks(text: &str) -> Vec<Hunk> {
     let mut hunks: Vec<Hunk> = Vec::new();
     for line in text.lines() {
         if let Some(header) = line.strip_prefix(HUNK_HEADER) {
@@ -274,9 +271,12 @@ mod tests {
         fs::write(dir.join("new.txt"), "one\ntwo\n").unwrap();
         fs::write(dir.join("blob.bin"), [1u8, 0, 2]).unwrap();
 
-        let text = untracked_diff(&dir.join("new.txt")).unwrap();
-        assert_eq!(text.hunks, vec![Hunk { old_start: 0, new_start: 1, lines: vec!["+one".into(), "+two".into()] }]);
-        assert!(untracked_diff(&dir.join("blob.bin")).unwrap().is_binary);
+        let hunks = vec![Hunk { old_start: 0, new_start: 1, lines: vec!["+one".into(), "+two".into()] }];
+        assert_eq!(
+            untracked_diff(&dir.join("new.txt")).unwrap(),
+            FileDiff::Diff { status: FileStatus::Untracked, hunks, is_truncated: false }
+        );
+        assert_eq!(untracked_diff(&dir.join("blob.bin")).unwrap(), FileDiff::Binary { status: FileStatus::Untracked });
         assert!(matches!(untracked_diff(&dir.join("gone.txt")), Err(FileDiffError::Read(_))));
     }
 
@@ -286,9 +286,11 @@ mod tests {
         let line = format!("{}\n", "ä".repeat(99));
         fs::write(dir.join("big.txt"), line.repeat(MAX_DIFF_BYTES / line.len() + 10)).unwrap();
 
-        let diff = untracked_diff(&dir.join("big.txt")).unwrap();
-        assert!(diff.is_truncated);
-        assert_eq!(diff.hunks[0].lines.last(), Some(&format!("+{}", "ä".repeat(99))));
+        let FileDiff::Diff { hunks, is_truncated, .. } = untracked_diff(&dir.join("big.txt")).unwrap() else {
+            panic!("no diff")
+        };
+        assert!(is_truncated);
+        assert_eq!(hunks[0].lines.last(), Some(&format!("+{}", "ä".repeat(99))));
     }
 
     #[test]
@@ -340,11 +342,8 @@ mod tests {
     fn tells_a_relative_folder_from_one_outside_a_repository() {
         let dir = temp_folder("none");
         fs::write(dir.join("a.txt"), "a").unwrap();
-        assert!(matches!(file_diff("relative", "a.txt"), Err(FileDiffError::RelativeFolder)));
+        assert!(matches!(read_diff("relative", "a.txt"), Err(FileDiffError::RelativeFolder)));
         // Without git on the machine the answer is that git is missing; both mean "use the chat".
-        assert!(matches!(
-            file_diff(&dir.to_string_lossy(), "a.txt"),
-            Err(FileDiffError::NotInRepository | FileDiffError::Git(GitError::Missing))
-        ));
+        assert!(matches!(file_diff(&dir.to_string_lossy(), "a.txt"), FileDiff::NotInRepository | FileDiff::GitMissing));
     }
 }

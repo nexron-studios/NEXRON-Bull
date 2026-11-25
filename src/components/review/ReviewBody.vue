@@ -12,6 +12,7 @@ import { useIsPhone } from '@/composables/useViewport'
 import { useDiffReviewStore } from '@/stores/diffReview'
 import type { ChatTabState } from '@/utils/chatTab'
 import { messageOfComments } from '@/utils/diffReview'
+import { isTextField } from '@/utils/textField'
 
 // Inside the review: the chat's changed files beside the diff of the chosen one, stepped through
 // with J and K or the arrows in the header; below, the comments waiting to go into the composer.
@@ -27,36 +28,24 @@ const root = useTemplateRef<HTMLElement>('root')
 const { t } = useI18n()
 const store = useDiffReviewStore()
 const isPhone = useIsPhone()
-const { changedFiles } = useChangedFiles(() => tab)
+const { changedFiles, chatHunksOfFile } = useChangedFiles(() => tab)
 
 const current = computed(
   () => changedFiles.value.find((file) => file.key === store.fileKey) ?? changedFiles.value[0]
 )
 const position = computed(() => (current.value ? changedFiles.value.indexOf(current.value) : -1))
 const comments = computed(() => store.commentsOf(tab.id))
-const commentCounts = computed(() => {
-  const counts = new Map<string, number>()
-  for (const comment of comments.value)
-    counts.set(comment.fileKey, (counts.get(comment.fileKey) ?? 0) + 1)
-  return counts
-})
+const commentCounts = computed(() => store.countsByFile(tab.id))
 
+// Read by the pane only when the chat's edits stand in for git's diff.
+const currentChatHunks = () => (current.value ? chatHunksOfFile(current.value.key) : [])
 const step = async (delta: number) => {
   const next = changedFiles.value[position.value + delta]
   if (!next) return
-  // The pane with the focus goes: a step button hands it to its twin in the next pane,
-  // anything else to the review itself, where J and K go on working.
-  const focused = document.activeElement
-  const hadFocus = root.value?.contains(focused) ?? false
-  const stepKey = focused instanceof HTMLElement ? focused.dataset.reviewStep : undefined
-  store.fileKey = next.key
+  store.show(next.key)
+  // The diff with the focus goes, or the step button turns disabled at the end: J and K go on.
   await nextTick()
-  if (!hadFocus || root.value?.contains(document.activeElement)) return
-  const twin = stepKey
-    ? root.value?.querySelector<HTMLElement>(`[data-review-step="${stepKey}"]`)
-    : null
-  const target = twin && !twin.hasAttribute('disabled') ? twin : root.value
-  target?.focus()
+  if (!root.value?.contains(document.activeElement)) root.value?.focus()
 }
 const insert = () => {
   if (!comments.value.length) return
@@ -68,10 +57,8 @@ const insert = () => {
   emit('insert', text)
 }
 
-const isTyping = (target: EventTarget | null) =>
-  target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
 const handleKeydown = (event: KeyboardEvent) => {
-  if (isTyping(event.target) || event.ctrlKey || event.metaKey || event.altKey) return
+  if (isTextField(event.target) || event.ctrlKey || event.metaKey || event.altKey) return
   if (event.key === NEXT_KEY) void step(1)
   if (event.key === PREVIOUS_KEY) void step(-1)
 }
@@ -98,12 +85,12 @@ const handleKeydown = (event: KeyboardEvent) => {
         :files="changedFiles"
         :current-key="current.key"
         :comment-counts
-        @pick="store.fileKey = $event"
+        @pick="store.show"
       />
       <ReviewFilePane
-        :key="current.key"
         :tab
         :file="current"
+        :chat-hunks="currentChatHunks"
         @reveal="emit('reveal', current.cardId)"
       >
         <template v-if="changedFiles.length > 1" #actions>
@@ -113,7 +100,6 @@ const handleKeydown = (event: KeyboardEvent) => {
           <NchIconButton
             :label="t('review.previous', { key: PREVIOUS_KEY.toUpperCase() })"
             size="icon-sm"
-            data-review-step="previous"
             :disabled="position <= 0"
             @click="step(-1)"
           >
@@ -122,7 +108,6 @@ const handleKeydown = (event: KeyboardEvent) => {
           <NchIconButton
             :label="t('review.next', { key: NEXT_KEY.toUpperCase() })"
             size="icon-sm"
-            data-review-step="next"
             :disabled="position >= changedFiles.length - 1"
             @click="step(1)"
           >

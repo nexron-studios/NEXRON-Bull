@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   countsOf,
-  hunksOfChange,
   hunksOfPatch,
+  lineNumberOf,
   rowsOfHunks,
   shapeOf,
   withoutNumbers
@@ -18,37 +18,6 @@ describe('hunksOfPatch', () => {
           { sign: ' ', text: 'a' },
           { sign: '-', text: 'b' },
           { sign: '+', text: 'c' }
-        ]
-      }
-    ])
-  })
-})
-
-describe('hunksOfChange', () => {
-  const lines = [{ sign: '+' as const, text: 'a' }]
-
-  it('should number a Write without patch as the whole new file', () => {
-    expect(hunksOfChange('Write', lines, undefined)).toEqual([
-      { old_start: 0, new_start: 1, lines }
-    ])
-  })
-
-  it('should leave an Edit without patch unnumbered', () => {
-    expect(hunksOfChange('Edit', lines, undefined)).toEqual([
-      { old_start: null, new_start: null, lines }
-    ])
-  })
-
-  it('should prefer the patch Claude Code sent', () => {
-    const patch = [{ old_start: 3, new_start: 3, lines: ['-a', '+b'] }]
-
-    expect(hunksOfChange('Edit', [{ sign: '-', text: 'a' }], patch)).toEqual([
-      {
-        old_start: 3,
-        new_start: 3,
-        lines: [
-          { sign: '-', text: 'a' },
-          { sign: '+', text: 'b' }
         ]
       }
     ])
@@ -117,5 +86,13 @@ describe('shapeOf', () => {
     expect(shapeOf(read())).not.toBe(
       shapeOf(hunksOfPatch([{ old_start: 3, new_start: 3, lines: ['-a', '+b', '+c'] }]))
     )
+  })
+})
+
+describe('lineNumberOf', () => {
+  it('should number a removed line in the old file and the others in the new one', () => {
+    const rows = rowsOfHunks(hunksOfPatch([{ old_start: 4, new_start: 6, lines: ['-a', '+b'] }]))
+
+    expect(rows.map((row) => (row.kind === 'line' ? lineNumberOf(row) : null))).toEqual([4, 6])
   })
 })

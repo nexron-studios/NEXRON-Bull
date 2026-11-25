@@ -2,6 +2,14 @@ import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { rangeOf, type LineRange } from '@/utils/diffReview'
 
+/** Keys that move the cursor, by how far: one line, or to the first or last. */
+const STEPS: Record<string, number> = {
+  ArrowDown: 1,
+  ArrowUp: -1,
+  End: Infinity,
+  Home: -Infinity
+}
+
 /**
  * Choosing lines of a diff, one or a range, like rows in a file manager: a press starts at a line,
  * Shift or a drag extends from there, arrow keys move the cursor and Shift+arrows extend.
@@ -43,6 +51,18 @@ export const useLineSelection = (indices: MaybeRefOrGetter<number[]>) => {
     select(target, isExtending)
   }
 
+  /** Arrow keys, Home and End, with Shift to extend; `true` when the key was one of them. */
+  const handleKey = (event: KeyboardEvent): boolean => {
+    const step = STEPS[event.key]
+    if (step === undefined) return false
+    event.preventDefault()
+    move(step, event.shiftKey)
+    return true
+  }
+
+  const isChosen = (index: number) =>
+    range.value !== null && index >= range.value.start && index <= range.value.end
+
   // A drag also ends when the pointer is taken away or the window loses focus mid-drag.
   useEventListener(window, ['pointerup', 'pointercancel', 'blur'], () => (isDragging.value = false))
 
@@ -51,5 +71,5 @@ export const useLineSelection = (indices: MaybeRefOrGetter<number[]>) => {
     cursor.value = null
   }
 
-  return { range, cursor, press, sweep, move, clear }
+  return { range, cursor, press, sweep, move, handleKey, isChosen, clear }
 }

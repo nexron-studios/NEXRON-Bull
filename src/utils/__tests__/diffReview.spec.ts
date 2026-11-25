@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { FileDiffAnswer, FileDiffProps } from '@/types/agentd.type'
+import type { FileDiff } from '@/types/agentd.type'
 import {
   commentedIndicesOf,
   displayPathOf,
   foldRows,
   lineSpanOf,
   messageOfComments,
+  referenceOf,
   reviewOf,
   type ReviewComment
 } from '../diffReview'
@@ -140,73 +141,79 @@ describe('displayPathOf', () => {
 
 describe('reviewOf', () => {
   const chat = [{ old_start: 1, new_start: 1, lines: [{ sign: '+' as const, text: 'chat' }] }]
-  const diff = (status: FileDiffProps['status'], isBinary = false): { answer: FileDiffAnswer } => ({
-    answer: {
-      state: 'diff',
-      status,
-      hunks: [{ old_start: 1, new_start: 1, lines: ['+git'] }],
-      is_binary: isBinary,
-      is_truncated: false
-    }
-  })
+  const reply = (answer: FileDiff) => ({ answer })
 
   it('should take git for a changed file', () => {
-    expect(reviewOf(diff('modified'), false, () => chat)).toMatchObject({
-      source: 'git',
-      status: 'modified',
-      hunks: [{ old_start: 1, new_start: 1, lines: [{ sign: '+', text: 'git' }] }]
+    const answer = reply({
+      state: 'diff',
+      status: 'deleted',
+      hunks: [{ old_start: 1, new_start: 0, lines: ['-git'] }],
+      is_truncated: false
     })
-  })
 
-  it('should fall back to the chat outside a repository and for a committed file', () => {
-    expect(reviewOf({ answer: { state: 'not_in_repository' } }, false, () => chat)).toEqual({
-      source: 'no_repo',
-      status: null,
-      hunks: chat,
+    expect(reviewOf(answer, false, () => chat)).toEqual({
+      kind: 'git',
+      status: 'deleted',
+      hunks: [{ old_start: 1, new_start: 0, lines: [{ sign: '-', text: 'git' }] }],
       isTruncated: false
     })
-    expect(reviewOf(diff('unchanged'), false, () => chat).source).toBe('unchanged')
   })
 
-  it('should keep the git status of a deleted file', () => {
-    expect(reviewOf(diff('deleted'), false, () => chat).status).toBe('deleted')
+  it('should wait while agentd has not answered', () => {
+    expect(reviewOf(undefined, false, () => chat)).toEqual({ kind: 'loading' })
   })
 
-  it('should fall back to the chat when agentd failed', () => {
-    expect(reviewOf(undefined, true, () => chat).source).toBe('failed')
-    expect(reviewOf({ answer: { state: 'failed', message: 'x' } }, false, () => chat).source).toBe(
-      'failed'
-    )
+  it('should show no lines for a binary file', () => {
+    expect(reviewOf(reply({ state: 'binary', status: 'modified' }), false, () => chat)).toEqual({
+      kind: 'binary',
+      status: 'modified'
+    })
   })
 
-  it('should say why the chat stands in without git or without the file', () => {
-    expect(reviewOf({ answer: { state: 'git_missing' } }, false, () => chat).source).toBe('no_git')
-    expect(reviewOf(diff('missing'), false, () => chat)).toMatchObject({
-      source: 'missing',
+  it.each([
+    [reply({ state: 'not_in_repository' }), 'no_repo'],
+    [reply({ state: 'git_missing' }), 'no_git'],
+    [reply({ state: 'clean', status: 'unchanged' }), 'unchanged'],
+    [reply({ state: 'clean', status: 'missing' }), 'missing'],
+    [reply({ state: 'too_big', status: 'modified' }), 'too_big'],
+    [reply({ state: 'failed', message: 'x' }), 'failed']
+  ] as const)('should take the chat and say why for %j', (answer, reason) => {
+    expect(reviewOf(answer, false, () => chat)).toEqual({ kind: 'chat', reason, hunks: chat })
+  })
+
+  it('should take the chat when the request failed', () => {
+    expect(reviewOf(undefined, true, () => chat)).toEqual({
+      kind: 'chat',
+      reason: 'failed',
       hunks: chat
     })
   })
 
-  it('should take the chat for a file too big to send any lines', () => {
-    const tooBig = {
-      answer: {
-        state: 'diff' as const,
-        status: 'modified' as const,
-        hunks: [],
-        is_binary: false,
-        is_truncated: true
-      }
-    }
+  it('should not read the chat while git answers', () => {
+    const answer = reply({ state: 'binary', status: 'added' })
 
-    expect(reviewOf(tooBig, false, () => chat)).toMatchObject({ source: 'too_big', hunks: chat })
+    expect(
+      reviewOf(answer, false, () => {
+        throw new Error('read the chat')
+      })
+    ).toEqual({ kind: 'binary', status: 'added' })
+  })
+})
+
+describe('referenceOf', () => {
+  const lines = onlyLines([{ old_start: 40, new_start: 42, lines: [' a', '-b', '+c'] }])
+
+  it('should name the file and the lines of the new file', () => {
+    expect(referenceOf(lines, { start: 0, end: 2 }, 'src/a.ts')).toEqual({
+      reference: 'src/a.ts:42-43',
+      isOld: false
+    })
   })
 
-  it('should show no lines for a binary file', () => {
-    expect(reviewOf(diff('modified', true), false, () => chat)).toEqual({
-      source: 'binary',
-      status: 'modified',
-      hunks: [],
-      isTruncated: false
+  it('should mark a reference to removed lines only', () => {
+    expect(referenceOf(lines, { start: 1, end: 1 }, 'src/a.ts')).toEqual({
+      reference: 'src/a.ts:41',
+      isOld: true
     })
   })
 })

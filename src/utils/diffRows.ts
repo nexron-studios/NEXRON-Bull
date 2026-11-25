@@ -57,21 +57,6 @@ export const hunksOfPatch = (patch: PatchHunk[]): DiffHunk[] =>
     lines: lines.map((line) => ({ sign: signOf(line.charAt(0)), text: line.slice(1) }))
   }))
 
-/**
- * One Edit, MultiEdit or Write: Claude Code's patch when it sent one, else the call's own lines.
- * A Write without patch created the file, so its lines are the whole file from line 1.
- */
-export const hunksOfChange = (
-  tool: string,
-  lines: DiffLine[],
-  patch: PatchHunk[] | undefined
-): DiffHunk[] => {
-  if (patch?.length) return hunksOfPatch(patch)
-  if (!lines.length) return []
-  if (tool === 'Write') return [{ old_start: 0, new_start: 1, lines }]
-  return [{ old_start: null, new_start: null, lines }]
-}
-
 /** The same lines without numbers, for changes a later one may have moved. */
 export const withoutNumbers = (hunks: DiffHunk[]): DiffHunk[] =>
   hunks.map((hunk) => ({ ...hunk, old_start: null, new_start: null }))
@@ -103,6 +88,10 @@ export const rowsOfHunks = (hunks: DiffHunk[]): DiffRow[] => {
  */
 export const shapeOf = (hunks: DiffHunk[]): string =>
   hunks.map((hunk) => `${hunk.old_start},${hunk.new_start},${hunk.lines.length}`).join(';')
+
+/** The number a row shows: a removed line's in the old file, the others' in the new one. */
+export const lineNumberOf = (row: DiffLineRow): number | null =>
+  row.sign === '-' ? row.old : row.new
 
 /** Added and removed lines, for the `+3 −1` in a head. */
 export const countsOf = (hunks: DiffHunk[]): { added: number; removed: number } => {

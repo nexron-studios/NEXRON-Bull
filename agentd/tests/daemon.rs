@@ -474,7 +474,8 @@ fn diffs_changed_new_and_deleted_files_against_head() {
 
     // Brackets are part of the name, not a pattern that also matches `i.vue`.
     agentd.send(json!({ "id": 74, "op": "file_diff", "cwd": repo, "path": "pages/[id].vue" }));
-    assert_eq!(agentd.expect(|e| e["id"] == 74)["answer"]["status"], "unchanged");
+    let unchanged = agentd.expect(|e| e["id"] == 74);
+    assert_eq!((&unchanged["answer"]["state"], &unchanged["answer"]["status"]), (&json!("clean"), &json!("unchanged")));
 
     agentd.send(json!({ "id": 75, "op": "file_diff", "cwd": repo, "path": "never.txt" }));
     assert_eq!(agentd.expect(|e| e["id"] == 75)["answer"]["status"], "missing");

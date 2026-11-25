@@ -9,29 +9,27 @@ const FILE_DIFF_TIMEOUT_MS = 15 * 1000
 
 /**
  * The review's lines of one file: git's working tree against `HEAD` on the machine the chat runs
- * on, else the edits the chat recorded (`chatHunks`). Asked again on every opening, since Claude
- * or the user may have changed the file meanwhile. An agentd from before the op answers with an
+ * on, else the edits the chat recorded (`chatHunks`). Asked again whenever a file is shown, since
+ * Claude or the user may have changed the file meanwhile. An agentd from before the op answers with an
  * error, and the chat's edits stand in.
  */
 export const useFileDiff = (
-  target: MaybeRefOrGetter<{ machine: Machine; cwd: string; path: string } | null>,
+  target: MaybeRefOrGetter<{ machine: Machine; cwd: string; path: string }>,
   chatHunks: MaybeRefOrGetter<DiffHunk[]>
 ) => {
   const query = useQuery({
     queryKey: computed(() => {
-      const value = toValue(target)
-      return ['agentd', 'file_diff', value?.machine ?? null, value?.cwd, value?.path]
+      const { machine, cwd, path } = toValue(target)
+      return ['agentd', 'file_diff', machine, cwd, path]
     }),
     queryFn: async () => {
-      const value = toValue(target)
-      if (!value) throw new Error('file_diff without a file')
+      const { machine, cwd, path } = toValue(target)
       return agentdService.ask<'file_diff'>(
-        { op: 'file_diff', cwd: value.cwd, path: value.path },
-        value.machine,
+        { op: 'file_diff', cwd, path },
+        machine,
         FILE_DIFF_TIMEOUT_MS
       )
     },
-    enabled: computed(() => toValue(target) !== null),
     staleTime: 0,
     // Read once per opening: a refetch on focus would only reset what the user chose meanwhile.
     refetchOnWindowFocus: false,

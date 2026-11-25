@@ -1,4 +1,4 @@
-import type { FileDiffAnswer, FileDiffProps, FileStatus } from '@/types/agentd.type'
+import type { ChangedStatus, FileDiff } from '@/types/agentd.type'
 import { fileKeyOf } from '@/utils/changedFiles'
 import { hunksOfPatch, type DiffHunk, type DiffLineRow, type DiffRow } from '@/utils/diffRows'
 
@@ -88,6 +88,16 @@ export const lineSpanOf = (
   return old.length ? { span: spanOf(old), isOld: true } : null
 }
 
+/** `src/foo.ts:42-45` for the chosen lines; `isOld` when only removed lines were chosen. */
+export const referenceOf = (
+  lines: DiffLineRow[],
+  range: LineRange,
+  path: string
+): { reference: string; isOld: boolean } | null => {
+  const span = lineSpanOf(lines, range)
+  return span ? { reference: `${path}:${span.span}`, isOld: span.isOld } : null
+}
+
 /** Where a file sits for the user: relative to the chat's folder, else its full path. */
 export const displayPathOf = (path: string, cwd: string): string => {
   const slashed = path.replaceAll('\\', '/')
@@ -129,11 +139,8 @@ export const messageOfComments = (comments: ReviewComment[], fileOrder: string[]
     .join('\n')
 }
 
-/** Where the review's lines come from and why, so the header can say so. */
-export const reviewSourceList = [
-  'git',
-  'binary',
-  'loading',
+/** Why the review shows the chat's own edits instead of git's diff */
+export const chatReasonList = [
   'no_repo',
   'no_git',
   'unchanged',
@@ -142,65 +149,46 @@ export const reviewSourceList = [
   'too_big',
   'failed'
 ] as const
-export type ReviewSource = (typeof reviewSourceList)[number]
+export type ChatReason = (typeof chatReasonList)[number]
 
-export interface Review {
-  source: ReviewSource
-  /** Git's view of the file; `null` when the lines come from the chat */
-  status: FileStatus | null
-  hunks: DiffHunk[]
-  isTruncated: boolean
-}
+export type Review =
+  | { kind: 'loading' }
+  | { kind: 'git'; status: ChangedStatus; hunks: DiffHunk[]; isTruncated: boolean }
+  | { kind: 'binary'; status: ChangedStatus }
+  | { kind: 'chat'; reason: ChatReason; hunks: DiffHunk[] }
 
 /** The chat's edits, read only when they stand in: a new chat message then changes nothing. */
 type ChatHunks = () => DiffHunk[]
 
-const fromChat = (source: ReviewSource, chatHunks: ChatHunks): Review => ({
-  source,
-  status: null,
-  hunks: chatHunks(),
-  isTruncated: false
+const fromChat = (reason: ChatReason, chatHunks: ChatHunks): Review => ({
+  kind: 'chat',
+  reason,
+  hunks: chatHunks()
 })
-
-const reviewOfDiff = (diff: FileDiffProps, chatHunks: ChatHunks): Review => {
-  if (diff.is_binary)
-    return { source: 'binary', status: diff.status, hunks: [], isTruncated: false }
-  switch (diff.status) {
-    case 'unchanged':
-    case 'ignored':
-    case 'missing':
-      return fromChat(diff.status, chatHunks)
-    case 'modified':
-    case 'added':
-    case 'untracked':
-    case 'deleted':
-      // Too big for agentd to send any lines: the chat's edits say more than an empty diff.
-      if (diff.is_truncated && !diff.hunks.length) return fromChat('too_big', chatHunks)
-      return {
-        source: 'git',
-        status: diff.status,
-        hunks: hunksOfPatch(diff.hunks),
-        isTruncated: diff.is_truncated
-      }
-    default: {
-      const unhandled: never = diff.status
-      throw new Error(`Unhandled file status: ${unhandled}`)
-    }
-  }
-}
 
 /** Git's answer when it has one worth showing, else the chat's own edits. */
 export const reviewOf = (
-  reply: { answer: FileDiffAnswer } | undefined,
+  reply: { answer: FileDiff } | undefined,
   isError: boolean,
   chatHunks: ChatHunks
 ): Review => {
   if (isError) return fromChat('failed', chatHunks)
-  if (!reply) return fromChat('loading', chatHunks)
+  if (!reply) return { kind: 'loading' }
   const { answer } = reply
   switch (answer.state) {
     case 'diff':
-      return reviewOfDiff(answer, chatHunks)
+      return {
+        kind: 'git',
+        status: answer.status,
+        hunks: hunksOfPatch(answer.hunks),
+        isTruncated: answer.is_truncated
+      }
+    case 'binary':
+      return { kind: 'binary', status: answer.status }
+    case 'too_big':
+      return fromChat('too_big', chatHunks)
+    case 'clean':
+      return fromChat(answer.status, chatHunks)
     case 'not_in_repository':
       return fromChat('no_repo', chatHunks)
     case 'git_missing':
@@ -213,3 +201,7 @@ export const reviewOf = (
     }
   }
 }
+
+/** The lines a review shows; none while loading or for a binary file. */
+export const hunksOfReview = (review: Review): DiffHunk[] =>
+  review.kind === 'git' || review.kind === 'chat' ? review.hunks : []

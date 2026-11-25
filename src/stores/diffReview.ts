@@ -23,7 +23,22 @@ export const useDiffReviewStore = defineStore('diffReview', () => {
     openTabId.value = null
   }
 
+  /** Another file in the open review */
+  const show = (key: string) => {
+    fileKey.value = key
+  }
+
   const commentsOf = (tabId: string): ReviewComment[] => comments.value[tabId] ?? []
+
+  const commentsOfFile = (tabId: string, key: string): ReviewComment[] =>
+    commentsOf(tabId).filter((comment) => comment.fileKey === key)
+
+  /** How many comments wait on each file */
+  const countsByFile = (tabId: string): Map<string, number> => {
+    const counts = new Map<string, number>()
+    for (const { fileKey: key } of commentsOf(tabId)) counts.set(key, (counts.get(key) ?? 0) + 1)
+    return counts
+  }
 
   const add = (tabId: string, comment: ReviewComment) => {
     comments.value = { ...comments.value, [tabId]: [...commentsOf(tabId), comment] }
@@ -41,5 +56,18 @@ export const useDiffReviewStore = defineStore('diffReview', () => {
     comments.value = rest
   }
 
-  return { openTabId, fileKey, comments, open, close, commentsOf, add, remove, clear }
+  return {
+    openTabId,
+    fileKey,
+    comments,
+    open,
+    close,
+    show,
+    commentsOf,
+    commentsOfFile,
+    countsByFile,
+    add,
+    remove,
+    clear
+  }
 })

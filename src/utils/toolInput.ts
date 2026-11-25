@@ -1,4 +1,5 @@
-import type { DiffLine } from '@/utils/diffRows'
+import type { PatchHunk } from '@/types/agentd.type'
+import { hunksOfPatch, type DiffHunk, type DiffLine } from '@/utils/diffRows'
 
 const linesOf = (value: unknown, sign: DiffLine['sign']): DiffLine[] =>
   typeof value === 'string' ? value.split('\n').map((text) => ({ sign, text })) : []
@@ -24,4 +25,22 @@ export const diffOf = (name: string, input: Record<string, unknown>): DiffLine[]
     default:
       return null
   }
+}
+
+/**
+ * One Edit, MultiEdit or Write as hunks: Claude Code's patch when it sent one, else the call's own
+ * lines without numbers. A Write without patch created the file, so its lines are the whole file
+ * from line 1. `null` for tools that change no file content.
+ */
+export const hunksOfTool = (
+  name: string,
+  input: Record<string, unknown>,
+  patch: PatchHunk[] | undefined
+): DiffHunk[] | null => {
+  const lines = diffOf(name, input)
+  if (!lines) return null
+  if (patch?.length) return hunksOfPatch(patch)
+  if (!lines.length) return []
+  if (name === 'Write') return [{ old_start: 0, new_start: 1, lines }]
+  return [{ old_start: null, new_start: null, lines }]
 }

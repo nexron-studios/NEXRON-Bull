@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Block, ChatMessage, PatchHunk } from '@/types/agentd.type'
-import { changedFilesOf, type ChangeSource } from '../changedFiles'
+import { changedFilesOf, chatHunksOf, type ChangeSource } from '../changedFiles'
 
 const message = (blocks: Block[], at: string | null = null): ChatMessage => ({
   uuid: 'm',
@@ -33,36 +33,6 @@ describe('changedFilesOf', () => {
     ])
 
     expect([file?.added, file?.removed]).toEqual([4, 2])
-  })
-
-  it('should keep every change as hunks for the review, oldest first', () => {
-    const patch = [{ old_start: 7, new_start: 7, lines: ['-a', '+b'] }]
-    const [file] = changedFilesOf([
-      chat([
-        message([edit('1', '/x/a.ts'), edit('2', '/x/a.ts')]),
-        message([result('1'), result('2', false, patch)])
-      ])
-    ])
-
-    expect(file?.hunks).toEqual([
-      {
-        old_start: null,
-        new_start: null,
-        lines: [
-          { sign: '-', text: 'a' },
-          { sign: '+', text: 'b' },
-          { sign: '+', text: 'c' }
-        ]
-      },
-      {
-        old_start: 7,
-        new_start: 7,
-        lines: [
-          { sign: '-', text: 'a' },
-          { sign: '+', text: 'b' }
-        ]
-      }
-    ])
   })
 
   it('should put the latest changed file first', () => {
@@ -124,6 +94,39 @@ describe('changedFilesOf', () => {
     expect(files.map(({ name, cardId }) => ({ name, cardId }))).toEqual([
       { name: 'b.ts', cardId: 'agent-call' },
       { name: 'a.ts', cardId: '1' }
+    ])
+  })
+})
+
+describe('chatHunksOf', () => {
+  it('should keep every change to the file, oldest first, numbers only on the latest', () => {
+    const first = [{ old_start: 2, new_start: 2, lines: ['-a', '+b', '+c'] }]
+    const latest = [{ old_start: 7, new_start: 7, lines: ['-a', '+b'] }]
+    const sources = [
+      chat([
+        message([edit('1', '/x/a.ts'), edit('2', '/x/a.ts'), edit('3', '/x/other.ts')]),
+        message([result('1', false, first), result('2', false, latest), result('3')])
+      ])
+    ]
+
+    expect(chatHunksOf(sources, '/x/a.ts')).toEqual([
+      {
+        old_start: null,
+        new_start: null,
+        lines: [
+          { sign: '-', text: 'a' },
+          { sign: '+', text: 'b' },
+          { sign: '+', text: 'c' }
+        ]
+      },
+      {
+        old_start: 7,
+        new_start: 7,
+        lines: [
+          { sign: '-', text: 'a' },
+          { sign: '+', text: 'b' }
+        ]
+      }
     ])
   })
 })

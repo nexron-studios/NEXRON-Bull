@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::catalog::{Profile, SessionSummary};
 use crate::chat::ChatMessage;
 use crate::commands::SlashCommand;
-use crate::file_diff::FileDiffAnswer;
+use crate::file_diff::FileDiff;
 use crate::profile_defaults::ProfileDefaults;
 use crate::quota::AccountQuota;
 use crate::rewind::RewindPoint;
@@ -282,5 +282,5 @@ pub enum Event {
     Configured { id: Option<u64>, tab: String },
     ProfileDefaults { id: Option<u64>, defaults: ProfileDefaults },
     /// The diff, or why there is none; the app then falls back to the chat's edits.
-    FileDiff { id: Option<u64>, answer: FileDiffAnswer },
+    FileDiff { id: Option<u64>, answer: FileDiff },
 }

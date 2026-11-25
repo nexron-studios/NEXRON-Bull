@@ -11,6 +11,7 @@ import {
   commentedIndicesOf,
   foldRows,
   isCommentable,
+  referenceOf,
   type LineRange,
   type ReviewComment,
   type ReviewRow
@@ -21,15 +22,18 @@ import { rowsOfHunks, shapeOf, type DiffHunk, type DiffLineRow } from '@/utils/d
 // with the pointer on the numbers or with the arrow keys, Enter writes a comment below it. Long
 // unchanged stretches are folded until opened; lines a comment names never are. An open comment
 // form stays until it is added or cancelled, whatever is chosen meanwhile.
-const { hunks, comments, label, referenceOf } = defineProps<{
+const { hunks, comments, label, path } = defineProps<{
   hunks: DiffHunk[]
   /** This file's pending comments, shown below the lines they name */
   comments: ReviewComment[]
   label: string
-  /** `src/foo.ts:42-45` for a range, `null` when its lines have no numbers */
-  referenceOf: (range: LineRange) => string | null
+  /** The file as comments name it, `src/foo.ts` */
+  path: string
 }>()
-const emit = defineEmits<{ comment: [range: LineRange, text: string]; remove: [id: string] }>()
+const emit = defineEmits<{
+  comment: [comment: { range: LineRange; reference: string; text: string }]
+  remove: [id: string]
+}>()
 
 const expanded = ref(new Set<number>())
 const box = useTemplateRef<HTMLElement>('box')
@@ -40,16 +44,15 @@ const baseId = useId()
 const hintId = useId()
 const { t } = useI18n()
 
-const allLines = computed(() => rowsOfHunks(hunks))
-const rows = computed(() => foldRows(allLines.value, expanded.value, commentedIndicesOf(comments)))
+const allRows = computed(() => rowsOfHunks(hunks))
+const lines = computed(() => allRows.value.filter((row): row is DiffLineRow => row.kind === 'line'))
+const rows = computed(() => foldRows(allRows.value, expanded.value, commentedIndicesOf(comments)))
 const choosable = computed(() =>
   rows.value.flatMap((row) => (row.kind === 'line' && isCommentable(row) ? [row.index] : []))
 )
 const selection = useLineSelection(choosable)
-const rangeReference = computed(() =>
-  selection.range.value ? referenceOf(selection.range.value) : null
-)
-const formReference = computed(() => (formRange.value ? referenceOf(formRange.value) : null))
+const rangeReference = computed(() => referenceTextOf(selection.range.value))
+const formReference = computed(() => referenceTextOf(formRange.value))
 const cursorId = computed(() =>
   selection.cursor.value === null ? undefined : `${baseId}-${selection.cursor.value}`
 )
@@ -57,9 +60,7 @@ const cursorId = computed(() =>
 const announcement = computed(() => {
   const reference = rangeReference.value
   if (!reference) return ''
-  const line = allLines.value.find(
-    (row): row is DiffLineRow => row.kind === 'line' && row.index === selection.cursor.value
-  )
+  const line = lines.value.find((row) => row.index === selection.cursor.value)
   return t('review.chosen', { reference, text: line?.text.trim() ?? '' })
 })
 const commentsByEnd = computed(() => {
@@ -78,9 +79,11 @@ const keyOf = (row: ReviewRow, at: number) => {
   if (row.kind === 'line') return row.index
   return row.kind === 'fold' ? `fold-${row.id}` : `gap-${at}`
 }
-const isChosen = (index: number) => {
-  const range = selection.range.value
-  return range !== null && index >= range.start && index <= range.end
+/** `src/foo.ts:42-45`, marked when only removed lines were chosen; `null` without numbers. */
+const referenceTextOf = (range: LineRange | null): string | null => {
+  const found = range ? referenceOf(lines.value, range, path) : null
+  if (!found) return null
+  return found.isOld ? t('review.old_reference', { reference: found.reference }) : found.reference
 }
 const press = (index: number, event: PointerEvent) => {
   selection.press(index, event)
@@ -102,8 +105,8 @@ const closeForm = () => {
   box.value?.focus({ preventScroll: true })
 }
 const addComment = (text: string) => {
-  if (!formRange.value) return
-  emit('comment', formRange.value, text)
+  if (!formRange.value || !formReference.value) return
+  emit('comment', { range: formRange.value, reference: formReference.value, text })
   closeForm()
   selection.clear()
 }
@@ -113,21 +116,9 @@ const expand = (id: number) => {
   box.value?.focus({ preventScroll: true })
 }
 
-const STEPS: Record<string, number> = {
-  ArrowDown: 1,
-  ArrowUp: -1,
-  End: Infinity,
-  Home: -Infinity
-}
 const handleKeydown = (event: KeyboardEvent) => {
   // Keys typed into the comment form are the form's own.
-  if (event.target !== event.currentTarget) return
-  const step = STEPS[event.key]
-  if (step !== undefined) {
-    event.preventDefault()
-    selection.move(step, event.shiftKey)
-    return
-  }
+  if (event.target !== event.currentTarget || selection.handleKey(event)) return
   if (event.key === 'Enter') {
     event.preventDefault()
     openForm()
@@ -190,7 +181,7 @@ watch(cursorId, async (id) => {
           <ReviewDiffLine
             :id="`${baseId}-${row.index}`"
             :line="row"
-            :is-chosen="isChosen(row.index)"
+            :is-chosen="selection.isChosen(row.index)"
             :is-cursor="selection.cursor.value === row.index"
             @press="press(row.index, $event)"
             @sweep="selection.sweep(row.index)"

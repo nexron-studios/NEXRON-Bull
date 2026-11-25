@@ -4,6 +4,7 @@
 //! the connection itself.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::IpAddr;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
@@ -243,12 +244,35 @@ pub fn test_machine(entry: MachineEntry) -> Result<Probe, machines::MachinesErro
     Ok(probe(&machines::validated(entry)?, true))
 }
 
+/// The host ssh connects to directly, from `ssh -G`. `None` behind a proxy (the host may not be
+/// reachable from here) or for a loopback `HostName` (a forwarded port into a VM or WSL): there
+/// `localhost` would show this machine's page under the other machine's name.
+fn direct_host_in(config: &str) -> Option<String> {
+    let value = |key: &str| config_value(config, key).filter(|value| value != "none");
+    if value("proxyjump").is_some() || value("proxycommand").is_some() {
+        return None;
+    }
+    value("hostname").filter(|host| !is_loopback_host(host))
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    match bare.parse::<IpAddr>() {
+        Ok(ip) => ip.is_loopback() || ip.is_unspecified(),
+        Err(_) => {
+            let name = bare.to_ascii_lowercase();
+            name == "localhost" || name.ends_with(".localhost")
+        }
+    }
+}
+
 /// The host ssh really connects to for a machine (`HostName`, the alias resolved), for the
-/// preview: a dev server's `localhost` there is that host from here. `None` when ssh cannot say.
+/// preview: a dev server's `localhost` there is that host from here. `None` when ssh cannot say
+/// or the machine is not directly reachable (`direct_host_in`).
 #[tauri::command(async)]
 pub fn machine_host_name(name: String) -> Result<Option<String>, machines::MachinesError> {
     let entry = machines::resolve(&name)?;
-    Ok(ssh_config_of(&entry).and_then(|config| config_value(&config, "hostname")))
+    Ok(ssh_config_of(&entry).and_then(|config| direct_host_in(&config)))
 }
 
 #[cfg(test)]
@@ -291,6 +315,33 @@ mod tests {
         assert_eq!(known_host_in("hostname box\nport 2222\n").as_deref(), Some("[box]:2222"));
         assert_eq!(known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(), Some("pc"));
         assert_eq!(known_host_in("hostname box\nhostkeyalias none\n").as_deref(), Some("box"));
+    }
+
+    #[test]
+    fn takes_a_direct_host_name() {
+        let config = "hostname devbox.example
+proxycommand none
+";
+        assert_eq!(direct_host_in(config).as_deref(), Some("devbox.example"));
+    }
+
+    #[test]
+    fn refuses_a_host_behind_a_proxy() {
+        assert_eq!(direct_host_in("hostname devbox.example
+proxyjump gate.example
+"), None);
+        assert_eq!(direct_host_in("hostname devbox.example
+proxycommand nc %h %p
+"), None);
+    }
+
+    #[test]
+    fn refuses_a_loopback_host_name() {
+        for host in ["localhost", "127.0.0.1", "127.0.1.1", "::1", "[::1]", "0.0.0.0", "vm.localhost"] {
+            assert_eq!(direct_host_in(&format!("hostname {host}
+port 2222
+")), None, "{host}");
+        }
     }
 
     #[test]

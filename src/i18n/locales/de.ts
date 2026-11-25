@@ -1256,8 +1256,9 @@ export default {
     empty_hint:
       'Nennt Claude eine localhost-Adresse, erscheint die Seite hier. Oder gib oben eine ein.',
     remote_hint: 'localhost ist hier {machine}. Bull lädt {src}.',
-    no_host_title: 'Adresse von {machine} unbekannt',
-    no_host_hint: 'ssh kann nicht sagen, wie der Rechner heißt. Öffne die Seite dort im Browser.',
+    no_host_title: '{machine} ist von hier nicht direkt erreichbar',
+    no_host_hint:
+      'ssh kennt keinen direkten Namen für den Rechner, etwa hinter einem Proxy oder einem weitergeleiteten Port. Öffne die Seite dort im Browser.',
     unreachable_title: 'Seite antwortet nicht',
     unreachable_hint:
       'Unter dieser Adresse läuft gerade nichts. Starte den Dev-Server und lade neu.',

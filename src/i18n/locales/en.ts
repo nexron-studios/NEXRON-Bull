@@ -476,7 +476,8 @@ export default {
     no_files: 'No file matches “{query}”.',
     folder_files: '{n} file | {n} files',
     queue_title: 'Waits for the end of the turn',
-    queue_send_now: 'Send message {n} now',
+    queue_into_turn_hint: 'Straight into the turn: {key}',
+    queue_send_now: 'Send message {n} into the turn now',
     queue_edit: 'Edit message {n}',
     queue_remove: 'Remove message {n}',
     queue_images: '{n} image | {n} images',
@@ -619,6 +620,10 @@ export default {
   },
   activity: {
     title: 'Activity',
+    bar_title: 'Still running in the background',
+    bar_agent_hint:
+      'Claude replies once the subagent is done | Claude replies once the subagents are done',
+    bar_more: '+{n} more',
     tool_count: '{n} tool | {n} tools',
     live: 'live',
     needs_you: 'needs you',

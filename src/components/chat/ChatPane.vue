@@ -10,6 +10,7 @@ import NchScrollEdge from '@/components/common/NchScrollEdge.vue'
 import { Button } from '@/components/ui/button'
 import ChatActivitySheet from '@/components/chat/ChatActivitySheet.vue'
 import ChatAutoCompactHint from '@/components/chat/ChatAutoCompactHint.vue'
+import ChatBackgroundBar from '@/components/chat/ChatBackgroundBar.vue'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatContextDialog from '@/components/chat/ChatContextDialog.vue'
 import ChatHistorySkeleton from '@/components/chat/ChatHistorySkeleton.vue'
@@ -49,6 +50,7 @@ import { latestAnswerOf } from '@/utils/answerCallouts'
 import type { ChatTabState } from '@/utils/chatTab'
 import { buildStream, firstTurnIndexOf } from '@/utils/chatStream'
 import type { PendingImage } from '@/utils/content'
+import type { Delivery } from '@/utils/pendingPrompts'
 import { resultsByToolId } from '@/utils/toolPairs'
 import { isAwaitingReply } from '@/utils/activity'
 import { approvalIdOf, useRevealTarget } from '@/composables/useChatReveal'
@@ -137,7 +139,8 @@ const plan = computed(() => planOf(tab.permission))
 // While tabs switch, the leaving pane is still mounted; only the active one answers keys.
 const isCurrent = computed(() => chat.activeId === tab.id)
 
-const send = (text: string, images: PendingImage[]) => chat.send(tab.id, text, images)
+const send = (text: string, images: PendingImage[], delivery: Delivery) =>
+  chat.send(tab.id, text, images, delivery)
 
 // A second Ctrl+F while open selects the term again, like a browser's find bar.
 const openSearch = () => (search.isOpen ? searchBox.value?.focus() : search.open())
@@ -192,7 +195,7 @@ provideMarkupTarget((result, handoff) => composer.value?.handOver(result, handof
 // The buttons of a callout in an answer: a question goes into the composer, a suggestion is sent.
 provideCalloutTarget({
   reply: (question) => composer.value?.quote(question),
-  send: (text) => send(text, []),
+  send: (text) => send(text, [], 'afterTurn'),
   isLatestAnswer: (messageId) => latestAnswerId.value === messageId
 })
 provideImageNameScope(() => ({ tabId: tab.id, machine: tab.machine, sessionId: tab.sessionId }))
@@ -403,6 +406,7 @@ const handlePreviewClick = (event: MouseEvent) => {
         @interrupt="chat.interrupt(tab.id)"
         @details="isActivityOpen = true"
       />
+      <ChatBackgroundBar v-else :tab-id="tab.id" />
       <ChatComposer
         ref="composer"
         :tab

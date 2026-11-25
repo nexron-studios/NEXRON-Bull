@@ -481,7 +481,8 @@ export default {
     no_files: 'Keine Datei passt zu „{query}“.',
     folder_files: '{n} Datei | {n} Dateien',
     queue_title: 'Wartet aufs Ende des Turns',
-    queue_send_now: 'Nachricht {n} jetzt einwerfen',
+    queue_into_turn_hint: 'Sofort in den Turn: {key}',
+    queue_send_now: 'Nachricht {n} sofort in den Turn schicken',
     queue_edit: 'Nachricht {n} bearbeiten',
     queue_remove: 'Nachricht {n} entfernen',
     queue_images: '{n} Bild | {n} Bilder',
@@ -634,6 +635,10 @@ export default {
   },
   activity: {
     title: 'Aktivität',
+    bar_title: 'Läuft noch im Hintergrund',
+    bar_agent_hint:
+      'Claude antwortet, sobald der Subagent fertig ist | Claude antwortet, sobald die Subagents fertig sind',
+    bar_more: '+{n} weitere',
     tool_count: '{n} Tool | {n} Tools',
     live: 'live',
     needs_you: 'braucht dich',

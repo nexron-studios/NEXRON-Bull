@@ -21,6 +21,7 @@ import { useTerminalStore } from '@/stores/terminals'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import { isEmptyChat } from '@/utils/sessionList'
 import type { ChatTabState } from '@/utils/chatTab'
+import { shownStatusOf } from '@/utils/shownStatus'
 import { targetOfTab } from '@/utils/sessionActions'
 import { nearestScrollOf } from '@/utils/nearestScroll'
 import { MOVE_CHORD, moveStepOf } from '@/utils/shortcuts'
@@ -161,7 +162,7 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
           @keydown="handleKeydown($event, tab.id)"
         >
           <ChatStatusIcon
-            :status="tab.status"
+            :status="shownStatusOf(tab)"
             :is-empty="isEmptyChat(tab)"
             :rank="finishRanks.get(tab.id) ?? null"
             :is-failed="tab.notice !== null"

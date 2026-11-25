@@ -97,14 +97,14 @@ describe('useChatStore: a message sent into the running turn', () => {
   it('should go to Claude with a uuid it can be withdrawn by', () => {
     const chat = workingTab()
 
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     expect([sentOps(), typeof stampOf()]).toEqual([['send'], 'string'])
   })
 
   it('should keep the tab running when the turn ends before Claude read it', () => {
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     emit(turnEnd())
 
@@ -119,7 +119,7 @@ describe('useChatStore: a message sent into the running turn', () => {
 
   it('should finish once the turn Claude started with it ends', () => {
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
     emit(turnEnd())
 
     vi.setSystemTime(9000)
@@ -133,7 +133,7 @@ describe('useChatStore: a message sent into the running turn', () => {
 
   it('should not wait for an echo past the next turn', () => {
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
     emit(turnEnd())
 
     emit(said('a2', 'Done.'))
@@ -149,7 +149,7 @@ describe('useChatStore: a message sent into the running turn', () => {
 
   it('should end the turn on a stop even with a message still unread', () => {
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     emit(turnEnd(true))
 
@@ -158,7 +158,7 @@ describe('useChatStore: a message sent into the running turn', () => {
 
   it('should wait with the planned account move until Claude read it', () => {
     const chat = workingTab({ moveAfterTurn: '/home/alex/.claude-gmail' })
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     emit(turnEnd())
     const before = sentOps()
@@ -176,7 +176,7 @@ describe('useChatStore: a message sent into the running turn', () => {
       response: { cancelled: true }
     })
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     await chat.interrupt('t1')
 
@@ -205,7 +205,7 @@ describe('useChatStore: a message sent into the running turn', () => {
       response: { cancelled: false }
     })
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     await chat.interrupt('t1')
 
@@ -215,7 +215,7 @@ describe('useChatStore: a message sent into the running turn', () => {
   it('should give the withdrawal only a short wait so a silent Claude cannot hold up the stop', async () => {
     ask.mockResolvedValue({ type: 'control_result', id: 1, tab: 't1', response: {} })
     const chat = workingTab()
-    chat.send('t1', 'use the blue one', [])
+    chat.send('t1', 'use the blue one', [], 'intoTurn')
 
     await chat.interrupt('t1')
 
@@ -234,7 +234,7 @@ describe('useChatStore: a message sent into the running turn', () => {
     })
     const chat = workingTab()
     await useShellRunsStore().start(chat.tabs[0], 'git status')
-    chat.send('t1', 'commit it', [])
+    chat.send('t1', 'commit it', [], 'intoTurn')
 
     emit(said('a1', 'Still on the tests.'))
     const before = chat.tabs[0].pending.length

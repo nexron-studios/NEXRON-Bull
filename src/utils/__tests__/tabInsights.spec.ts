@@ -247,15 +247,15 @@ describe('backgroundTasksOf', () => {
   it('should name the tasks that count as activity and leave out ambient ones', () => {
     expect(backgroundTasksOf(event)).toEqual({
       active: [
-        { id: 'blj8exi1k', description: 'Follow act video generation until done' },
-        { id: 'a3cb1f0c2392d1046', description: 'Check the release' }
+        { id: 'blj8exi1k', description: 'Follow act video generation until done', kind: 'shell' },
+        { id: 'a3cb1f0c2392d1046', description: 'Check the release', kind: 'agent' }
       ]
     })
   })
 
   it('should keep a task without a description with an empty name', () => {
     const bare = { ...event, tasks: [{ task_id: 'b1', task_type: 'local_bash' }] }
-    expect(backgroundTasksOf(bare)?.active).toEqual([{ id: 'b1', description: '' }])
+    expect(backgroundTasksOf(bare)?.active).toEqual([{ id: 'b1', description: '', kind: 'shell' }])
   })
 
   it('should ignore other system events', () => {
@@ -337,12 +337,14 @@ describe('subagentsOf', () => {
       message('u1', started, [result('toolu_4', 'Async agent launched. agentId: a7f')])
     ]
     const listed = subagentsOf(messages, [], true, {
-      active: [{ id: 'a7f', description: 'Explore' }],
-      at: 50
+      active: [{ id: 'a7f', description: 'Explore', kind: 'agent' }],
+      at: 50,
+      agentsSince: null
     })
     const gone = subagentsOf(messages, [], true, {
-      active: [{ id: 'b1', description: 'npm run dev' }],
-      at: 60
+      active: [{ id: 'b1', description: 'npm run dev', kind: 'shell' }],
+      at: 60,
+      agentsSince: null
     })
     expect([listed[0]?.status, gone[0]?.status, gone[0]?.finishedAt]).toEqual([
       'running',
@@ -374,7 +376,11 @@ describe('subagentsOf', () => {
     const firstEnd = { id: 'toolu_5', status: 'failed' as const, at: 10 }
 
     it('should run again under the SendMessage call though its first run failed', () => {
-      const [agent] = subagentsOf(messages, [firstEnd], true, { active: [], at: 10 })
+      const [agent] = subagentsOf(messages, [firstEnd], true, {
+        active: [],
+        at: 10,
+        agentsSince: null
+      })
       expect([agent?.status, agent?.runId, agent?.startedAt]).toEqual([
         'running',
         'toolu_send',

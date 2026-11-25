@@ -79,23 +79,59 @@ describe('useChatStore with the composer', () => {
     setActivePinia(createPinia())
   })
 
-  it('should send a message typed while Claude works into the running turn at once', () => {
+  it('should hold a message typed while Claude works', () => {
     const chat = openTab('working')
 
     chat.send('t1', 'and check light mode', [])
 
+    expect([sentContents(), heldTexts(), chat.tabs[0].pending]).toEqual([
+      [],
+      ['and check light mode'],
+      []
+    ])
+  })
+
+  it('should send a message held while Claude works once the turn ends', () => {
+    const chat = openTab('working')
+    chat.send('t1', 'and check light mode', [])
+
+    emit(turnEnd())
+
+    expect([sentContents(), heldTexts()]).toEqual([
+      [[{ type: 'text', text: 'and check light mode' }]],
+      []
+    ])
+  })
+
+  it('should send a message into the running turn at once when asked to', () => {
+    const chat = openTab('working')
+
+    chat.send('t1', 'and check light mode', [], 'intoTurn')
+
     const [pending] = chat.tabs[0].pending
     expect([
       sentContents(),
-      useHeldPromptsStore().heldOf('t1'),
+      heldTexts(),
       chat.tabs[0].status,
       chat.isSteering(pending.uuid)
     ]).toEqual([[[{ type: 'text', text: 'and check light mode' }]], [], 'working', true])
   })
 
+  it('should send a message at once when Claude is done', () => {
+    const chat = openTab('idle')
+
+    chat.send('t1', 'and check light mode', [])
+
+    expect([sentContents(), heldTexts(), chat.tabs[0].status]).toEqual([
+      [[{ type: 'text', text: 'and check light mode' }]],
+      [],
+      'working'
+    ])
+  })
+
   it('should stop saying Claude reads it at its next step once the echo came', () => {
     const chat = openTab('working')
-    chat.send('t1', 'and check light mode', [])
+    chat.send('t1', 'and check light mode', [], 'intoTurn')
     const [pending] = chat.tabs[0].pending
 
     emit({
@@ -110,6 +146,14 @@ describe('useChatStore with the composer', () => {
     })
 
     expect([chat.tabs[0].pending, chat.isSteering(pending.uuid)]).toEqual([[], false])
+  })
+
+  it('should hold a slash command sent into the running turn', () => {
+    const chat = openTab('working')
+
+    chat.send('t1', '/review', [], 'intoTurn')
+
+    expect([sentContents(), heldTexts()]).toEqual([[], ['/review']])
   })
 
   it('should hold a slash command typed while Claude works', () => {
@@ -129,7 +173,21 @@ describe('useChatStore with the composer', () => {
     expect([sentContents(), heldTexts()]).toEqual([[[{ type: 'text', text: '/review' }]], []])
   })
 
-  it('should send a held message into the running turn when asked to', () => {
+  it('should send a message held while Claude works into the running turn when asked to', () => {
+    const chat = openTab('working')
+    chat.send('t1', 'and check light mode', [])
+    const [held] = useHeldPromptsStore().heldOf('t1')
+
+    chat.sendHeldNow('t1', held.id)
+
+    expect([
+      sentContents(),
+      heldTexts(),
+      chat.tabs[0].pending.map((prompt) => chat.isSteering(prompt.uuid))
+    ]).toEqual([[[{ type: 'text', text: 'and check light mode' }]], [], [true]])
+  })
+
+  it('should send a message held during an approval into the running turn when asked to', () => {
     const chat = openTab('asking')
     chat.send('t1', 'and check light mode', [])
     const [held] = useHeldPromptsStore().heldOf('t1')

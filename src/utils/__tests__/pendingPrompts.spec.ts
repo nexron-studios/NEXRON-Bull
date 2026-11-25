@@ -145,12 +145,41 @@ describe('draftWithUnsent', () => {
 
 describe('isHeldWhile', () => {
   it.each([
-    ['a message while Claude works', 'working', 'and check light mode', false],
-    ['a message while Claude waits for an approval', 'asking', 'and check light mode', true],
-    ['a slash command while Claude works', 'working', '/review', true],
-    ['a slash command once Claude is done', 'idle', '/review', false],
-    ['a message once Claude is done', 'idle', 'and check light mode', false]
-  ] as const)('should decide for %s', (_, status, text, expected) => {
-    expect(isHeldWhile(status, text)).toBe(expected)
+    ['a message while Claude works', 'working', 'and check light mode', 'afterTurn', true],
+    [
+      'a message while Claude waits for an approval',
+      'asking',
+      'and check light mode',
+      'afterTurn',
+      true
+    ],
+    [
+      'a message sent into the turn while Claude works',
+      'working',
+      'and check light mode',
+      'intoTurn',
+      false
+    ],
+    [
+      'a message sent into the turn during an approval',
+      'asking',
+      'and check light mode',
+      'intoTurn',
+      false
+    ],
+    ['a slash command while Claude works', 'working', '/review', 'afterTurn', true],
+    ['a slash command sent into the turn', 'working', '/review', 'intoTurn', true],
+    ['a slash command once Claude is done', 'idle', '/review', 'afterTurn', false],
+    ['a message once Claude is done', 'idle', 'and check light mode', 'afterTurn', false],
+    [
+      'a message sent into the turn once Claude is done',
+      'idle',
+      'and check light mode',
+      'intoTurn',
+      false
+    ],
+    ['a message while Claude starts', 'starting', 'and check light mode', 'afterTurn', false]
+  ] as const)('should decide for %s', (_, status, text, delivery, expected) => {
+    expect(isHeldWhile(status, text, delivery)).toBe(expected)
   })
 })

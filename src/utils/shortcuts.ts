@@ -92,7 +92,10 @@ export const historyStepOf = (event: KeyInfo): 'undo' | 'redo' | null => {
   return null
 }
 
-/** Ctrl/Cmd+Enter sends where a plain Enter already means something else (a new line, a note). */
+/**
+ * Ctrl/Cmd+Enter sends where a plain Enter already means something else (a new line, a note), and
+ * in the composer sends into Claude's running turn where Enter would queue the message.
+ */
 export const SEND_CHORD: KeyChord = { modifier: 'command', keys: ['Enter'] }
 /** An IME still composing owns its Enter: it commits the word, nothing is sent. */
 export const isSendShortcut = (event: KeyInfo & Pick<KeyboardEvent, 'isComposing'>) =>

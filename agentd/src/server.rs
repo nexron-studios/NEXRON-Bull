@@ -53,7 +53,7 @@ impl Clients {
     }
 
     /// The request with a server id in place of the app's, which its answer gets back.
-    fn adopt(&self, client: u64, line: &str) -> String {
+    fn assign_id(&self, client: u64, line: &str) -> String {
         let Ok(mut request) = serde_json::from_str::<Value>(line) else { return line.to_string() };
         let Some(own) = request["id"].as_u64() else { return line.to_string() };
         let mut routes = self.lock();
@@ -88,6 +88,8 @@ struct Answer {
 
 impl Routes {
     fn route(&mut self, line: &[u8]) {
+        // Most lines are stream events without an id: reading only the id skips building a whole
+        // `Value` for each of them; the few answers are read in full below.
         let id = serde_json::from_slice::<Answer>(line).ok().and_then(|answer| answer.id);
         let Some(id) = id else { return self.broadcast(line) };
         let mut event: Value = match serde_json::from_slice(line) {
@@ -165,7 +167,7 @@ fn serve_client(daemon: &Arc<Daemon<Clients>>, clients: &Clients, id: u64, strea
     }
     clients.lock().streams.push((id, writer));
     for line in lines.map_while(Result::ok) {
-        daemon.request(&clients.adopt(id, &line));
+        daemon.request(&clients.assign_id(id, &line));
     }
     clients.leave(id);
 }
@@ -302,7 +304,7 @@ mod tests {
         let clients = Clients::default();
         let ((gone, _), (stays, mut stays_reader)) = (app(), app());
         clients.lock().streams.extend([(1, gone), (2, stays)]);
-        let asked: Value = serde_json::from_str(&clients.adopt(1, r#"{"id":1,"op":"quota"}"#)).unwrap();
+        let asked: Value = serde_json::from_str(&clients.assign_id(1, r#"{"id":1,"op":"quota"}"#)).unwrap();
 
         clients.leave(1);
         clients.clone().write_all(format!("{}\n", json_line(&asked["id"])).as_bytes()).unwrap();
@@ -314,7 +316,7 @@ mod tests {
     fn keeps_open_asks_bounded() {
         let clients = Clients::default();
         for own in 0..(MAX_OPEN_ASKS as u64 + 10) {
-            clients.adopt(1, &format!(r#"{{"id":{own},"op":"send"}}"#));
+            clients.assign_id(1, &format!(r#"{{"id":{own},"op":"send"}}"#));
         }
 
         assert_eq!(clients.lock().asked.len(), MAX_OPEN_ASKS);

@@ -120,5 +120,8 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
     stopFollow()
   })
 
-  return { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo }
+  /** A follow or glide is moving the list, not the reader. */
+  const isGliding = () => followFrame !== 0
+
+  return { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo, isGliding }
 }

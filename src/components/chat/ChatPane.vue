@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, shallowReactive, watch } from 'vue'
-import {
-  ArrowDown,
-  ChevronsUp,
-  FileWarning,
-  ImageDown,
-  Info,
-  RotateCcw,
-  TriangleAlert
-} from '@lucide/vue'
+import { ArrowDown, FileWarning, ImageDown, Info, RotateCcw, TriangleAlert } from '@lucide/vue'
 import { useEventListener, usePreferredReducedMotion } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import NchClawdEmpty from '@/components/common/NchClawdEmpty.vue'
@@ -23,6 +15,7 @@ import ChatContextDialog from '@/components/chat/ChatContextDialog.vue'
 import ChatHistorySkeleton from '@/components/chat/ChatHistorySkeleton.vue'
 import ChatLimitNudge from '@/components/chat/ChatLimitNudge.vue'
 import ChatLimitWaitingCard from '@/components/chat/ChatLimitWaitingCard.vue'
+import ChatOlderHistory from '@/components/chat/ChatOlderHistory.vue'
 import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import ChatPermissionCard from '@/components/chat/ChatPermissionCard.vue'
 import ChatPlanCard from '@/components/chat/ChatPlanCard.vue'
@@ -45,6 +38,7 @@ import { useDoubleEscape } from '@/composables/useDoubleEscape'
 import { provideImageNameScope } from '@/composables/useImageNameScope'
 import { provideCalloutTarget } from '@/composables/useCalloutTarget'
 import { provideMarkupTarget } from '@/composables/useMarkupTarget'
+import { useOlderHistory } from '@/composables/useOlderHistory'
 import { useScrollEdges } from '@/composables/useScrollEdges'
 import { providePromptEdit, usePromptEditOf } from '@/composables/usePromptEdit'
 import { useChatStore } from '@/stores/chat'
@@ -83,7 +77,8 @@ const { labelOf: machineLabelOf } = useMachineLabel()
 const chat = useChatStore()
 const rewind = useRewindStore()
 const drafts = useDraftStore()
-const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo } = useChatFollow(scroller)
+const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo, isGliding } =
+  useChatFollow(scroller)
 // The open search floats over the chat's top: a revealed card lands below it.
 useRevealTarget(scroller, glideTo, () => searchBox.value?.coverOf() ?? null)
 const reducedMotion = usePreferredReducedMotion()
@@ -119,6 +114,12 @@ const isEmpty = computed(
     !isQueued.value
 )
 const hasHistoryFailed = computed(() => tab.history === 'failed' && !messages.value.length)
+const loadOlder = () => chat.loadHistory(tab.id)
+useOlderHistory(
+  scroller,
+  () => ({ history: tab.history, hasMore: tab.hasMore, count: tab.messages.length }),
+  { load: loadOlder, isGliding }
+)
 const emptyHint = computed(() =>
   machineLabelOf(tab.machine)
     ? t('chat.clawd_hint', { machine: machineLabelOf(tab.machine), folder: folderNameOf(tab.cwd) })
@@ -272,15 +273,7 @@ const handlePreviewClick = (event: MouseEvent) => {
               {{ t('chat.history_retry') }}
             </Button>
           </NchEmpty>
-          <Button
-            v-if="tab.hasMore"
-            variant="ghost"
-            class="self-center"
-            @click="chat.loadHistory(tab.id)"
-          >
-            <ChevronsUp class="size-4" aria-hidden="true" />
-            {{ t('chat.load_older') }}
-          </Button>
+          <ChatOlderHistory v-if="tab.hasMore" :history="tab.history" @load="loadOlder" />
           <ChatHistorySkeleton v-if="tab.history === 'loading' && !messages.length" />
           <ChatStreamItem
             v-for="item in stream"

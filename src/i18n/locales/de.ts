@@ -75,6 +75,8 @@ export default {
     send: 'Senden',
     stop: 'Stoppen',
     load_older: 'Ältere Nachrichten laden',
+    loading_older: 'Ältere Nachrichten werden geladen',
+    load_older_failed: 'Ältere Nachrichten nicht geladen · erneut versuchen',
     compacted: 'Verlauf wurde zusammengefasst',
     interrupted: 'Abgebrochen',
     agent_report: 'Rückmeldung von Subagent „{name}“',

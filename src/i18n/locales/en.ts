@@ -74,6 +74,8 @@ export default {
     send: 'Send',
     stop: 'Stop',
     load_older: 'Load older messages',
+    loading_older: 'Loading older messages',
+    load_older_failed: 'Older messages did not load · try again',
     compacted: 'Conversation was compacted',
     interrupted: 'Stopped',
     agent_report: 'Report from subagent “{name}”',

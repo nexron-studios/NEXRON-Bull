@@ -60,8 +60,71 @@ describe('useChatStore with the composer', () => {
     setActivePinia(createPinia())
   })
 
-  it('should hold a message typed while Claude works and send it once the turn ends', () => {
+  it('should send a message typed while Claude works into the running turn at once', () => {
     const chat = openTab('working')
+
+    chat.send('t1', 'and check light mode', [])
+
+    const [pending] = chat.tabs[0].pending
+    expect([
+      sentContents(),
+      useHeldPromptsStore().heldOf('t1'),
+      chat.tabs[0].status,
+      chat.isSteering(pending.uuid)
+    ]).toEqual([[[{ type: 'text', text: 'and check light mode' }]], [], 'working', true])
+  })
+
+  it('should stop saying Claude reads it at its next step once the echo came', () => {
+    const chat = openTab('working')
+    chat.send('t1', 'and check light mode', [])
+    const [pending] = chat.tabs[0].pending
+
+    emit({
+      type: 'message',
+      tab: 't1',
+      message: {
+        uuid: 'echo-1',
+        role: 'user',
+        at: null,
+        blocks: [{ type: 'text', text: 'and check light mode' }]
+      }
+    })
+
+    expect([chat.tabs[0].pending, chat.isSteering(pending.uuid)]).toEqual([[], false])
+  })
+
+  it('should hold a slash command typed while Claude works until the turn ends', () => {
+    const chat = openTab('working')
+
+    chat.send('t1', '/review', [])
+    expect(sentContents()).toEqual([])
+    expect(
+      useHeldPromptsStore()
+        .heldOf('t1')
+        .map((prompt) => prompt.text)
+    ).toEqual(['/review'])
+
+    emit({ type: 'claude', tab: 't1', event: { type: 'result', subtype: 'success', result: '' } })
+    expect(sentContents()).toEqual([[{ type: 'text', text: '/review' }]])
+  })
+
+  it('should send a held message into the running turn when asked to', () => {
+    const chat = openTab('asking')
+    chat.send('t1', 'and check light mode', [])
+    const [held] = useHeldPromptsStore().heldOf('t1')
+
+    chat.sendHeldNow('t1', held.id)
+
+    expect([
+      sentContents(),
+      useHeldPromptsStore().heldOf('t1'),
+      chat.tabs[0].status,
+      chat.tabs[0].pending.map((prompt) => chat.isSteering(prompt.uuid))
+    ]).toEqual([[[{ type: 'text', text: 'and check light mode' }]], [], 'asking', [true]])
+  })
+
+  it('should hold a message typed while Claude waits for an approval and send it once the turn ends', () => {
+    const chat = openTab('asking')
 
     chat.send('t1', 'and check light mode', [])
     expect(sentContents()).toEqual([])
@@ -77,7 +140,7 @@ describe('useChatStore with the composer', () => {
   })
 
   it('should put held messages back into the composer when Claude is stopped', () => {
-    const chat = openTab('working')
+    const chat = openTab('asking')
     useDraftStore().draftOf('t1').text = 'half typed'
 
     chat.send('t1', 'held one', [])
@@ -283,7 +346,7 @@ describe('useChatStore with the notes of marked images', () => {
   })
 
   it('should give a held message back with its notes on the images, not in the text', () => {
-    const chat = openTab('working')
+    const chat = openTab('asking')
     const one = noted('a', 'one.png', [note(1, 'bigger')])
 
     chat.send('t1', 'please crop', [one])

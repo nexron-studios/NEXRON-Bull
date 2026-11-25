@@ -58,7 +58,12 @@ import { noteTextOf, type MarkNote } from '@/utils/markup'
 import { IMAGE_REF_SLOTS, imageRefFormatOf, withPlainImageRefs } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
-import { draftWithUnsent, pendingMessageOf, type SentDraft } from '@/utils/pendingPrompts'
+import {
+  draftWithUnsent,
+  isHeldWhile,
+  pendingMessageOf,
+  type SentDraft
+} from '@/utils/pendingPrompts'
 import { shellPromptBlocks } from '@/utils/shellBlocks'
 import { parseSlashInput } from '@/utils/slashCommands'
 import { withSubagentEvent } from '@/utils/subagentActions'
@@ -137,6 +142,9 @@ export const useChatStore = defineStore(
     const unechoed = new Set<string>()
     // The `!` runs each pending prompt took along; they go back to the chat if it never gets out.
     const sentShell = new Map<string, ShellRun[]>()
+    // Pending prompts sent into a running turn: the chat says Claude reads them at its next step.
+    // Reactive, the prompt's line in the chat reads it.
+    const steering = ref(new Set<string>())
 
     const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeId.value) ?? null)
     /**
@@ -181,6 +189,7 @@ export const useChatStore = defineStore(
         back.flatMap((prompt) => sentShell.get(prompt.uuid) ?? [])
       )
       back.forEach((prompt) => forgetShell(prompt.uuid))
+      back.forEach((prompt) => steering.value.delete(prompt.uuid))
       update(id, (t) => withoutPending(t, new Set(back.map((prompt) => prompt.uuid))))
     }
 
@@ -199,7 +208,11 @@ export const useChatStore = defineStore(
       rememberImageNames(id, uuid)
       sentDrafts.delete(uuid)
       forgetShell(uuid)
+      steering.value.delete(uuid)
     }
+
+    /** Sent into the running turn and not read by Claude yet. */
+    const isSteering = (uuid: string) => steering.value.has(uuid)
 
     const forgetShell = (uuid: string) => {
       sentShell.delete(uuid)
@@ -417,14 +430,26 @@ export const useChatStore = defineStore(
       return true
     }
 
-    /** While Claude works a message waits above the composer, still open to change. */
+    /**
+     * Enter while Claude works sends at once, as in the terminal: Claude reads the message at its
+     * next tool result, or right after the turn (Jonas, 25.11.2026). Two kinds wait above the
+     * composer instead, still open to change: anything typed while Claude waits for an approval or
+     * an answer, which it would only read after that decision and which is mostly meant for the
+     * card; and a slash command, which Claude Code runs only as a turn of its own.
+     */
     const send = (id: string, text: string, images: PendingImage[]) => {
       const tab = tabOf(id)
       if (!tab) return
       if (queueForLimit(id, text, images)) return
-      if (tab.status === 'working' || tab.status === 'asking')
-        return useHeldPromptsStore().hold(id, { text, images })
+      if (isHeldWhile(tab.status, text)) return useHeldPromptsStore().hold(id, { text, images })
       dispatch(id, text, images)
+    }
+
+    /** "Jetzt einwerfen": a held message goes into the running turn without waiting for its end. */
+    const sendHeldNow = (id: string, heldId: string) => {
+      const prompt = useHeldPromptsStore().release(id, heldId)
+      if (!prompt || queueForLimit(id, prompt.text, prompt.images)) return
+      dispatch(id, prompt.text, prompt.images)
     }
 
     const dispatch = (id: string, text: string, images: PendingImage[]) => {
@@ -450,7 +475,12 @@ export const useChatStore = defineStore(
         if (tab.status === 'ended') start(tab)
         return
       }
-      update(id, (t) => withTurnClock({ ...t, status: 'working', notice: null }, now))
+      // Into a running turn: the turn and an open approval stay as they are.
+      const isRunning = tab.status === 'working' || tab.status === 'asking'
+      if (isRunning) steering.value.add(prompt.uuid)
+      update(id, (t) =>
+        withTurnClock(isRunning ? t : { ...t, status: 'working', notice: null }, now)
+      )
       void sendNow(id, entry)
     }
 
@@ -728,6 +758,7 @@ export const useChatStore = defineStore(
       attach.forgetClosed(id)
       queued.value.delete(id)
       tab?.pending.forEach((prompt) => sentDrafts.delete(prompt.uuid))
+      tab?.pending.forEach((prompt) => steering.value.delete(prompt.uuid))
       useDraftStore().discard(id)
       useHeldPromptsStore().takeAll(id)
       useShellRunsStore().forget(id)
@@ -787,6 +818,8 @@ export const useChatStore = defineStore(
       loadHistory,
       send,
       sendCommand,
+      sendHeldNow,
+      isSteering,
       ensureStarted,
       askClaude,
       refreshConnectors,

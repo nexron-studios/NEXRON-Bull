@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { Clock, Pencil, X } from '@lucide/vue'
+import { Clock, CornerDownLeft, Pencil, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import type { HeldPrompt } from '@/stores/heldPrompts'
+import { parseSlashInput } from '@/utils/slashCommands'
 
-// Figma 30: what was typed while Claude works, numbered above the composer until the turn ends.
+// Figma 30: what was held back while Claude works (during an approval or question, a slash
+// command), numbered above the composer until the turn ends. Each one can go into the running
+// turn at once; a slash command cannot, Claude runs it only as a turn of its own.
 defineProps<{ prompts: HeldPrompt[] }>()
-const emit = defineEmits<{ edit: [id: string]; remove: [id: string] }>()
+const emit = defineEmits<{ edit: [id: string]; remove: [id: string]; sendNow: [id: string] }>()
 
 const { t } = useI18n()
 </script>
@@ -33,6 +36,15 @@ const { t } = useI18n()
         <span v-if="prompt.images.length" class="shrink-0 text-meta text-muted-foreground">
           {{ t('prompt_input.queue_images', { n: prompt.images.length }) }}
         </span>
+        <NchIconButton
+          v-if="!parseSlashInput(prompt.text)"
+          :label="t('prompt_input.queue_send_now', { n: index + 1 })"
+          size="icon-sm"
+          class="shrink-0 text-muted-foreground"
+          @click="emit('sendNow', prompt.id)"
+        >
+          <CornerDownLeft class="size-3.5" aria-hidden="true" />
+        </NchIconButton>
         <NchIconButton
           :label="t('prompt_input.queue_edit', { n: index + 1 })"
           size="icon-sm"

@@ -18,6 +18,7 @@ import { useImageAttachments } from '@/composables/useImageAttachments'
 import { useImageReferences } from '@/composables/useImageReferences'
 import { usePromptHistory } from '@/composables/usePromptHistory'
 import { useDraftStore } from '@/stores/drafts'
+import { useChatStore } from '@/stores/chat'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
 import { useShellRunsStore } from '@/stores/shellRuns'
 import { useSlashCommandsStore } from '@/stores/slashCommands'
@@ -69,6 +70,7 @@ const {
   placeMarkedImages
 } = useImageAttachments(toRef(stored, 'images'), toRef(stored, 'readingCount'), references.follow)
 const held = useHeldPromptsStore()
+const chat = useChatStore()
 const shell = useShellRunsStore()
 const slashCommands = useSlashCommandsStore()
 const focusField = () => field.value?.focus()
@@ -238,6 +240,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, handOver, 
       :prompts="heldPrompts"
       @edit="editHeld"
       @remove="held.release(tab.id, $event)"
+      @send-now="chat.sendHeldNow(tab.id, $event)"
     />
     <div class="relative">
       <ChatComposerMenu

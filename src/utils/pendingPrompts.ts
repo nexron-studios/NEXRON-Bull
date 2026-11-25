@@ -1,9 +1,19 @@
 import type { Block, ChatMessage, PromptBlock } from '@/types/agentd.type'
 import type { PendingImage } from '@/utils/content'
+import type { TabStatus } from '@/utils/chatTab'
 import { remapImageRefs, type ImageRefFormat } from '@/utils/imageRefs'
 import { shellBlockOf } from '@/utils/shellBlocks'
+import { parseSlashInput } from '@/utils/slashCommands'
 
 const PENDING_PREFIX = 'pending:'
+
+/**
+ * A message waits above the composer instead of going into the running turn: while Claude waits
+ * for an approval or an answer, and a slash command while Claude works (it runs only as a turn
+ * of its own; mid-turn Claude would read it as plain text).
+ */
+export const isHeldWhile = (status: TabStatus, text: string): boolean =>
+  status === 'asking' || (status === 'working' && parseSlashInput(text) !== null)
 
 /** What the user typed and attached for one prompt, to put back if it never reaches Claude. */
 export interface SentDraft {

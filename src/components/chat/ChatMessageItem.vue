@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Archive, Copy, OctagonX, SquareSlash } from '@lucide/vue'
+import { Archive, Copy, CornerDownLeft, OctagonX, SquareSlash } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/types/agentd.type'
 import { copyText } from '@/lib/clipboard'
@@ -26,6 +26,7 @@ import { useCalloutTarget } from '@/composables/useCalloutTarget'
 import { toolCardIdOf } from '@/composables/useChatReveal'
 import { useImageRefFormat } from '@/composables/useImageRefFormat'
 import { useSentImages } from '@/composables/useSentImages'
+import { useChatStore } from '@/stores/chat'
 
 // `stats`: the answer ends its turn; the line under it says what the turn took.
 const {
@@ -41,6 +42,7 @@ const {
 }>()
 
 const { t } = useI18n()
+const chat = useChatStore()
 const calloutTarget = useCalloutTarget()
 const imageRefFormat = useImageRefFormat()
 
@@ -79,6 +81,10 @@ const openPreview = (at: number) => {
 /** A sent prompt's text with its image references highlighted like in the composer. */
 const promptPiecesOf = (text: string) =>
   textPiecesOf(text, sentImageRefHighlightsOf(text, imageSrcs.value, imageRefFormat.value))
+
+// Sent into the running turn: it waits at the end of the chat until Claude reads it, then its
+// echo takes its place where Claude read it.
+const isSteering = computed(() => message.role === 'user' && chat.isSteering(message.uuid))
 
 // What the row under a sent prompt copies; a prompt of only images or a command gets no row.
 const promptText = computed(() => (message.role === 'user' ? texts.value.join('\n\n') : ''))
@@ -201,6 +207,10 @@ const shellOutputAt = (index: number) => {
         class="max-w-[72ch] font-mono text-meta whitespace-pre-wrap text-muted-foreground"
         >{{ block.text }}</pre>
     </template>
+    <p v-if="isSteering" class="flex items-center gap-1.5 text-meta text-muted-foreground">
+      <CornerDownLeft class="size-3.5" aria-hidden="true" />
+      {{ t('chat.steering') }}
+    </p>
     <ChatUserMessageActions
       v-if="promptText"
       :uuid="message.uuid"

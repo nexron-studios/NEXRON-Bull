@@ -1,5 +1,5 @@
 /** What a tool does, as the colour hierarchy in tokens.css sees it. */
-export const toolKindList = ['read', 'change', 'outside'] as const
+export const toolKindList = ['read', 'change', 'outside', 'skill'] as const
 export type ToolKind = (typeof toolKindList)[number]
 
 /** What the thinking bar says Claude is doing while a call runs; the key under `chat.stream.activity`. */
@@ -12,6 +12,7 @@ export const activityList = [
   'searches_web',
   'delegates',
   'plans',
+  'uses_skill',
   'uses'
 ] as const
 export type Activity = (typeof activityList)[number]
@@ -27,9 +28,58 @@ export const toolIconList = [
   'agent',
   'tasks',
   'plug',
-  'wrench'
+  'wrench',
+  'skill',
+  'review',
+  'security',
+  'simplify',
+  'play',
+  'loop',
+  'schedule',
+  'init',
+  'config'
 ] as const
 export type ToolIcon = (typeof toolIconList)[number]
+
+/** Skills that ship with Claude Code or run often here; any other skill gets the generic `skill`. */
+export const knownSkillList = [
+  'code-review',
+  'review',
+  'thermo-nuclear-review',
+  'security-review',
+  'simplify',
+  'run',
+  'loop',
+  'schedule',
+  'init',
+  'update-config'
+] as const
+export type KnownSkill = (typeof knownSkillList)[number]
+
+const SKILL_ICON: Record<KnownSkill, ToolIcon> = {
+  'code-review': 'review',
+  review: 'review',
+  'thermo-nuclear-review': 'review',
+  'security-review': 'security',
+  simplify: 'simplify',
+  run: 'play',
+  loop: 'loop',
+  schedule: 'schedule',
+  init: 'init',
+  'update-config': 'config'
+}
+
+const isKnownSkill = (skill: string): skill is KnownSkill =>
+  (knownSkillList as readonly string[]).includes(skill)
+
+// Plugin skills come as `plugin:skill` and a typed command as `/skill`; the bare name decides.
+const bareSkillOf = (skill: string): string => skill.replace(/^\//, '').split(':').at(-1) ?? ''
+
+/** The picture of one skill: its own for a well-known one, the generic skill icon otherwise. */
+export const skillIconOf = (skill: string): ToolIcon => {
+  const bare = bareSkillOf(skill)
+  return isKnownSkill(bare) ? SKILL_ICON[bare] : 'skill'
+}
 
 export interface ToolInfo {
   kind: ToolKind
@@ -70,13 +120,22 @@ const TOOLS: Record<string, ToolInfo> = {
   TaskList: READS_PLAN,
   TaskGet: READS_PLAN
 }
+const SKILL_TOOL = 'Skill'
 const MCP_PREFIX = 'mcp__'
 const MCP_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'plug' }
 const UNKNOWN_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'wrench' }
 
-/** Unknown tools run outside the project, like shell, web, MCP and subagents. */
-export const toolInfoOf = (name: string): ToolInfo =>
-  TOOLS[name] ?? (name.startsWith(MCP_PREFIX) ? MCP_TOOL : UNKNOWN_TOOL)
+/**
+ * Unknown tools run outside the project, like shell, web, MCP and subagents. `target` is the call's
+ * summary (`summarizeToolInput`): for a Skill call it names the skill, which picks the icon.
+ */
+export const toolInfoOf = (name: string, target = ''): ToolInfo => {
+  if (name === SKILL_TOOL)
+    return { kind: 'skill', activity: 'uses_skill', icon: skillIconOf(target) }
+  return TOOLS[name] ?? (name.startsWith(MCP_PREFIX) ? MCP_TOOL : UNKNOWN_TOOL)
+}
+
+export const isSkillTool = (name: string): boolean => name === SKILL_TOOL
 
 /** The tools Claude keeps its plan with; they feed the steps list, not the chain. */
 export const isTaskTool = (name: string): boolean => toolInfoOf(name).activity === 'plans'

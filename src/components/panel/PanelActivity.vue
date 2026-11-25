@@ -57,7 +57,7 @@ const { staggerIndexOf } = useRowArrivals(() => rows.value.map((row) => row.run.
 const waiting = computed(() => {
   if (state.value.kind !== 'waiting') return null
   const { reason, tool, target } = state.value
-  const info = toolInfoOf(tool)
+  const info = toolInfoOf(tool, target)
   return {
     info,
     title:

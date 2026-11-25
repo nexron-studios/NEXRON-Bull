@@ -87,6 +87,8 @@ export default {
     tool_result: 'Result',
     tool_error: 'Error',
     tool_input: 'Input',
+    tool_skill_args: 'Arguments',
+    tool_skill_no_args: 'No arguments',
     tool_state: { running: 'running', done: 'done', error: 'error', stopped: 'not finished' },
     reads: {
       file: '{n} file read | {n} files read',
@@ -149,6 +151,7 @@ export default {
         searches_web: 'Claude is searching the web for {target}',
         delegates: 'Claude is handing a task to a subagent',
         plans: 'Claude is planning the steps',
+        uses_skill: 'Claude is using the {target} skill',
         uses: 'Claude is using {tool}'
       }
     },

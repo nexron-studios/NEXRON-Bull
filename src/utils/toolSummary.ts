@@ -8,7 +8,9 @@ const SUMMARY_FIELDS = [
   'url',
   'query',
   'description',
-  'prompt'
+  'prompt',
+  // A Skill call: the skill's name says what it does, its args only refine it.
+  'skill'
 ] as const
 const SUMMARY_CHARS = 120
 
@@ -19,3 +21,7 @@ export const summarizeToolInput = (input: Record<string, unknown>): string => {
   const line = typeof value === 'string' ? compactPath(value.split('\n')[0] ?? '') : ''
   return line.length > SUMMARY_CHARS ? `${line.slice(0, SUMMARY_CHARS)}…` : line
 }
+
+/** What a Skill call passes to its skill, as plain text; empty when it passes nothing. */
+export const skillArgsOf = (input: Record<string, unknown>): string =>
+  typeof input.args === 'string' ? input.args.trim() : ''

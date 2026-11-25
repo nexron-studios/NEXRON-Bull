@@ -48,6 +48,22 @@ describe('activityOfTab', () => {
     })
   })
 
+  it('should name the skill a running Skill call loads', () => {
+    const turn = { startedAt: 0, afterUuid: null }
+    const skill: ChatMessage = {
+      ...read,
+      blocks: [
+        { type: 'tool_use', id: 't2', name: 'Skill', input: { skill: 'simplify', args: 'src' } }
+      ]
+    }
+    expect(activityOfTab(tab({ messages: [prompt, skill], turn }), noResults)).toEqual({
+      kind: 'tool',
+      activity: 'uses_skill',
+      tool: 'Skill',
+      target: 'simplify'
+    })
+  })
+
   it('should ignore a call an earlier turn left without result', () => {
     const next = { ...prompt, uuid: 'p2' }
     const turn = { startedAt: 0, afterUuid: 'a1' }

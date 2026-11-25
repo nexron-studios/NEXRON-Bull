@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactPath, isTaskTool, shortTarget, toolInfoOf } from '../toolKind'
+import { compactPath, isTaskTool, shortTarget, skillIconOf, toolInfoOf } from '../toolKind'
 
 describe('toolInfoOf', () => {
   it('should give colour, activity and icon of a known tool', () => {
@@ -15,9 +15,55 @@ describe('toolInfoOf', () => {
   })
 
   it('should fall back to a plug for MCP tools and a wrench for unknown ones', () => {
-    expect([toolInfoOf('mcp__figma__get').icon, toolInfoOf('Skill').icon]).toEqual([
+    expect([toolInfoOf('mcp__figma__get').icon, toolInfoOf('Mystery').icon]).toEqual([
       'plug',
       'wrench'
+    ])
+  })
+})
+
+describe('toolInfoOf for skills', () => {
+  it('should give a Skill call the skill colour, activity and the icon of its skill', () => {
+    expect(toolInfoOf('Skill', 'code-review')).toEqual({
+      kind: 'skill',
+      activity: 'uses_skill',
+      icon: 'review'
+    })
+  })
+
+  it('should give a Skill call without a skill name the generic skill icon', () => {
+    expect(toolInfoOf('Skill')).toEqual({ kind: 'skill', activity: 'uses_skill', icon: 'skill' })
+  })
+
+  it('should ignore the target of every other tool', () => {
+    expect(toolInfoOf('Bash', 'code-review')).toEqual({
+      kind: 'outside',
+      activity: 'runs',
+      icon: 'terminal'
+    })
+  })
+})
+
+describe('skillIconOf', () => {
+  it('should know the well-known skills', () => {
+    expect(
+      ['security-review', 'simplify', 'run', 'loop', 'schedule', 'init', 'update-config'].map(
+        skillIconOf
+      )
+    ).toEqual(['security', 'simplify', 'play', 'loop', 'schedule', 'init', 'config'])
+  })
+
+  it('should read a plugin skill and a typed command by their bare name', () => {
+    expect([skillIconOf('anthropic-skills:security-review'), skillIconOf('/code-review')]).toEqual([
+      'security',
+      'review'
+    ])
+  })
+
+  it('should fall back to the generic skill icon for any other skill', () => {
+    expect([skillIconOf('anthropic-skills:pdf'), skillIconOf('blender-reel')]).toEqual([
+      'skill',
+      'skill'
     ])
   })
 })

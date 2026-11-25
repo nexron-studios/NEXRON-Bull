@@ -8,6 +8,11 @@
  *   good       done, allowed
  *   act-*      what a tool does, on icons only: read/search, change/run, web/MCP.
  *              act-read is a muted slate so it never reads as the blue brand
+ *   act-skill  a skill Claude loads (code-review, simplify …): its icon and the skill name on its
+ *              own 12 % tint in the chat step row (25.11.2026: skills get a look of their own).
+ *              Claude orange like the skills share of the context breakdown, so a skill reads the
+ *              same in both places; deeper than clawd so the name keeps 4.5:1 as text, and redder
+ *              than warning so it never reads as "Claude is working"
  *   foreground / muted-foreground  content and meta text
  *   brand      the bull (public/favicon.svg), the focus ring, the scrollbar thumb, the bar marking
  *              the open session, the drag-and-drop line, Clawd (18.11.2026), and the thinking bar's
@@ -72,6 +77,7 @@
   --color-act-read: var(--act-read);
   --color-act-change: var(--act-change);
   --color-act-outside: var(--act-outside);
+  --color-act-skill: var(--act-skill);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-strong: var(--brand-strong);
@@ -152,6 +158,7 @@
   --act-read: #4f6b93;
   --act-change: #6352c8;
   --act-outside: #0b7585;
+  --act-skill: #9c461c;
   --link: var(--brand-strong);
   --link-hover: #2a4fd6;
   --brand: #4d7cff;
@@ -210,6 +217,7 @@
   --act-read: #7f9bc4;
   --act-change: #9085e9;
   --act-outside: #1fa9bd;
+  --act-skill: #e08560;
   --link: var(--brand);
   --link-hover: #8fb0ff;
   --brand: #4d7cff;

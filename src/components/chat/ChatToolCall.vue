@@ -7,10 +7,10 @@ import ChatShellOutput from '@/components/chat/ChatShellOutput.vue'
 import { countsOf, rowsOfHunks } from '@/utils/diffRows'
 import { hunksOfTool } from '@/utils/toolInput'
 import { TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
-import { toolInfoOf } from '@/utils/toolKind'
+import { isSkillTool, toolInfoOf } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
 import { resultTextOf, type ToolResultBlock } from '@/utils/toolPairs'
-import { summarizeToolInput } from '@/utils/toolSummary'
+import { skillArgsOf, summarizeToolInput } from '@/utils/toolSummary'
 import { toDataUrl } from '@/utils/attachments'
 
 // One quiet row per call on a thin rail (Figma "38" A, 19.11.2026): steps in a row no longer
@@ -42,8 +42,14 @@ const state = computed<ToolState>(() => {
   if (result) return result.is_error ? 'error' : 'done'
   return isRunning ? 'running' : 'stopped'
 })
-const info = computed(() => toolInfoOf(name))
 const summary = computed(() => summarizeToolInput(input))
+const info = computed(() => toolInfoOf(name, summary.value))
+// A skill call names its skill on a tint of its own and shows the args as text, not as JSON.
+const isSkill = computed(() => isSkillTool(name))
+const skillArgs = computed(() => (isSkill.value ? skillArgsOf(input) : ''))
+const rowText = computed(() =>
+  isSkill.value ? (skillArgs.value.split('\n')[0] ?? '') : summary.value
+)
 // Line numbers and context only come with Claude Code's patch; the input alone has neither.
 const diffHunks = computed(() => hunksOfTool(name, input, result?.patch))
 const diffRows = computed(() => (diffHunks.value ? rowsOfHunks(diffHunks.value) : null))
@@ -79,8 +85,13 @@ const images = computed(() =>
         aria-hidden="true"
       />
       <span class="font-medium">{{ name }}</span>
+      <span
+        v-if="isSkill && summary"
+        class="max-w-1/2 shrink-0 truncate rounded-sm bg-act-skill/12 px-1.5 font-medium text-act-skill"
+        >{{ summary }}</span
+      >
       <span class="min-w-0 flex-1 truncate font-mono text-meta text-muted-foreground">{{
-        summary
+        rowText
       }}</span>
       <span v-if="counts" class="flex shrink-0 gap-1.5 font-mono text-meta tabular-nums">
         <span class="sr-only">{{ t('chat.diff_counts', counts) }}</span>
@@ -120,12 +131,25 @@ const images = computed(() =>
       v-else
       class="mt-1 flex flex-col gap-1 rounded-lg border border-border bg-card/60 px-3 py-2"
     >
-      <p class="text-meta tracking-wide text-muted-foreground uppercase">
-        {{ t('chat.tool_input') }}
-      </p>
-      <pre class="max-h-60 overflow-auto font-mono text-meta whitespace-pre-wrap text-subtle">{{
-        details
-      }}</pre>
+      <template v-if="isSkill">
+        <p class="text-meta tracking-wide text-muted-foreground uppercase">
+          {{ t('chat.tool_skill_args') }}
+        </p>
+        <!-- Prose, so the sans font; a pre keeps Claude's line breaks without template whitespace. -->
+        <pre
+          v-if="skillArgs"
+          class="max-h-60 overflow-auto font-sans text-small whitespace-pre-wrap text-subtle"
+          >{{ skillArgs }}</pre>
+        <p v-else class="text-small text-muted-foreground">{{ t('chat.tool_skill_no_args') }}</p>
+      </template>
+      <template v-else>
+        <p class="text-meta tracking-wide text-muted-foreground uppercase">
+          {{ t('chat.tool_input') }}
+        </p>
+        <pre class="max-h-60 overflow-auto font-mono text-meta whitespace-pre-wrap text-subtle">{{
+          details
+        }}</pre>
+      </template>
       <template v-if="result">
         <p
           class="mt-2 text-meta tracking-wide uppercase"

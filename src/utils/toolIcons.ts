@@ -1,17 +1,26 @@
 import type { Component } from 'vue'
 import {
   Bot,
+  BrushCleaning,
+  CalendarClock,
   Check,
   CircleDashed,
   FilePen,
+  FilePlus,
   FileText,
   FolderOpen,
   Globe,
   ListChecks,
   LoaderCircle,
+  Play,
   Plug,
+  Repeat,
   Search,
+  SearchCheck,
+  Settings2,
+  ShieldCheck,
   SquareTerminal,
+  WandSparkles,
   Wrench,
   X
 } from '@lucide/vue'
@@ -29,14 +38,24 @@ export const TOOL_ICON: Record<ToolIcon, Component> = {
   agent: Bot,
   tasks: ListChecks,
   plug: Plug,
-  wrench: Wrench
+  wrench: Wrench,
+  skill: WandSparkles,
+  review: SearchCheck,
+  security: ShieldCheck,
+  simplify: BrushCleaning,
+  play: Play,
+  loop: Repeat,
+  schedule: CalendarClock,
+  init: FilePlus,
+  config: Settings2
 }
 
-/** Read, change and outside each have their act colour. */
+/** Read, change, outside and skill each have their act colour. */
 export const TOOL_KIND_CLASS: Record<ToolKind, string> = {
   read: 'text-act-read',
   change: 'text-act-change',
-  outside: 'text-act-outside'
+  outside: 'text-act-outside',
+  skill: 'text-act-skill'
 }
 
 /** How a tool call's state looks in the panel: the activity list and a subagent's actions. */

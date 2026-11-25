@@ -38,12 +38,8 @@ export const activityOfTab = (
   if (live) return { kind: live }
   const call = runningCall(tab, results)
   if (!call) return { kind: 'working' }
-  return {
-    kind: 'tool',
-    activity: toolInfoOf(call.name).activity,
-    tool: call.name,
-    target: shortTarget(summarizeToolInput(call.input))
-  }
+  const target = shortTarget(summarizeToolInput(call.input))
+  return { kind: 'tool', activity: toolInfoOf(call.name, target).activity, tool: call.name, target }
 }
 
 /**

@@ -22,7 +22,7 @@ const targetEl = useTemplateRef<HTMLElement>('target')
 const { t } = useI18n()
 const { open, setOpen } = useClippedTooltip([nameEl, targetEl])
 
-const info = computed(() => toolInfoOf(run.name))
+const info = computed(() => toolInfoOf(run.name, run.target))
 const duration = computed(() => {
   if (run.startedAt === null) return ''
   if (run.finishedAt !== null) return formatElapsed(run.finishedAt - run.startedAt)

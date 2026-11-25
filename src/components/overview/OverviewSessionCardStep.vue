@@ -23,7 +23,7 @@ const icon = computed((): { icon: Component; class: string } => {
   const { activity, isApproval } = current
   if (activity.kind === 'ask') return { icon: MessageCircleQuestion, class: 'text-warning' }
   if (activity.kind === 'state') return { icon: LoaderCircle, class: 'text-warning' }
-  const info = toolInfoOf(activity.tool)
+  const info = toolInfoOf(activity.tool, activity.target)
   return {
     icon: TOOL_ICON[info.icon],
     class: isApproval ? 'text-critical' : TOOL_KIND_CLASS[info.kind]

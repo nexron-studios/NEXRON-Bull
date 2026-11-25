@@ -92,6 +92,11 @@ export const historyStepOf = (event: KeyInfo): 'undo' | 'redo' | null => {
   return null
 }
 
+/** Ctrl/Cmd+Enter sends where a plain Enter already means something else (a new line, a note). */
+export const SEND_CHORD: KeyChord = { modifier: 'command', keys: ['Enter'] }
+export const isSendShortcut = (event: KeyInfo) =>
+  hasCommandKey(event) && !event.shiftKey && event.key === 'Enter'
+
 /** Backspace or Delete alone, as on a field that is empty already: the thing itself should go. */
 export const isRemoveKey = (event: KeyInfo) =>
   (event.key === 'Backspace' || event.key === 'Delete') &&

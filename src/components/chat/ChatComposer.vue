@@ -15,7 +15,7 @@ import { useComposerMenu } from '@/composables/useComposerMenu'
 import { useComposerPaste } from '@/composables/useComposerPaste'
 import { useImageAttachments } from '@/composables/useImageAttachments'
 import { useImageReferences } from '@/composables/useImageReferences'
-import type { MarkupResult } from '@/composables/useMarkupTarget'
+import type { MarkupHandoff, MarkupResult } from '@/composables/useMarkupTarget'
 import { usePromptHistory } from '@/composables/usePromptHistory'
 import { useDraftStore } from '@/stores/drafts'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
@@ -242,13 +242,32 @@ const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
   return true
 }
 
+/**
+ * "Senden" in the preview: image and comment go out as a message of their own, by the same way as
+ * any message (queue, limit). The draft stays for later; only an attachment that just went out
+ * leaves it, with its references.
+ */
+const sendMarkup = ({ sourceId, images: outgoing, comment }: MarkupResult) => {
+  const [first] = outgoing
+  if (!first) return false
+  const ref = references.format.value.render(1, first.name)
+  const text = comment ? t('images.comment_line', { ref, comment }) : ''
+  emit('send', withPlainImageRefs(text, references.format.value), outgoing)
+  if (sourceId && images.value.some((image) => image.id === sourceId)) remove(sourceId)
+  return true
+}
+
+/** A result from the preview, wherever it was asked to go. */
+const handOver = (result: MarkupResult, handoff: MarkupHandoff) =>
+  handoff === 'send' ? sendMarkup(result) : takeMarkup(result)
+
 /** Line comments from the diff review, by the same path as a marked image's comment. */
 const takeReview = (comments: string) => {
   isShell.value = false
   prependComment(comments)
 }
 
-defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup, takeReview })
+defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, handOver, takeReview })
 </script>
 
 <template>

@@ -15,7 +15,7 @@ import { useIsPhone } from '@/composables/useViewport'
 import { imageMeta, stepIndex, type LightboxImage } from '@/utils/attachments'
 import { startModeOf, type LightboxMode } from '@/utils/lightbox'
 import type { Size } from '@/utils/markup'
-import { historyStepOf } from '@/utils/shortcuts'
+import { historyStepOf, isSendShortcut } from '@/utils/shortcuts'
 import { isTextField } from '@/utils/textField'
 
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
@@ -102,6 +102,12 @@ const handleMarkKey = (event: KeyboardEvent) => {
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
+  // Also from inside a note or the comment, where a plain Enter has its own meaning.
+  if (target && isSendShortcut(event)) {
+    event.preventDefault()
+    void apply('send')
+    return
+  }
   // The comment field keeps its own keys: text undo, and arrows that move the caret.
   if (isTextField(event.target)) return
   if (isMarking.value) return handleMarkKey(event)
@@ -159,7 +165,12 @@ watch(isOpen, (open) => {
             @step="step"
             @load="natural = $event"
           />
-          <ChatMarkupSheet v-if="isMarking" :is-applying @apply="apply" />
+          <ChatMarkupSheet
+            v-if="isMarking"
+            :is-applying
+            @apply="apply('compose')"
+            @send="apply('send')"
+          />
           <ChatLightboxPhoneBar
             v-else
             class="pb-safe"
@@ -170,7 +181,8 @@ watch(isOpen, (open) => {
             @step="step"
             @copy="copy"
             @mark="setMode('mark')"
-            @apply="apply"
+            @apply="apply('compose')"
+            @send="apply('send')"
           />
         </template>
 
@@ -203,7 +215,8 @@ watch(isOpen, (open) => {
             :is-marking
             :is-applying
             @discard="discard"
-            @apply="apply"
+            @apply="apply('compose')"
+            @send="apply('send')"
           />
         </div>
       </template>

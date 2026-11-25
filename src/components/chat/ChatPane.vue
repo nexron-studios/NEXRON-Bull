@@ -180,8 +180,9 @@ useDoubleEscape(
   () => rewind.openRewind(tab.id)
 )
 
-// A marked image, from the history or the composer itself, goes into this tab's composer.
-provideMarkupTarget((result) => composer.value?.takeMarkup(result) ?? false)
+// A marked image, from the history or the composer itself, goes into this tab's composer, or out
+// as a message of its own.
+provideMarkupTarget((result, handoff) => composer.value?.handOver(result, handoff) ?? false)
 // The buttons of a callout in an answer: a question goes into the composer, a suggestion is sent.
 provideCalloutTarget({
   reply: (question) => composer.value?.quote(question),

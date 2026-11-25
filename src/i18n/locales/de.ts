@@ -349,11 +349,13 @@ export default {
     text_label: 'Text im Bild',
     text_placeholder: 'Text, Enter setzt ihn',
     comment_hint:
-      'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern.',
+      'Geht mit dem Bild in dein Eingabefeld, markiert, wenn du gezeichnet hast. Du kannst ihn dort noch ändern. Senden schickt beides gleich als eigene Nachricht.',
     keep_original: 'Original zusätzlich mitschicken',
     discard: 'Verwerfen',
     apply: 'Ins Eingabefeld',
-    apply_phone_hint: 'Pfeil: markiertes Bild und Kommentar ins Eingabefeld',
+    send: 'Senden',
+    apply_phone_hint:
+      'Pfeil nach unten: Bild und Kommentar ins Eingabefeld. Pfeil nach oben: gleich senden.',
     cancel: 'Abbrechen',
     comment_line: 'Zu {ref}: {comment}',
     reference: '[Bild {n} ({name})]',

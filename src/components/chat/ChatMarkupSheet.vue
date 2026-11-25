@@ -8,7 +8,7 @@ import { useMarkup } from '@/composables/useMarkup'
 // Bottom of the phone markup screen (Figma "M20"): tools, then colours and sizes, then the comment
 // with the arrow that takes image and comment into the composer. On the stage in both themes.
 const { isApplying } = defineProps<{ isApplying: boolean }>()
-const emit = defineEmits<{ apply: [] }>()
+const emit = defineEmits<{ apply: []; send: [] }>()
 
 const { t } = useI18n()
 const markup = useMarkup()
@@ -21,7 +21,12 @@ const markup = useMarkup()
     <div class="flex flex-wrap items-center justify-between gap-y-3">
       <ChatMarkupTools is-large />
     </div>
-    <ChatMarkupPhoneComment :is-applying described-by="markup-apply-hint" @apply="emit('apply')" />
+    <ChatMarkupPhoneComment
+      :is-applying
+      described-by="markup-apply-hint"
+      @apply="emit('apply')"
+      @send="emit('send')"
+    />
     <div class="flex items-center gap-2 px-1">
       <Checkbox
         id="markup-keep-original-phone"

@@ -14,8 +14,15 @@ export interface MarkupResult {
   comment: string
 }
 
+/**
+ * Where the result goes: into the composer to write on (`compose`, "Ins Eingabefeld"), or straight
+ * to Claude as a message of its own (`send`).
+ */
+export const markupHandoffList = ['compose', 'send'] as const
+export type MarkupHandoff = (typeof markupHandoffList)[number]
+
 /** Returns false when the composer turned the images away (too many). */
-type MarkupTarget = (result: MarkupResult) => boolean
+type MarkupTarget = (result: MarkupResult, handoff: MarkupHandoff) => boolean
 
 const MARKUP_TARGET: InjectionKey<MarkupTarget> = Symbol('markupTarget')
 

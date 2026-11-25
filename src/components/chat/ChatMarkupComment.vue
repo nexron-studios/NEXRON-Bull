@@ -1,25 +1,29 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowDown, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
+import NchKbd from '@/components/common/NchKbd.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMarkup } from '@/composables/useMarkup'
-import { isRemoveKey } from '@/utils/shortcuts'
+import { useShortcutLabels } from '@/composables/useShortcutLabels'
+import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 
 // Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
 // composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
 // While marking, each numbered mark has its note here as well as on the image, so the text and
-// the spot it is about stay one thing; the field below is then for anything else. Nothing is sent
-// from here. A long note wraps and grows up to a few lines, then scrolls. The × removes the mark
+// the spot it is about stay one thing; the field below is then for anything else. "Ins
+// Eingabefeld" hands everything to the composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it
+// as a message of its own. A long note wraps and grows up to a few lines, then scrolls. The × removes the mark
 // with its note; Backspace in a pin's empty note does too, as a pin is nothing without it.
 const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
-const emit = defineEmits<{ discard: []; apply: [] }>()
+const emit = defineEmits<{ discard: []; apply: []; send: [] }>()
 
 const { t } = useI18n()
+const { labelOf, ariaOf } = useShortcutLabels()
 const markup = useMarkup()
 
 const rowLookOf = (id: string) => {
@@ -108,14 +112,26 @@ const hasNotes = computed(() => isMarking && rows.value.length > 0)
           {{ t('images.discard') }}
         </Button>
         <Button
+          variant="secondary"
           size="sm"
-          class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
           :disabled="!markup.isDirty.value"
           :aria-busy="isApplying"
           @click="emit('apply')"
         >
           <ArrowDown aria-hidden="true" />
           {{ t('images.apply') }}
+        </Button>
+        <Button
+          size="sm"
+          class="bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover"
+          :disabled="!markup.isDirty.value"
+          :aria-busy="isApplying"
+          :aria-keyshortcuts="ariaOf(SEND_CHORD)"
+          @click="emit('send')"
+        >
+          <ArrowUp aria-hidden="true" />
+          {{ t('images.send') }}
+          <NchKbd :key-label="labelOf(SEND_CHORD)" is-on-fill />
         </Button>
       </div>
     </div>

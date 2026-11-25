@@ -2,14 +2,12 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import { agentdService } from '@/api/services/agentd.service'
-import i18n from '@/i18n'
-import { handleError } from '@/lib/error'
+import { reportAgentdFailure } from '@/lib/error'
 import { queryClient } from '@/lib/queryClient'
+import { say } from '@/lib/worktreeText'
 import { useChatStore } from '@/stores/chat'
-import type { WorktreeRemoval } from '@/types/agentd.type'
 import type { ChatTabState } from '@/utils/chatTab'
-import { isUnknownOpError } from '@/utils/sessionActions'
-import { mergeToastOf, removalToastOf, type Phrase, type WorktreeToast } from '@/utils/worktree'
+import { mergeToastOf, refusalToastOf, removalToastOf, type WorktreeToast } from '@/utils/worktree'
 
 /** A toast stays up long enough to read the clashing files. */
 const RESULT_TOAST_MS = 10_000
@@ -21,11 +19,6 @@ const RESULT_TOAST_MS = 10_000
 export const useWorktreeActionsStore = defineStore('worktreeActions', () => {
   /** Tabs whose merge is on its way, so the menu shows it and a second click waits. */
   const mergingTabs = ref(new Set<string>())
-
-  const { t } = i18n.global
-
-  const say = ({ key, params, count }: Phrase) =>
-    count === undefined ? t(key, params) : t(key, params, count)
 
   const show = ({ tone, title, notes }: WorktreeToast) => {
     const message = say(title)
@@ -45,12 +38,6 @@ export const useWorktreeActionsStore = defineStore('worktreeActions', () => {
     }
   }
 
-  const reportFailure = (error: unknown, op: string, tab: ChatTabState) => {
-    if (isUnknownOpError(error, op))
-      toast.error(t('session_actions.outdated', { machine: tab.machine ?? '' }))
-    else handleError(error)
-  }
-
   // The main checkout may have moved to `preview`: every bar showing a branch asks again.
   const refreshBranches = (tab: ChatTabState) =>
     void queryClient.invalidateQueries({ queryKey: ['agentd', 'branch', tab.machine] })
@@ -59,14 +46,14 @@ export const useWorktreeActionsStore = defineStore('worktreeActions', () => {
     if (mergingTabs.value.has(tab.id)) return
     mergingTabs.value = new Set(mergingTabs.value).add(tab.id)
     try {
-      const merge = await agentdService.ask<'preview_merged'>(
+      const answer = await agentdService.ask<'preview_merged' | 'worktree_refused'>(
         { op: 'merge_into_preview', worktree: tab.cwd },
         tab.machine
       )
-      show(mergeToastOf(merge))
+      show(answer.type === 'preview_merged' ? mergeToastOf(answer) : refusalToastOf(answer))
       refreshBranches(tab)
     } catch (error) {
-      reportFailure(error, 'merge_into_preview', tab)
+      reportAgentdFailure(error, 'merge_into_preview', tab.machine)
     } finally {
       const rest = new Set(mergingTabs.value)
       rest.delete(tab.id)
@@ -75,18 +62,22 @@ export const useWorktreeActionsStore = defineStore('worktreeActions', () => {
   }
 
   /**
-   * Stops the chat's Claude (agentd refuses while it runs in the folder), then removes. A refusal
-   * leaves the tab as it is; its Claude starts again with the next message. Failures go to the
-   * confirmation, which reports them.
+   * Stops the chat's Claude (agentd refuses while it runs in the folder), then removes the
+   * worktree whose top folder is `root`. True once it is gone; a refusal leaves the tab as it is,
+   * its Claude starts again with the next message. Failures go to the confirmation.
    */
-  const remove = async (tab: ChatTabState): Promise<WorktreeRemoval> => {
+  const remove = async (tab: ChatTabState, root: string): Promise<boolean> => {
     await useChatStore().stopAndWait(tab.id)
-    const { outcome } = await agentdService.ask<'worktree_removed'>(
-      { op: 'remove_worktree', worktree: tab.cwd },
+    const answer = await agentdService.ask<'worktree_removed' | 'worktree_refused'>(
+      { op: 'remove_worktree', worktree: root },
       tab.machine
     )
-    show(removalToastOf(outcome))
-    return outcome
+    if (answer.type === 'worktree_refused') {
+      show(refusalToastOf(answer))
+      return false
+    }
+    show(removalToastOf(answer.outcome))
+    return answer.outcome.kind === 'removed'
   }
 
   return { mergingTabs, mergeIntoPreview, remove }

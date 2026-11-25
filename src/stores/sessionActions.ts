@@ -5,17 +5,17 @@ import { agentdService } from '@/api/services/agentd.service'
 import { useIsPhone } from '@/composables/useViewport'
 import i18n from '@/i18n'
 import { copyText } from '@/lib/clipboard'
-import { handleError } from '@/lib/error'
+import { handleError, reportAgentdFailure } from '@/lib/error'
 import { ClearRefusedError, useChatStore } from '@/stores/chat'
 import { useHiddenSessionsStore } from '@/stores/hiddenSessions'
 import { useRememberedSettingsStore } from '@/stores/rememberedSettings'
 import { useWorktreeActionsStore } from '@/stores/worktreeActions'
-import { savedTabOf } from '@/utils/chatTab'
+import { savedTabOf, type ChatTabState } from '@/utils/chatTab'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
 import {
   hiddenKeysOf,
-  isUnknownOpError,
   needsStop,
+  targetOfTab,
   type ConfirmationKind,
   type SessionAction,
   type SessionTarget
@@ -33,12 +33,22 @@ const OP_OF = {
   remove_worktree: 'remove_worktree'
 } as const
 
-/** A step the user confirms in the dialog first. `sessionId` is the one they saw when asking. */
-export interface SessionConfirmation {
-  kind: ConfirmationKind
-  target: SessionTarget
-  sessionId: string | null
-}
+/**
+ * A step the user confirms in the dialog first. `sessionId` is the one they saw when asking.
+ * Removing a worktree names the tab and the worktree's top folder, the one that goes.
+ */
+export type SessionConfirmation =
+  | {
+      kind: Exclude<ConfirmationKind, 'remove_worktree'>
+      target: SessionTarget
+      sessionId: string | null
+    }
+  | {
+      kind: 'remove_worktree'
+      target: SessionTarget
+      sessionId: string | null
+      worktree: { tab: ChatTabState; root: string }
+    }
 
 /**
  * Clearing, removing and deleting sessions, from the sidebar, the overview and a chat's menus.
@@ -67,12 +77,9 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
   )
 
   const reportFailure = (error: unknown, { kind, target }: SessionConfirmation) => {
-    const op = OP_OF[kind]
     if (error instanceof ClearRefusedError)
       toast.error(t(`session_actions.refused.${error.reason}`, { machine: target.machine ?? '' }))
-    else if (op && isUnknownOpError(error, op))
-      toast.error(t('session_actions.outdated', { machine: target.machine ?? '' }))
-    else handleError(error)
+    else reportAgentdFailure(error, OP_OF[kind], target.machine)
   }
 
   /** On a phone no open chat is the list; closing the shown one must not push another. */
@@ -82,13 +89,21 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     if (isPhone.value && wasShown) chat.activeId = null
   }
 
-  const ask = (kind: ConfirmationKind, target: SessionTarget) => {
+  const ask = (kind: Exclude<ConfirmationKind, 'remove_worktree'>, target: SessionTarget) => {
     confirmation.value = { kind, target, sessionId: target.sessionId }
   }
 
   const requestClear = (target: SessionTarget) => ask('clear', target)
   const requestDelete = (target: SessionTarget) => ask('delete', target)
-  const requestRemoveWorktree = (target: SessionTarget) => ask('remove_worktree', target)
+  const requestRemoveWorktree = (tab: ChatTabState, root: string) => {
+    const target = targetOfTab(tab)
+    confirmation.value = {
+      kind: 'remove_worktree',
+      target,
+      sessionId: target.sessionId,
+      worktree: { tab, root }
+    }
+  }
 
   /** Closes the tabs and hides the sessions, with an undo that brings both back. */
   const hideAll = async (targets: SessionTarget[]) => {
@@ -180,10 +195,8 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
   }
 
   /** The tab goes once its folder is gone: Claude could not start there again. */
-  const removeWorktree = async ({ target }: SessionConfirmation) => {
-    if (!target.tab) return
-    const outcome = await useWorktreeActionsStore().remove(target.tab)
-    if (outcome.kind === 'removed') closeTab(target.tab.id)
+  const removeWorktree = async ({ tab, root }: { tab: ChatTabState; root: string }) => {
+    if (await useWorktreeActionsStore().remove(tab, root)) closeTab(tab.id)
   }
 
   const run = async (current: SessionConfirmation) => {
@@ -196,10 +209,10 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
       case 'delete':
         return deleteForGood(current)
       case 'remove_worktree':
-        return removeWorktree(current)
+        return removeWorktree(current.worktree)
       default: {
-        const unhandled: never = current.kind
-        throw new Error(`Unhandled session confirmation: ${unhandled}`)
+        const unhandled: never = current
+        throw new Error(`Unhandled session confirmation: ${JSON.stringify(unhandled)}`)
       }
     }
   }

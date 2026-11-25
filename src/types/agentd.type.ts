@@ -228,6 +228,8 @@ export type AgentdEvent =
       working: boolean
       profile?: string | null
       account?: string | null
+      /** Where Claude works: a planned worktree's folder; missing from an older agentd */
+      cwd?: string
     }
   /** The limit card of a tab, sent again to an app that attaches later */
   | { type: 'limit'; tab: string; state: LimitState }
@@ -256,16 +258,19 @@ export type AgentdEvent =
       sessions?: SessionCountRow[]
     }
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
-  /** `is_worktree`: a linked git worktree; missing from an agentd older than worktrees */
-  /** `worktree_root`: that worktree's top folder, the one a removal deletes */
+  /**
+   * `worktree_root`: the linked git worktree's top folder, the one a removal deletes; `null` in a
+   * main checkout, missing from an agentd older than worktrees
+   */
+  | { type: 'branch'; id: number | null; branch: string | null; worktree_root?: string | null }
+  /** A worktree was not made (`tab` set: its Claude did not start), merged or removed */
   | {
-      type: 'branch'
+      type: 'worktree_refused'
       id: number | null
-      branch: string | null
-      is_worktree?: boolean
-      worktree_root?: string | null
+      tab: string | null
+      kind: WorktreeRefusalKind
+      message: string
     }
-  | { type: 'worktree_created'; id: number | null; path: string; branch: string; base: string }
   | {
       type: 'preview_merged'
       id: number | null
@@ -317,6 +322,8 @@ export interface StartPayload {
   is_fresh: boolean
   /** `low` … `max`; `null` keeps the profile's effort */
   effort: string | null
+  /** Claude starts in a new worktree of the repository of `cwd`, named after `hint` */
+  worktree: { hint: string; root: string | null } | null
 }
 
 /** One block of a prompt as the app sends it: Anthropic content blocks. */
@@ -387,11 +394,6 @@ export type AgentdRequest =
   | { op: 'rewind_points'; profile: string | null; session_id: string }
   /** Ctrl+B: sends the running call `tool_use_id` (or every foreground one) to the background */
   | { op: 'background'; tab: string; tool_use_id: string | null }
-  /**
-   * A worktree and `feat/…` branch for the repository of `cwd`, named after `hint`; asked again for
-   * the same `tab`, the one made the first time
-   */
-  | { op: 'create_worktree'; cwd: string; hint: string; root: string | null; tab: string }
   | { op: 'merge_into_preview'; worktree: string }
   /** Refuses while anything in the worktree could be lost or a chat runs in it */
   | { op: 'remove_worktree'; worktree: string }
@@ -405,6 +407,19 @@ export type PreviewMergeOutcome =
   | { kind: 'main_elsewhere'; branch: string }
   /** `preview` is missing and the main checkout has uncommitted changes; nothing was merged */
   | { kind: 'main_dirty' }
+
+/** Why agentd made, merged or removed no worktree; `failed` is git or the disk failing. */
+export const worktreeRefusalKindList = [
+  'no_folder',
+  'no_repository',
+  'not_a_worktree',
+  'no_integration',
+  'relative_root',
+  'detached',
+  'no_free_name',
+  'failed'
+] as const
+export type WorktreeRefusalKind = (typeof worktreeRefusalKindList)[number]
 
 /** Only `removed` removed anything. */
 export type WorktreeRemoval =

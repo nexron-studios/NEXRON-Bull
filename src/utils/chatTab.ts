@@ -120,10 +120,10 @@ export interface ChatTabState {
    */
   isFresh: boolean
   /**
-   * The repository this chat gets its own worktree from at its first start, named after the
-   * first prompt; `null` once the worktree is made (`cwd` is then the worktree) or without one.
+   * Claude's first start makes this chat its own worktree of the repository `cwd` is in, named
+   * after the first prompt; `started` then names the worktree as `cwd`.
    */
-  worktreeFrom: string | null
+  isWorktreePlanned: boolean
   /** The user muted this chat: it never notifies */
   isMuted: boolean
   history: HistoryState
@@ -177,7 +177,7 @@ export type PermissionMode = OfferedMode | (typeof otherPermissionModeList)[numb
 /** What reopens a tab after a restart; everything else comes back from the transcript. */
 export type SavedTab = SavedTabFields &
   // Optional: tabs saved before muting, effort, the window or worktrees existed have none of these.
-  Partial<Pick<ChatTabState, 'isMuted' | 'effort' | 'contextWindow' | 'worktreeFrom'>>
+  Partial<Pick<ChatTabState, 'isMuted' | 'effort' | 'contextWindow' | 'isWorktreePlanned'>>
 
 type SavedTabFields = Pick<
   ChatTabState,
@@ -210,7 +210,7 @@ export const savedTabOf = ({
   isFresh,
   unseenAt,
   contextWindow,
-  worktreeFrom
+  isWorktreePlanned
 }: ChatTabState): SavedTab => ({
   id,
   title,
@@ -226,7 +226,7 @@ export const savedTabOf = ({
   isFresh,
   unseenAt,
   contextWindow,
-  worktreeFrom
+  isWorktreePlanned
 })
 
 /** A saved window is divided by; anything but a positive number counts as unknown. */
@@ -244,9 +244,9 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   // Saved before the flag existed: only a tab whose prompt came back has a title.
   isFresh: fields.isFresh ?? !fields.title,
   unseenAt: fields.unseenAt ?? null,
-  worktreeFrom: fields.worktreeFrom ?? null,
+  isWorktreePlanned: fields.isWorktreePlanned ?? false,
   // A chat waiting for its worktree starts Claude only with its first prompt.
-  status: fields.sessionId || fields.worktreeFrom ? 'ended' : 'starting',
+  status: fields.sessionId || fields.isWorktreePlanned ? 'ended' : 'starting',
   statusBeforeMove: null,
   messages: [],
   streaming: '',
@@ -546,6 +546,8 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
         ...tab,
         ...movedAccountOf(tab, event),
         sessionId: event.session_id,
+        cwd: event.cwd ?? tab.cwd,
+        isWorktreePlanned: false,
         status: event.working ? 'working' : 'idle',
         statusBeforeMove: null,
         notice: null
@@ -568,6 +570,9 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
         permission: null,
         retry: null
       }
+    // Not in a worktree then: the next start goes to the folder itself, the notice says so.
+    case 'worktree_refused':
+      return { ...tab, status: 'ended', isWorktreePlanned: false, notice: event.message }
     case 'error':
       // While starting, the error is the start's: Claude never ran, the next prompt starts again.
       return {

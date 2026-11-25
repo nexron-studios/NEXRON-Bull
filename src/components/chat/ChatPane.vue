@@ -369,7 +369,7 @@ watch(
         class="mb-2 flex items-center gap-2 text-small text-muted-foreground"
       >
         <Info class="size-4 shrink-0" aria-hidden="true" />
-        {{ tab.worktreeFrom ? t('worktree.planned_hint') : t('chat.ended_hint') }}
+        {{ tab.isWorktreePlanned ? t('worktree.planned_hint') : t('chat.ended_hint') }}
       </p>
       <ChatLimitNudge
         v-if="warning"

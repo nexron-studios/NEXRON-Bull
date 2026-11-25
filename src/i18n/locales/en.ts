@@ -772,6 +772,10 @@ export default {
       example_title: 'What a new worktree is called',
       example_prompt: 'First message: “Add a week view to the calendar”',
       example_slug: 'add-week-view-calendar',
+      example_folder_default: 'dev/worktrees/app-{slug}',
+      example_folder_in: '{root}/app-{slug}',
+      example_branch_value: 'feat/{slug}',
+      root_not_full: 'Enter a full path, such as C:\\dev\\worktrees or /Users/me/dev/worktrees.',
       example_folder: 'Folder',
       example_branch: 'Branch',
       example_preview: 'preview',
@@ -1240,8 +1244,17 @@ export default {
     own_hint:
       'The chat works in a folder and branch of its own, fresh from the integration branch. Name and folder come from your first message.',
     planned_hint: 'With your first message Bull creates the worktree and starts Claude in it.',
-    create_failed:
-      'No worktree of its own: {reason}. Your next message starts Claude in the folder itself.',
+    starts_in_folder: 'Your next message starts Claude in the folder itself, without a worktree.',
+    refused: {
+      no_folder: 'The folder does not exist.',
+      no_repository: 'The folder is not in a git repository.',
+      not_a_worktree: 'This is the main checkout, not a worktree.',
+      no_integration: 'The repository has no integration branch (dev, main or master).',
+      relative_root: 'The worktree folder in Settings is not a full path.',
+      detached: 'No branch is checked out in the worktree.',
+      no_free_name: 'No free name is left for this branch.',
+      failed: 'Git failed: {message}'
+    },
     waits_for_prompt:
       'The worktree of this chat is created with the first message. Write something first.',
     pending: 'Own worktree from the first message',

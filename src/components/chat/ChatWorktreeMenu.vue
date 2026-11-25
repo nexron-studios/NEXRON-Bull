@@ -13,11 +13,11 @@ import {
 import { useSessionActionsStore } from '@/stores/sessionActions'
 import { useWorktreeActionsStore } from '@/stores/worktreeActions'
 import type { ChatTabState } from '@/utils/chatTab'
-import { targetOfTab } from '@/utils/sessionActions'
 
 // The branch of a chat that runs in its own worktree: it says so, and opens what comes next for
 // the branch, merging it into `preview` for the dev server and removing the worktree once done.
-const { tab, branch } = defineProps<{ tab: ChatTabState; branch: string }>()
+// `root` is the worktree's top folder: a chat on a subfolder removes all of it.
+const { tab, branch, root } = defineProps<{ tab: ChatTabState; branch: string; root: string }>()
 
 const { t } = useI18n()
 const worktrees = useWorktreeActionsStore()
@@ -52,10 +52,7 @@ const isMerging = computed(() => worktrees.mergingTabs.has(tab.id))
         {{ isMerging ? t('worktree.merging') : t('worktree.merge') }}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem
-        variant="destructive"
-        @select="actions.requestRemoveWorktree(targetOfTab(tab))"
-      >
+      <DropdownMenuItem variant="destructive" @select="actions.requestRemoveWorktree(tab, root)">
         <FolderX aria-hidden="true" />
         {{ t('worktree.remove') }}
       </DropdownMenuItem>

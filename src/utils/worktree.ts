@@ -1,4 +1,4 @@
-import type { AgentdEvent, WorktreeRemoval } from '@/types/agentd.type'
+import type { AgentdEvent, WorktreeRefusalKind, WorktreeRemoval } from '@/types/agentd.type'
 
 /** A toast is long enough for a handful of paths; the rest is counted. */
 const MAX_LISTED_FILES = 5
@@ -36,6 +36,26 @@ const filesPhrase = (files: string[]): Phrase => {
     ? counted('worktree.files_and_more', more, { files: listed })
     : phrase('worktree.files', { files: listed })
 }
+
+/**
+ * A folder agentd can take as it is: a drive (`C:\x`), a network share (`\\server`) or a root
+ * (`/x`). A relative one would be looked up from agentd's own folder, `~` is never expanded.
+ */
+export const isFullPath = (path: string): boolean => /^([a-zA-Z]:[\\/]|[\\/])/.test(path.trim())
+
+/** Why agentd made, merged or removed no worktree; only `failed` needs agentd's own words. */
+export const refusalPhraseOf = ({
+  kind,
+  message
+}: {
+  kind: WorktreeRefusalKind
+  message: string
+}): Phrase => phrase(`worktree.refused.${kind}`, { message })
+
+export const refusalToastOf = (refusal: {
+  kind: WorktreeRefusalKind
+  message: string
+}): WorktreeToast => ({ tone: 'error', title: refusalPhraseOf(refusal), notes: [] })
 
 export const mergeToastOf = (merge: PreviewMerged): WorktreeToast => {
   const notes = [

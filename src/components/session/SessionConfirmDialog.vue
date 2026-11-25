@@ -3,9 +3,7 @@ import { computed } from 'vue'
 import { Eraser, FolderX, LoaderCircle, Square, Trash2, X } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { knownGitBranchOf } from '@/composables/useGitBranch'
 import { useMachineNames } from '@/composables/useMachineNames'
-import type { Machine } from '@/api/services/agentd.service'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -27,10 +25,6 @@ const { t } = useI18n()
 const { nameOf } = useMachineNames()
 const actions = useSessionActionsStore()
 const { confirmation, confirmationTarget, isWorking } = storeToRefs(actions)
-// A chat on a subfolder loses the whole worktree: the dialog names its top folder, which the
-// session bar that offered the removal already asked for.
-const folderOf = (cwd: string, machine: Machine) =>
-  folderNameOf(knownGitBranchOf(cwd, machine)?.worktreeRoot ?? cwd)
 
 const ICONS = {
   clear: Eraser,
@@ -56,7 +50,8 @@ const text = computed(() => {
     title: actions.titleOf(target),
     machine: nameOf(target.machine),
     account: target.account,
-    folder: target.tab ? folderOf(target.tab.cwd, target.machine) : ''
+    // A chat on a subfolder loses the whole worktree: the dialog names its top folder.
+    folder: current.kind === 'remove_worktree' ? folderNameOf(current.worktree.root) : ''
   }
   return {
     title: t(keys.title, params),

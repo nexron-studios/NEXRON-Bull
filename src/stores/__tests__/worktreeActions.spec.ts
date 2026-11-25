@@ -2,7 +2,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import { newTab } from '@/utils/chatTab'
-import { targetOfTab } from '@/utils/sessionActions'
 import { useChatStore } from '../chat'
 import { useSessionActionsStore } from '../sessionActions'
 import { useWorktreeActionsStore } from '../worktreeActions'
@@ -19,7 +18,9 @@ vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   agentdService: { ask, send, onEvent: () => () => {}, waitFor: vi.fn() }
 }))
 
-const WORKTREE = 'C:\\dev\\worktrees\\app-week-view'
+/** The chat works on a subfolder; removing takes the whole worktree. */
+const ROOT_OF_SUBFOLDER = 'C:\\dev\\worktrees\\app-week-view'
+const WORKTREE = `${ROOT_OF_SUBFOLDER}\\src`
 
 const worktreeTab = () => ({
   ...newTab({
@@ -66,6 +67,23 @@ describe('useWorktreeActionsStore', () => {
     })
   })
 
+  it('should say in German why agentd made no merge', async () => {
+    ask.mockResolvedValue({
+      type: 'worktree_refused',
+      id: 1,
+      tab: null,
+      kind: 'not_a_worktree',
+      message: 'C:\dev\app is the main checkout, not a worktree'
+    })
+
+    await useWorktreeActionsStore().mergeIntoPreview(worktreeTab())
+
+    expect(toast.error).toHaveBeenCalledWith('Das ist der Hauptordner, kein Worktree.', {
+      description: undefined,
+      duration: 10_000
+    })
+  })
+
   it('should close the tab once its worktree is gone after the confirmation', async () => {
     ask.mockResolvedValue({
       type: 'worktree_removed',
@@ -76,10 +94,10 @@ describe('useWorktreeActionsStore', () => {
     chat.tabs = [worktreeTab()]
     const actions = useSessionActionsStore()
 
-    actions.requestRemoveWorktree(targetOfTab(chat.tabs[0]))
+    actions.requestRemoveWorktree(chat.tabs[0], ROOT_OF_SUBFOLDER)
     await actions.confirm()
 
-    expect(ask).toHaveBeenCalledWith({ op: 'remove_worktree', worktree: WORKTREE }, null)
+    expect(ask).toHaveBeenCalledWith({ op: 'remove_worktree', worktree: ROOT_OF_SUBFOLDER }, null)
     expect(chat.tabs).toEqual([])
     expect(toast.success).toHaveBeenCalledWith(
       'Worktree entfernt, Branch feat/week-view gelöscht.',
@@ -97,7 +115,7 @@ describe('useWorktreeActionsStore', () => {
     chat.tabs = [worktreeTab()]
     const actions = useSessionActionsStore()
 
-    actions.requestRemoveWorktree(targetOfTab(chat.tabs[0]))
+    actions.requestRemoveWorktree(chat.tabs[0], WORKTREE)
     await actions.confirm()
 
     expect(chat.tabs.map((tab) => tab.id)).toEqual(['t1'])

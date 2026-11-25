@@ -1,7 +1,6 @@
 import { computed, reactive, toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { AgentdDisconnectedError, agentdService, type Machine } from '@/api/services/agentd.service'
-import { queryClient } from '@/lib/queryClient'
 
 /** Claude may switch branches while it works; agentd only reads a file, so asking is cheap. */
 const BRANCH_POLL_MS = 30 * 1000
@@ -21,17 +20,22 @@ const forgetOnReconnect = () => {
   })
 }
 
-/** `isWorktree` is `null` from an agentd before worktrees: it cannot tell, nor make one. */
+/**
+ * Where the folder sits: the main checkout, a linked worktree with its top folder, or unknown on a
+ * machine whose agentd predates worktrees (it can neither tell nor make one).
+ */
+export type Checkout =
+  { kind: 'main' } | { kind: 'worktree'; root: string } | { kind: 'unsupported' }
+
 export interface GitBranch {
   branch: string | null
-  isWorktree: boolean | null
-  /** The linked worktree's top folder; `null` in a main checkout */
-  worktreeRoot: string | null
+  checkout: Checkout
 }
 
-/** What the last answer said about a folder, without asking again; the session bar keeps it. */
-export const knownGitBranchOf = (cwd: string, machine: Machine) =>
-  queryClient.getQueryData<GitBranch>(['agentd', 'branch', machine, cwd])
+const checkoutOf = (root: string | null | undefined): Checkout => {
+  if (root === undefined) return { kind: 'unsupported' }
+  return root === null ? { kind: 'main' } : { kind: 'worktree', root }
+}
 
 /**
  * The git branch checked out in a tab's folder and whether the folder is a linked worktree, from
@@ -51,11 +55,7 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
           on,
           BRANCH_TIMEOUT_MS
         )
-        return {
-          branch: answer.branch,
-          isWorktree: answer.is_worktree ?? null,
-          worktreeRoot: answer.worktree_root ?? null
-        }
+        return { branch: answer.branch, checkout: checkoutOf(answer.worktree_root) }
       } catch (error) {
         // A lost connection says nothing about the agentd behind the next one, and its
         // `disconnected` event has already gone by: marking it now would stick.
@@ -63,7 +63,8 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
         throw error
       }
     },
-    enabled: computed(() => !isUnknown.value),
+    // No folder yet (a dialog still empty) has no branch to ask for.
+    enabled: computed(() => !isUnknown.value && !!toValue(cwd)),
     refetchInterval: BRANCH_POLL_MS,
     retry: false
   })

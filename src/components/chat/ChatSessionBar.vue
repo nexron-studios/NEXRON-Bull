@@ -41,9 +41,11 @@ const canRewind = computed(
 const isBranchShown = computed(
   () => !branch.isUnknown.value && (branch.isPending.value || !!branch.data.value?.branch)
 )
-const worktreeBranch = computed(() =>
-  branch.data.value?.isWorktree ? branch.data.value.branch : null
-)
+const worktree = computed(() => {
+  const answer = branch.data.value
+  if (!answer?.branch || answer.checkout.kind !== 'worktree') return null
+  return { branch: answer.branch, root: answer.checkout.root }
+})
 </script>
 
 <template>
@@ -74,7 +76,7 @@ const worktreeBranch = computed(() =>
       <TooltipContent>{{ tab.cwd }}</TooltipContent>
     </Tooltip>
     <!-- A chat whose worktree comes with its first message: not the main checkout's branch. -->
-    <template v-if="tab.worktreeFrom">
+    <template v-if="tab.isWorktreePlanned">
       <span class="text-border" aria-hidden="true">/</span>
       <GitBranch class="size-4 shrink-0" aria-hidden="true" />
       <span class="min-w-0 truncate">{{ t('worktree.pending') }}</span>
@@ -82,7 +84,7 @@ const worktreeBranch = computed(() =>
     <template v-else-if="isBranchShown">
       <span class="text-border" aria-hidden="true">/</span>
       <span class="sr-only">{{ t('panel.branch') }}:</span>
-      <ChatWorktreeMenu v-if="worktreeBranch" :tab :branch="worktreeBranch" />
+      <ChatWorktreeMenu v-if="worktree" :tab :branch="worktree.branch" :root="worktree.root" />
       <template v-else>
         <GitBranch class="size-4 shrink-0" aria-hidden="true" />
         <Skeleton v-if="branch.isPending.value" class="h-4 w-24" />

@@ -785,6 +785,11 @@ export default {
       example_title: 'So heißt ein neuer Worktree',
       example_prompt: 'Erste Nachricht: „Bitte den Kalender um eine Wochenansicht erweitern“',
       example_slug: 'kalender-wochenansicht-erweitern',
+      example_folder_default: 'dev/worktrees/app-{slug}',
+      example_folder_in: '{root}/app-{slug}',
+      example_branch_value: 'feat/{slug}',
+      root_not_full:
+        'Bitte einen vollständigen Pfad eintragen, etwa C:\\dev\\worktrees oder /Users/ich/dev/worktrees.',
       example_folder: 'Ordner',
       example_branch: 'Branch',
       example_preview: 'preview',
@@ -1260,8 +1265,18 @@ export default {
     own_hint:
       'Der Chat arbeitet in einem eigenen Ordner mit eigenem Branch, frisch vom Integrationsbranch. Name und Ordner kommen aus deiner ersten Nachricht.',
     planned_hint: 'Mit deiner ersten Nachricht legt Bull den Worktree an und startet Claude darin.',
-    create_failed:
-      'Kein eigener Worktree: {reason}. Deine nächste Nachricht startet Claude direkt im Ordner.',
+    starts_in_folder:
+      'Deine nächste Nachricht startet Claude ohne eigenen Worktree direkt im Ordner.',
+    refused: {
+      no_folder: 'Den Ordner gibt es nicht.',
+      no_repository: 'Der Ordner liegt in keinem Git-Repo.',
+      not_a_worktree: 'Das ist der Hauptordner, kein Worktree.',
+      no_integration: 'Das Repo hat keinen Integrationsbranch (dev, main oder master).',
+      relative_root: 'Der Ordner für Worktrees in den Einstellungen ist kein vollständiger Pfad.',
+      detached: 'Im Worktree ist kein Branch ausgecheckt.',
+      no_free_name: 'Für diesen Branch ist kein Name mehr frei.',
+      failed: 'Git ist gescheitert: {message}'
+    },
     waits_for_prompt:
       'Der Worktree dieses Chats entsteht mit der ersten Nachricht. Schreib zuerst etwas.',
     pending: 'Eigener Worktree ab der ersten Nachricht',

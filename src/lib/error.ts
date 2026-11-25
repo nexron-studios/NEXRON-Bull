@@ -1,7 +1,8 @@
 import { toast } from 'vue-sonner'
-import { AgentdDisconnectedError } from '@/api/services/agentd.service'
+import { AgentdDisconnectedError, type Machine } from '@/api/services/agentd.service'
 import { useMachineNames } from '@/composables/useMachineNames'
 import i18n from '@/i18n'
+import { isUnknownOpError } from '@/utils/sessionActions'
 
 const isCancellation = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError'
@@ -19,4 +20,13 @@ export const handleError = (error: unknown): void => {
   const message = error instanceof Error ? error.message : String(error)
   console.error('app.error', { message })
   toast.error(i18n.global.t('errors.unexpected', { message }))
+}
+
+/** Like `handleError`, but an agentd from before `op` gets named: that machine needs a new one. */
+export const reportAgentdFailure = (error: unknown, op: string | null, machine: Machine): void => {
+  if (op && isUnknownOpError(error, op)) {
+    toast.error(i18n.global.t('session_actions.outdated', { machine: machine ?? '' }))
+    return
+  }
+  handleError(error)
 }

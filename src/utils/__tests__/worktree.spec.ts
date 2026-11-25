@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeToastOf, removalToastOf } from '../worktree'
+import { isFullPath, mergeToastOf, refusalToastOf, removalToastOf } from '../worktree'
 
 const merged = (outcome: Parameters<typeof mergeToastOf>[0]['outcome'], extra = {}) => ({
   type: 'preview_merged' as const,
@@ -76,6 +76,33 @@ describe('removalToastOf', () => {
       key: 'worktree.refused_unmerged',
       params: { integration: 'origin/main', n: 3 },
       count: 3
+    })
+  })
+})
+
+describe('isFullPath', () => {
+  it('should take drive, share and root paths', () => {
+    expect(
+      ['C:\\dev\\worktrees', 'd:/trees', '\\\\server\\trees', '/Users/me/trees'].map(isFullPath)
+    ).toEqual([true, true, true, true])
+  })
+
+  it('should refuse relative and home paths', () => {
+    expect(['trees', '..\\trees', '~/trees', ''].map(isFullPath)).toEqual([
+      false,
+      false,
+      false,
+      false
+    ])
+  })
+})
+
+describe('refusalToastOf', () => {
+  it('should name the refusal by its kind and carry the message of git', () => {
+    expect(refusalToastOf({ kind: 'failed', message: 'git merge failed: boom' })).toEqual({
+      tone: 'error',
+      title: { key: 'worktree.refused.failed', params: { message: 'git merge failed: boom' } },
+      notes: []
     })
   })
 })

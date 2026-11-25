@@ -193,6 +193,14 @@ describe('numbered marks', () => {
     expect([...markNumbersOf(withoutMark(strokes, 'p1'), {})]).toEqual([['p2', 1]])
   })
 
+  it('should go on after the numbers burnt into the image by an earlier round', () => {
+    expect([...markNumbersOf([pin('p'), mark('a')], { a: 'x' }, 1)]).toEqual([
+      ['p', 2],
+      ['a', 3]
+    ])
+    expect(markupNotesOf([pin('p')], { p: 'bluer' }, 1)).toEqual(['② bluer'])
+  })
+
   it('should never number a text', () => {
     expect(markNumbersOf([text], { text: 'x' }).size).toBe(0)
   })

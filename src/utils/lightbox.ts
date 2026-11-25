@@ -32,18 +32,24 @@ export const toPendingImage = (image: LightboxImage, newId: () => string): Pendi
     src: image.src,
     bytes: image.bytes,
     isMarked: image.isMarked,
+    markCount: image.markCount,
     ...parsed
   }
 }
 
-/** The marked copy: a new attachment under the source's name, with its new encoding's extension. */
+/**
+ * The marked copy: a new attachment under the source's name, with its new encoding's extension.
+ * `markCount`: the highest number now burnt into it.
+ */
 export const markedCopyOf = (
   name: string,
   encoded: { src: string; mediaType: ImageType; data: string; bytes: number },
-  id: string
+  id: string,
+  markCount: number
 ): PendingImage => ({
   id,
   name: renameExtension(name, encoded.mediaType),
   isMarked: true,
+  markCount,
   ...encoded
 })

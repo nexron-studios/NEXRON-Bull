@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { noteBlockAfter, withNoteLines, withoutNoteLines } from '../imageNotes'
+import { noteBlockAfter, noteLinesAfter, withNoteLines, withoutNoteLines } from '../imageNotes'
 
 const CHIP = '[Image 1 (shot.png)]'
 
@@ -30,6 +30,15 @@ describe('withoutNoteLines', () => {
 
   it('should leave a text without notes under the chip as it is', () => {
     expect(withoutNoteLines(`${CHIP} crop\nthanks ①`, CHIP.length)).toBe(`${CHIP} crop\nthanks ①`)
+  })
+})
+
+describe('noteLinesAfter', () => {
+  it('should read the note lines under the chip', () => {
+    expect(noteLinesAfter(`${CHIP} crop\n① bigger\n② bluer\nthanks`, CHIP.length)).toEqual([
+      '① bigger',
+      '② bluer'
+    ])
   })
 })
 

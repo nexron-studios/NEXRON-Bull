@@ -58,7 +58,7 @@ export const useLightboxActions = ({
       return copy ? [copy] : []
     }
     const encoded = await flattenImage(image.src, markup.strokes.value, markup.numbers.value)
-    const marked = markedCopyOf(image.name, encoded, newId())
+    const marked = markedCopyOf(image.name, encoded, newId(), markup.markCount.value)
     const original = markup.isKeepingOriginal.value ? toPendingImage(image, newId) : null
     return original ? [marked, original] : [marked]
   }

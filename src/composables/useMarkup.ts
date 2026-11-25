@@ -33,14 +33,18 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   /** The mark whose note field is open on the image */
   const editingId = ref<string | null>(null)
   const isKeepingOriginal = ref(false)
+  /** Numbers already burnt into the image (a marked copy marked again); set by the preview */
+  const burntIn = ref(0)
 
   const strokes = computed(() => history.value.present)
   const canUndo = computed(() => history.value.past.length > 0)
   const canRedo = computed(() => history.value.future.length > 0)
   const isDirty = computed(() => strokes.value.length > 0 || !!comment.value.trim())
-  const numbers = computed(() => markNumbersOf(strokes.value, notes.value))
+  const numbers = computed(() => markNumbersOf(strokes.value, notes.value, burntIn.value))
+  /** The highest number in the image once this round is burnt in */
+  const markCount = computed(() => burntIn.value + numbers.value.size)
   /** The written notes behind their numbers, one line each, as they go into the composer */
-  const noteLines = computed(() => markupNotesOf(strokes.value, notes.value))
+  const noteLines = computed(() => markupNotesOf(strokes.value, notes.value, burntIn.value))
 
   const setNote = (id: string, text: string) => {
     notes.value = { ...notes.value, [id]: text }
@@ -90,6 +94,8 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
     strokes,
     numbers,
     noteLines,
+    burntIn,
+    markCount,
     setNote,
     settleNote,
     canUndo,

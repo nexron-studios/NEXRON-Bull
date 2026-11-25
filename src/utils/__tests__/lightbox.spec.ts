@@ -49,10 +49,11 @@ describe('markedCopyOf', () => {
       bytes: 2
     }
 
-    expect(markedCopyOf('photo.jpg', encoded, 'm1')).toEqual({
+    expect(markedCopyOf('photo.jpg', encoded, 'm1', 3)).toEqual({
       id: 'm1',
       name: 'photo.png',
       isMarked: true,
+      markCount: 3,
       src: 'data:image/png;base64,aGk=',
       mediaType: 'image/png',
       data: 'aGk=',

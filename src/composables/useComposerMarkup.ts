@@ -76,7 +76,8 @@ export const useComposerMarkup = ({
   /**
    * "Senden" in the preview: image and comment go out as a message of their own, by the same way
    * as any message (queue, limit). The draft stays for later; only an attachment that just went
-   * out leaves it, with its references. A shell command waiting in the draft stays one: nothing
+   * out leaves it, with its references; the notes it had there from earlier rounds go out with it,
+   * in front of this round's. A shell command waiting in the draft stays one: nothing
    * is written into it.
    */
   const sendMarkup = ({ sourceId, images: outgoing, comment, notes }: MarkupResult) => {
@@ -86,7 +87,8 @@ export const useComposerMarkup = ({
     }
     // An image Claude would not take (no base64 data URL) cannot go along; its comment still can.
     const [first] = outgoing
-    const text = oneLineOf(comment, notes)
+    const earlier = first && sourceId ? references.notesOf(sourceId) : []
+    const text = oneLineOf(comment, [...earlier, ...notes])
     if (!first && !text) {
       toast.error(t('images.send_empty'))
       return false

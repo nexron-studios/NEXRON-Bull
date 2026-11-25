@@ -124,6 +124,15 @@ const handleKeydown = (event: KeyboardEvent) => {
   step(delta)
 }
 
+// A marked copy marked again numbers on after what is painted into it already.
+watch(
+  current,
+  (image) => {
+    markup.burntIn.value = image?.markCount ?? 0
+  },
+  { immediate: true }
+)
+
 watch(index, () => {
   natural.value = null
   zoom.value = 1

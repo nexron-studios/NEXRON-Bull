@@ -88,6 +88,8 @@ export interface LightboxImage {
   id?: string
   /** Drawn on in the preview; the chip shows a pen */
   isMarked?: boolean
+  /** Numbers burnt into the image by earlier marking, so a next round goes on after them */
+  markCount?: number
 }
 
 export const toDataUrl = (mediaType: string, data: string) => `data:${mediaType};base64,${data}`

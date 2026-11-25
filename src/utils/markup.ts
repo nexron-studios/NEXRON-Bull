@@ -217,13 +217,16 @@ export type MarkupNotes = Readonly<Record<string, string>>
 
 /**
  * The number of every mark that has one, in the order the marks were made: pins always, other
- * marks once a note belongs to them. Text needs none, it says what it means itself.
+ * marks once a note belongs to them. Text needs none, it says what it means itself. `burntIn`:
+ * numbers an earlier round already painted into the image; this round goes on after them.
  */
-export const markNumbersOf = (strokes: readonly Stroke[], notes: MarkupNotes) => {
+export const markNumbersOf = (strokes: readonly Stroke[], notes: MarkupNotes, burntIn = 0) => {
   const numbers = new Map<string, number>()
   for (const stroke of strokes) {
     if (numbers.has(stroke.id) || stroke.tool === 'text') continue
-    if (stroke.tool === 'pin' || stroke.id in notes) numbers.set(stroke.id, numbers.size + 1)
+    if (stroke.tool === 'pin' || stroke.id in notes) {
+      numbers.set(stroke.id, burntIn + numbers.size + 1)
+    }
   }
   return numbers
 }
@@ -245,8 +248,8 @@ export const circledNumberOf = (number: number) =>
  * Each written note behind the number its mark has in the image ("① bigger"). One line per note,
  * so a note's own line breaks become spaces.
  */
-export const markupNotesOf = (strokes: readonly Stroke[], notes: MarkupNotes) =>
-  [...markNumbersOf(strokes, notes)].flatMap(([id, number]) => {
+export const markupNotesOf = (strokes: readonly Stroke[], notes: MarkupNotes, burntIn = 0) =>
+  [...markNumbersOf(strokes, notes, burntIn)].flatMap(([id, number]) => {
     const note = (notes[id] ?? '').trim().replace(/\s*\n\s*/g, ' ')
     return note ? [`${circledNumberOf(number)} ${note}`] : []
   })

@@ -149,7 +149,7 @@ describe('useComposerMarkup', () => {
     expect(draft.value).toBe(`${chipOf(1, 'shot.png')} please crop\n① bigger\n② bluer\nthanks`)
   })
 
-  it('should take the notes along when the marked image is sent from the draft', () => {
+  it('should send the notes along when the marked image leaves the draft', () => {
     const shot = imageOf('a', 'shot.png')
     const marked = { ...imageOf('m', 'shot.png'), isMarked: true }
     const { handOver, draft, sent } = setup({ attached: [shot] })
@@ -158,7 +158,25 @@ describe('useComposerMarkup', () => {
 
     handOver({ sourceId: 'm', images: [marked], comment: '', notes: [] }, 'send')
 
-    expect(sent).toEqual([['', ['shot.png']]])
+    expect(sent).toEqual([['About [Image 1 (shot.png)]: ① bigger', ['shot.png']]])
     expect(draft.value).toBe('look\nthanks')
+  })
+
+  it('should add a second round of notes after the first, in order, and send the image clean', () => {
+    const shot = imageOf('a', 'shot.png')
+    const first = { ...imageOf('m1', 'shot.png'), isMarked: true, markCount: 1 }
+    const second = { ...imageOf('m2', 'shot.png'), isMarked: true, markCount: 2 }
+    const { handOver, draft, sent } = setup({ attached: [shot] })
+    draft.value = `${chipOf(1, 'shot.png')} please crop`
+
+    handOver({ sourceId: 'a', images: [first], comment: '', notes: ['① bigger'] }, 'compose')
+    handOver({ sourceId: 'm1', images: [second], comment: '', notes: ['② bluer'] }, 'compose')
+
+    expect(draft.value).toBe(`${chipOf(1, 'shot.png')} please crop\n① bigger\n② bluer`)
+
+    handOver({ sourceId: 'm2', images: [second], comment: '', notes: [] }, 'send')
+
+    expect(sent).toEqual([['About [Image 1 (shot.png)]: ① bigger ② bluer', ['shot.png']]])
+    expect(draft.value).toBe('please crop')
   })
 })

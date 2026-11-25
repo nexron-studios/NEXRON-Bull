@@ -19,6 +19,8 @@ export interface PendingImage {
   bytes: number
   /** Drawn on in the preview; the chip shows a pen */
   isMarked?: boolean
+  /** Numbers burnt into the image by earlier marking, so a next round goes on after them */
+  markCount?: number
 }
 
 /** One user turn as Anthropic content blocks: images first, then the text. */

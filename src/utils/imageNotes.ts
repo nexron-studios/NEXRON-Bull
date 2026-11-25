@@ -28,6 +28,12 @@ export const noteBlockAfter = (text: string, at: number): { start: number; end: 
   return end > start ? { start, end } : null
 }
 
+/** The note lines under the line holding `at`, as they read. */
+export const noteLinesAfter = (text: string, at: number): string[] => {
+  const block = noteBlockAfter(text, at)
+  return block ? text.slice(block.start + 1, block.end).split('\n') : []
+}
+
 /** `lines` under the line holding `at`, after its notes so far; what followed keeps its own line. */
 export const withNoteLines = (text: string, at: number, lines: readonly string[]) => {
   const end = noteBlockAfter(text, at)?.end ?? lineEndOf(text, at)

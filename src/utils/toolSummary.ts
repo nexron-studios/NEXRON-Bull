@@ -1,6 +1,7 @@
 import { compactPath } from '@/utils/toolKind'
 
 const SUMMARY_FIELDS = [
+  'skill',
   'command',
   'file_path',
   'path',

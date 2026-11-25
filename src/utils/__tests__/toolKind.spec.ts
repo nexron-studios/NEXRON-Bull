@@ -6,6 +6,10 @@ describe('toolInfoOf', () => {
     expect(toolInfoOf('Grep')).toEqual({ kind: 'read', activity: 'searches', icon: 'search' })
   })
 
+  it('should mark a skill with its own kind, activity and icon', () => {
+    expect(toolInfoOf('Skill')).toEqual({ kind: 'skill', activity: 'applies_skill', icon: 'skill' })
+  })
+
   it('should treat every task tool as planning', () => {
     expect(['TodoWrite', 'TaskCreate', 'TaskUpdate'].map((name) => toolInfoOf(name))).toEqual([
       { kind: 'change', activity: 'plans', icon: 'tasks' },
@@ -15,7 +19,7 @@ describe('toolInfoOf', () => {
   })
 
   it('should fall back to a plug for MCP tools and a wrench for unknown ones', () => {
-    expect([toolInfoOf('mcp__figma__get').icon, toolInfoOf('Skill').icon]).toEqual([
+    expect([toolInfoOf('mcp__figma__get').icon, toolInfoOf('SomeNewTool').icon]).toEqual([
       'plug',
       'wrench'
     ])

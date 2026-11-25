@@ -1,5 +1,8 @@
-/** What a tool does, as the colour hierarchy in tokens.css sees it. */
-export const toolKindList = ['read', 'change', 'outside'] as const
+/**
+ * What a tool does, as the colour hierarchy in tokens.css sees it. `skill`: Claude follows a skill
+ * (code-review, a house skill …), tinted in the skills orange so it stands out from plain steps.
+ */
+export const toolKindList = ['read', 'change', 'outside', 'skill'] as const
 export type ToolKind = (typeof toolKindList)[number]
 
 /** What the thinking bar says Claude is doing while a call runs; the key under `chat.stream.activity`. */
@@ -12,6 +15,7 @@ export const activityList = [
   'searches_web',
   'delegates',
   'plans',
+  'applies_skill',
   'uses'
 ] as const
 export type Activity = (typeof activityList)[number]
@@ -27,6 +31,7 @@ export const toolIconList = [
   'agent',
   'tasks',
   'plug',
+  'skill',
   'wrench'
 ] as const
 export type ToolIcon = (typeof toolIconList)[number]
@@ -68,7 +73,8 @@ const TOOLS: Record<string, ToolInfo> = {
   TaskCreate: PLANS,
   TaskUpdate: PLANS,
   TaskList: READS_PLAN,
-  TaskGet: READS_PLAN
+  TaskGet: READS_PLAN,
+  Skill: { kind: 'skill', activity: 'applies_skill', icon: 'skill' }
 }
 const MCP_PREFIX = 'mcp__'
 const MCP_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'plug' }

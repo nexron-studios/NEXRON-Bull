@@ -17,7 +17,8 @@
  *   link       brand-blue text: links in Claude's answers and the "Vorschlag" callout. Brand on
  *              dark (4.9:1), brand-strong on light (4.7:1); link-hover is lighter on dark, deeper on
  *              light (19.11.2026: links in the main colour, with hover)
- *   clawd      Claude orange, only the skills share of the context breakdown. Clawd himself is
+ *   clawd      Claude orange, only for skills: their share of the context breakdown and a skill
+ *              Claude runs (icon and row tint in chat and panel, never its text: 3:1 on light, 25.11.2026). Clawd himself is
  *              brand blue, so he follows the theme (18.11.2026)
  *   stage      the black backdrop of the full-screen image viewer on phones, in both themes
  *   account-a…d  the dot that marks a Claude account (composer chip, panel, sidebar footer),

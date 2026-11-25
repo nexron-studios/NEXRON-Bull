@@ -149,6 +149,7 @@ export default {
         searches_web: 'Claude is searching the web for {target}',
         delegates: 'Claude is handing a task to a subagent',
         plans: 'Claude is planning the steps',
+        applies_skill: 'Claude is using the {target} skill',
         uses: 'Claude is using {tool}'
       }
     },

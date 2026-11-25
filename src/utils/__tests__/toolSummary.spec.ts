@@ -16,6 +16,12 @@ describe('summarizeToolInput', () => {
     )
   })
 
+  it('should name the skill rather than its arguments', () => {
+    expect(summarizeToolInput({ skill: 'code-review', args: 'low origin/main...HEAD' })).toBe(
+      'code-review'
+    )
+  })
+
   it('should return an empty line when no known field is present', () => {
     expect(summarizeToolInput({ todos: [] })).toBe('')
   })

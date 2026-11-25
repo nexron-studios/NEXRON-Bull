@@ -6,7 +6,7 @@ import ChatDiffView from '@/components/chat/ChatDiffView.vue'
 import ChatShellOutput from '@/components/chat/ChatShellOutput.vue'
 import { countsOf, rowsOfHunks } from '@/utils/diffRows'
 import { hunksOfTool } from '@/utils/toolInput'
-import { TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
+import { SKILL_ROW_TINT, TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
 import { toolInfoOf } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
 import { resultTextOf, type ToolResultBlock } from '@/utils/toolPairs'
@@ -43,6 +43,7 @@ const state = computed<ToolState>(() => {
   return isRunning ? 'running' : 'stopped'
 })
 const info = computed(() => toolInfoOf(name))
+const isSkill = computed(() => info.value.kind === 'skill')
 const summary = computed(() => summarizeToolInput(input))
 // Line numbers and context only come with Claude Code's patch; the input alone has neither.
 const diffHunks = computed(() => hunksOfTool(name, input, result?.patch))
@@ -70,7 +71,7 @@ const images = computed(() =>
   >
     <summary
       class="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 text-small select-none hover:bg-muted/60 [&::-webkit-details-marker]:hidden"
-      :class="{ 'bg-muted/60': state === 'running' }"
+      :class="isSkill ? SKILL_ROW_TINT : { 'bg-muted/60': state === 'running' }"
     >
       <component
         :is="TOOL_ICON[info.icon]"
@@ -79,9 +80,11 @@ const images = computed(() =>
         aria-hidden="true"
       />
       <span class="font-medium">{{ name }}</span>
-      <span class="min-w-0 flex-1 truncate font-mono text-meta text-muted-foreground">{{
-        summary
-      }}</span>
+      <span
+        class="min-w-0 flex-1 truncate"
+        :class="isSkill ? 'font-semibold' : 'font-mono text-meta text-muted-foreground'"
+        >{{ summary }}</span
+      >
       <span v-if="counts" class="flex shrink-0 gap-1.5 font-mono text-meta tabular-nums">
         <span class="sr-only">{{ t('chat.diff_counts', counts) }}</span>
         <span class="text-good" aria-hidden="true">+{{ counts.added }}</span>

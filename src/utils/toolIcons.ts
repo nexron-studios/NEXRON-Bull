@@ -12,6 +12,7 @@ import {
   Plug,
   Search,
   SquareTerminal,
+  WandSparkles,
   Wrench,
   X
 } from '@lucide/vue'
@@ -29,15 +30,20 @@ export const TOOL_ICON: Record<ToolIcon, Component> = {
   agent: Bot,
   tasks: ListChecks,
   plug: Plug,
+  skill: WandSparkles,
   wrench: Wrench
 }
 
-/** Read, change and outside each have their act colour. */
+/** Read, change and outside each have their act colour; a skill has the skills orange. */
 export const TOOL_KIND_CLASS: Record<ToolKind, string> = {
   read: 'text-act-read',
   change: 'text-act-change',
-  outside: 'text-act-outside'
+  outside: 'text-act-outside',
+  skill: 'text-clawd'
 }
+
+/** The tint behind a skill's row in chat and panel, so a running code review is seen at a glance. */
+export const SKILL_ROW_TINT = 'bg-clawd/10'
 
 /** How a tool call's state looks in the panel: the activity list and a subagent's actions. */
 export const TOOL_RUN_LOOK: Record<ToolRunStatus, { icon: Component; class: string }> = {

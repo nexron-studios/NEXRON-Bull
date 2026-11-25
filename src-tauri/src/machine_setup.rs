@@ -3,22 +3,18 @@
 //! explains; `machine_install` copies agentd over with the same calls. The first call asks which
 //! system the machine runs (`machine_os`), the others are written for it.
 
-use std::net::IpAddr;
-use std::process::Command;
-
 use serde::Serialize;
 use tauri::State;
 
-use crate::connections;
 use crate::machine_os::{self, MachineOs, Platform, UNAME_COMMAND};
 use crate::machines::{self, MachineEntry, MachineStore};
 use crate::remote_call::{Asked, ask, ssh};
+use crate::ssh_config;
 
 const HELLO_LINE: &str = r#"{"op":"hello","id":1}"#;
 /// ssh's own exit code for its failures; anything else is the remote command's.
 pub(crate) const SSH_FAILED: i32 = 255;
 const SHELL_COMMAND_MISSING: i32 = 127;
-const DEFAULT_SSH_PORT: &str = "22";
 const MAX_DETAIL_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -108,7 +104,7 @@ fn agentd_answer(entry: &MachineEntry, should_accept_new_key: bool, os: MachineO
 
 fn ssh_failed(entry: &MachineEntry, stderr: &str) -> Probe {
     let reason = ssh_failure(stderr);
-    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| known_host_of(entry)).flatten();
+    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| ssh_config::known_host_of(entry)).flatten();
     Probe { known_host, ..Probe::of(reason, stderr) }
 }
 
@@ -151,36 +147,6 @@ pub(crate) fn detail_of(stderr: &str) -> Option<String> {
     (!tail.is_empty()).then(|| tail.chars().take(MAX_DETAIL_CHARS).collect())
 }
 
-/// The name `known_hosts` keeps the machine under, from `ssh -G` (reads the config, connects
-/// nowhere).
-fn known_host_of(entry: &MachineEntry) -> Option<String> {
-    known_host_in(&ssh_config_of(entry)?)
-}
-
-/// What `ssh -G` makes of the machine: one `key value` line per option.
-fn ssh_config_of(entry: &MachineEntry) -> Option<String> {
-    let mut command = Command::new(connections::ssh_program());
-    command.arg("-G").args(entry.ssh_args());
-    Some(ask(command, "", "").ok()?.stdout)
-}
-
-fn config_value(config: &str, key: &str) -> Option<String> {
-    config.lines().find_map(|line| {
-        let (name, value) = line.split_once(' ')?;
-        name.eq_ignore_ascii_case(key).then(|| value.trim().to_string())
-    })
-}
-
-/// `hostkeyalias` wins over `hostname`; a port other than 22 is stored as `[host]:port`.
-fn known_host_in(config: &str) -> Option<String> {
-    let value = |key: &str| config_value(config, key);
-    let host = value("hostkeyalias").filter(|alias| alias != "none").or_else(|| value("hostname"))?;
-    match value("port").filter(|port| port != DEFAULT_SSH_PORT) {
-        Some(port) => Some(format!("[{host}]:{port}")),
-        None => Some(host),
-    }
-}
-
 /// Checks a machine the user typed in or picked; it need not be in the list yet. A listed one
 /// remembers the system found: its next connection speaks that system's shell.
 #[tauri::command(async)]
@@ -191,37 +157,6 @@ pub fn test_machine(store: State<'_, MachineStore>, entry: MachineEntry) -> Resu
         store.remember_os(&entry, os);
     }
     Ok(probe)
-}
-
-/// The host ssh connects to directly, from `ssh -G`. `None` behind a proxy (the host may not be
-/// reachable from here) or for a loopback `HostName` (a forwarded port into a VM or WSL): there
-/// `localhost` would show this machine's page under the other machine's name.
-fn direct_host_in(config: &str) -> Option<String> {
-    let value = |key: &str| config_value(config, key).filter(|value| value != "none");
-    if value("proxyjump").is_some() || value("proxycommand").is_some() {
-        return None;
-    }
-    value("hostname").filter(|host| !is_loopback_host(host))
-}
-
-fn is_loopback_host(host: &str) -> bool {
-    let bare = host.trim_start_matches('[').trim_end_matches(']');
-    match bare.parse::<IpAddr>() {
-        Ok(ip) => ip.is_loopback() || ip.is_unspecified(),
-        Err(_) => {
-            let name = bare.to_ascii_lowercase();
-            name == "localhost" || name.ends_with(".localhost")
-        }
-    }
-}
-
-/// The host ssh really connects to for a machine (`HostName`, the alias resolved), for the
-/// preview: a dev server's `localhost` there is that host from here. `None` when ssh cannot say
-/// or the machine is not directly reachable (`direct_host_in`).
-#[tauri::command(async)]
-pub fn machine_host_name(name: String) -> Result<Option<String>, machines::MachinesError> {
-    let entry = machines::resolve(&name)?;
-    Ok(ssh_config_of(&entry).and_then(|config| direct_host_in(&config)))
 }
 
 #[cfg(test)]
@@ -256,52 +191,6 @@ mod tests {
         let github = "Hi alex! You've successfully authenticated, but GitHub does not provide shell access.";
         assert_eq!(presence_reason(&asked(1, github)), ProbeReason::UnsupportedSystem);
         assert_eq!(presence_reason(&asked(255, "Connection closed by 10.0.0.2 port 22")), ProbeReason::Offline);
-    }
-
-    #[test]
-    fn names_the_machine_as_known_hosts_stores_it() {
-        assert_eq!(known_host_in("user nexron\nhostname 100.64.0.10\nport 22\n").as_deref(), Some("100.64.0.10"));
-        assert_eq!(known_host_in("hostname box\nport 2222\n").as_deref(), Some("[box]:2222"));
-        assert_eq!(known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(), Some("pc"));
-        assert_eq!(known_host_in("hostname box\nhostkeyalias none\n").as_deref(), Some("box"));
-    }
-
-    #[test]
-    fn takes_a_direct_host_name() {
-        let config = "hostname devbox.example
-proxycommand none
-";
-        assert_eq!(direct_host_in(config).as_deref(), Some("devbox.example"));
-    }
-
-    #[test]
-    fn refuses_a_host_behind_a_proxy() {
-        assert_eq!(direct_host_in("hostname devbox.example
-proxyjump gate.example
-"), None);
-        assert_eq!(direct_host_in("hostname devbox.example
-proxycommand nc %h %p
-"), None);
-    }
-
-    #[test]
-    fn refuses_a_loopback_host_name() {
-        for host in ["localhost", "127.0.0.1", "127.0.1.1", "::1", "[::1]", "0.0.0.0", "vm.localhost"] {
-            assert_eq!(direct_host_in(&format!("hostname {host}
-port 2222
-")), None, "{host}");
-        }
-    }
-
-    #[test]
-    fn reads_one_option_of_ssh_g() {
-        let config = "user dev
-hostname devbox.example
-port 22
-";
-        assert_eq!(config_value(config, "hostname").as_deref(), Some("devbox.example"));
-        assert_eq!(config_value(config, "HostName").as_deref(), Some("devbox.example"));
-        assert_eq!(config_value(config, "proxyjump"), None);
     }
 
     #[test]

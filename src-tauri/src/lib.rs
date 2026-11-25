@@ -44,7 +44,7 @@ pub fn run() {
             machines::add_machine,
             machines::remove_machine,
             machine_setup::test_machine,
-            machine_setup::machine_host_name,
+            ssh_config::machine_host_name,
             machine_install::install_agentd,
             notification_setting::notification_setting,
             terminal::terminal_shells,

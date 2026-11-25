@@ -227,6 +227,21 @@ describe('relay', () => {
     tablet.socket.close()
   })
 
+  it('should count connection ids from its start time, so a restart reuses none', async () => {
+    const bridgeStartedBefore = Date.now()
+    const device = await signedIn()
+    device.send({ type: 'request', seq: 1, machine: null, line: '{"id":1,"op":"hello"}' })
+
+    const { connection } = await device.next('sent')
+
+    assert.ok(Number(connection) < bridgeStartedBefore, `${connection} is not below the test start`)
+    assert.ok(
+      Number(connection) > bridgeStartedBefore - 60_000,
+      `${connection} is not a start time`
+    )
+    device.socket.close()
+  })
+
   it('should fail a request for a machine it cannot start', async () => {
     const device = await signedIn()
     device.send({ type: 'request', seq: 4, machine: 'nowhere', line: '{"op":"hello"}' })

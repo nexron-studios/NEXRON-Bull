@@ -16,6 +16,7 @@ $env:BULL_BRIDGE_PORT = "$Port"
 $env:BULL_BRIDGE_MACHINES = $Machines
 
 Set-Location $bridge
-# cmd for the redirection: PowerShell 5.1 would write the log as UTF-16 and wrap stderr lines.
-& cmd /d /c "node --experimental-strip-types --disable-warning=ExperimentalWarning src\main.ts serve >> `"$log`" 2>&1"
+# npm start runs the node line from package.json. cmd for the redirection: PowerShell 5.1
+# would write the log as UTF-16 and wrap stderr lines.
+& cmd /d /c "npm start >> `"$log`" 2>&1"
 exit $LASTEXITCODE

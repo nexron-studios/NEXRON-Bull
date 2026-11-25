@@ -58,9 +58,10 @@ const activity = computed(() => {
   const current = isBusy.value ? rowActivityOf(row.tab) : null
   return current ? activityLabel(current) : ''
 })
-// The chat is done, shells or agents it started are not: they get the line a busy row's activity
-// has. A busy row says what Claude does now instead.
-const background = computed(() => (row.group === 'done' ? backgroundWorkOf(row.tab) : []))
+// Shells or agents Claude still runs get the line a busy row's activity has: under "done" a shell
+// the chat left running, under "running" the agent that holds it there. While Claude itself works
+// the line says what it does now instead.
+const background = computed(() => (isEmpty.value ? [] : backgroundWorkOf(row.tab)))
 </script>
 
 <template>

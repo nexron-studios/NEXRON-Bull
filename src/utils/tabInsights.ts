@@ -46,11 +46,22 @@ export interface Subagent {
   finishedAt: number | null
 }
 
+/**
+ * What a background task is: an agent ends on its own and Claude answers its report; a shell (or a
+ * monitor) may run for ever, like a dev server.
+ */
+export const backgroundTaskKindList = ['agent', 'shell'] as const
+export type BackgroundTaskKind = (typeof backgroundTaskKindList)[number]
+
+/** Claude Code's `task_type`s of a run that reports back (2.1.332); any other one counts as shell. */
+const AGENT_TASK_TYPES = ['local_agent', 'remote_agent', 'in_process_teammate', 'local_workflow']
+
 /** A background task the user would call work: a shell, an agent, a monitor. */
 export interface BackgroundTask {
   id: string
   /** What Claude Code names it, e.g. the `description` of the Bash call; empty when it gave none */
   description: string
+  kind: BackgroundTaskKind
 }
 
 /**
@@ -62,6 +73,8 @@ export interface BackgroundTasks {
   active: BackgroundTask[]
   /** When the list arrived (ms since epoch) */
   at: number
+  /** Since when an agent runs in the background without a break (ms); `null` while none does */
+  agentsSince: number | null
 }
 
 /** A background agent's end, from Claude's `<task-notification>`. */
@@ -176,9 +189,13 @@ const textOf = (content: unknown): string =>
 
 interface ListedTask {
   task_id?: unknown
+  task_type?: unknown
   description?: unknown
   ambient?: unknown
 }
+
+const kindOf = (taskType: unknown): BackgroundTaskKind =>
+  AGENT_TASK_TYPES.some((type) => type === taskType) ? 'agent' : 'shell'
 
 /**
  * The background tasks still running, from the stream's `system` event of subtype
@@ -187,7 +204,9 @@ interface ListedTask {
  * as a live-update watcher, which Claude Code asks hosts to leave out of activity indicators.
  * Live only: after a reload there is no list until the next change.
  */
-export const backgroundTasksOf = (event: ClaudeEvent): Omit<BackgroundTasks, 'at'> | null => {
+export const backgroundTasksOf = (
+  event: ClaudeEvent
+): Omit<BackgroundTasks, 'at' | 'agentsSince'> | null => {
   if (event.type !== 'system' || event.subtype !== 'background_tasks_changed') return null
   if (!Array.isArray(event.tasks)) return null
   const tasks = (event.tasks as ListedTask[]).flatMap((task) =>
@@ -198,7 +217,8 @@ export const backgroundTasksOf = (event: ClaudeEvent): Omit<BackgroundTasks, 'at
       .filter((task) => task.ambient !== true)
       .map((task) => ({
         id: task.id,
-        description: typeof task.description === 'string' ? task.description.trim() : ''
+        description: typeof task.description === 'string' ? task.description.trim() : '',
+        kind: kindOf(task.task_type)
       }))
   }
 }

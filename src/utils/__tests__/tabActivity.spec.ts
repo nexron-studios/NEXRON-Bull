@@ -327,10 +327,11 @@ describe('backgroundShellsOf', () => {
     ]
     const tasks = {
       active: [
-        { id: 'b2', description: '' },
-        { id: 'a7f', description: '' }
+        { id: 'b2', description: '', kind: 'shell' as const },
+        { id: 'a7f', description: '', kind: 'agent' as const }
       ],
-      at: ms(9)
+      at: ms(9),
+      agentsSince: null
     }
     expect(backgroundShellsOf(messages, [], true, tasks)).toEqual([
       { id: 's2', command: 'npm run build', description: '', startedAt: ms(2) }
@@ -356,10 +357,11 @@ describe('backgroundShellsOf', () => {
     ]
     const tasks = {
       active: [
-        { id: 'b1', description: '' },
-        { id: 'b2', description: 'Follow act video generation until done' }
+        { id: 'b1', description: '', kind: 'shell' as const },
+        { id: 'b2', description: 'Follow act video generation until done', kind: 'shell' as const }
       ],
-      at: ms(3)
+      at: ms(3),
+      agentsSince: null
     }
     expect(backgroundShellsOf(messages, [], true, tasks).map((shell) => shell.description)).toEqual(
       ['Watch the release', 'Follow act video generation until done']
@@ -368,7 +370,9 @@ describe('backgroundShellsOf', () => {
 
   it('should end a shell the stream lists only as ambient housekeeping', () => {
     const messages = started('s1', 'b1', 'node watch.mjs', 1)
-    expect(backgroundShellsOf(messages, [], true, { active: [], at: ms(9) })).toEqual([])
+    expect(
+      backgroundShellsOf(messages, [], true, { active: [], at: ms(9), agentsSince: null })
+    ).toEqual([])
   })
 
   it('should list nothing once Claude has exited', () => {

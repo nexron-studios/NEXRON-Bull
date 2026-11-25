@@ -99,6 +99,11 @@ export interface ChatTabState {
   /** When the last turn ended here (ms); `null` until one did in this run of the app */
   finishedAt: number | null
   /**
+   * The answer to the user ended while a background agent still ran: the chat finishes with the
+   * turn that ends once no agent runs, usually Claude's reply to the last report. Live only.
+   */
+  isFinishHeld: boolean
+  /**
    * The turn a limit or an account move cut off, in this run of the app. The prompt after the cut
    * (agentd's "go on", or the user's) continues it, so the panel keeps listing its subagents and
    * "Offen" instead of starting over. "Aktivität" shows what runs now and
@@ -253,6 +258,7 @@ export const newTab = (fields: SavedTab): ChatTabState => ({
   live: NO_LIVE_BLOCK,
   turn: null,
   finishedAt: null,
+  isFinishHeld: false,
   cutTurn: null,
   pending: [],
   history: fields.sessionId ? 'none' : 'loaded',
@@ -368,6 +374,7 @@ const withEmptyChat = (tab: ChatTabState): ChatTabState => ({
   hasMore: false,
   history: 'loaded',
   finishedAt: null,
+  isFinishHeld: false,
   cutTurn: null,
   unseenAt: null,
   contextWindow: null,
@@ -471,9 +478,27 @@ export const backgroundWorkOf = (
   tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>
 ): BackgroundTask[] => (tab.status === 'ended' ? [] : (tab.backgroundTasks?.active ?? []))
 
-/** The tab as lists show it: during a move to another account, with its status from before. */
-export const listedTabOf = (tab: ChatTabState): ChatTabState =>
-  tab.statusBeforeMove ? { ...tab, status: tab.statusBeforeMove } : tab
+/** The background agents Claude still runs; each ends with a report that Claude answers. */
+export const backgroundAgentsOf = (
+  tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>
+): BackgroundTask[] => backgroundWorkOf(tab).filter((task) => task.kind === 'agent')
+
+/**
+ * The status the user sees: a chat whose turn ended while a background agent still runs works on
+ * (Jonas, 25.11.2026: "wenn ein Subagent noch läuft soll es bei Läuft angezeigt werden"). A shell
+ * does not hold it, because a dev server never ends; the row names the shell instead.
+ */
+export const shownStatusOf = (tab: Pick<ChatTabState, 'status' | 'backgroundTasks'>): TabStatus =>
+  tab.status === 'idle' && backgroundAgentsOf(tab).length > 0 ? 'working' : tab.status
+
+/**
+ * The tab as lists show it: with its background agents as work, and during a move to another
+ * account with its status from before.
+ */
+export const listedTabOf = (tab: ChatTabState): ChatTabState => {
+  const status = tab.statusBeforeMove ?? shownStatusOf(tab)
+  return status === tab.status ? tab : { ...tab, status }
+}
 
 /** The tab after one agentd event that belongs to it. */
 export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState => {
@@ -541,12 +566,13 @@ export const withAgentNotices = (tab: ChatTabState, notices: AgentNotice[]): Cha
 /** The background tasks the stream just listed as running. */
 export const withBackgroundTasks = (
   tab: ChatTabState,
-  tasks: Omit<BackgroundTasks, 'at'>,
+  tasks: Omit<BackgroundTasks, 'at' | 'agentsSince'>,
   now: number
-): ChatTabState => ({
-  ...tab,
-  backgroundTasks: { ...tasks, at: now }
-})
+): ChatTabState => {
+  const hasAgents = tasks.active.some((task) => task.kind === 'agent')
+  const agentsSince = hasAgents ? (tab.backgroundTasks?.agentsSince ?? now) : null
+  return { ...tab, backgroundTasks: { ...tasks, at: now, agentsSince } }
+}
 
 /** A sent prompt shows at once; `withMessage` swaps in Claude's echo. */
 export const withPendingPrompt = (tab: ChatTabState, prompt: ChatMessage): ChatTabState => ({
@@ -587,23 +613,26 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
     // Claude took up a subagent's report on its own: the last answer is still news.
     if (isAgentReplyOf(tab, turn)) return { ...tab, turn: { ...turn, isAgentReply: true } }
     // A new turn makes the last answer old news: the tab leaves the finish order.
-    return { ...tab, turn, unseenAt: null }
+    return { ...tab, turn, unseenAt: null, isFinishHeld: false }
   }
   return { ...withTurnEnd(tab, now), turn: null }
 }
 
 /**
  * A turn that ends well finishes the chat; a crash, an exit or an error result mid-turn does not.
- * Shells or agents left running in the background do not hold the finish: some never end, and the
- * row says what still runs (Jonas, 25.11.2026). Claude's reply to a background report finishes it
- * again once nothing is left running, since that reply carries the result the user waited for;
- * a reply while more still runs is only a step on the way.
+ * A background agent still running holds the finish: the chat stays under "running" until a turn
+ * ends with no agent left, usually Claude's reply to the last report (Jonas, 25.11.2026). Shells
+ * do not hold it, since some never end and the row says what still runs. Claude's reply to a
+ * report finishes the chat again once nothing is left running, since that reply carries the
+ * result the user waited for; a reply while shells still run is only a step on the way, unless
+ * it is the one an agent held the finish for.
  */
 const withTurnEnd = (tab: ChatTabState, now: number): ChatTabState => {
   if (tab.status !== 'idle' || tab.notice) return tab
   const isAgentReply = !!tab.turn && isAgentReplyOf(tab, tab.turn)
-  if (isAgentReply && backgroundWorkOf(tab).length > 0) return tab
-  return { ...tab, finishedAt: now }
+  if (backgroundAgentsOf(tab).length > 0) return isAgentReply ? tab : { ...tab, isFinishHeld: true }
+  if (isAgentReply && !tab.isFinishHeld && backgroundWorkOf(tab).length > 0) return tab
+  return { ...tab, finishedAt: now, isFinishHeld: false }
 }
 
 /**

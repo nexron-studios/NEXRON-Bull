@@ -68,7 +68,11 @@ describe('useChatStore: background work', () => {
     chat.tabs = [
       {
         ...liveTab('t1', null),
-        backgroundTasks: { active: [{ id: 'a7f', description: '' }], at: 1 }
+        backgroundTasks: {
+          active: [{ id: 'a7f', description: '', kind: 'agent' }],
+          at: 1,
+          agentsSince: null
+        }
       }
     ]
 
@@ -107,7 +111,7 @@ describe('useChatStore: background work', () => {
     expect([tab.status, tab.finishedAt, tab.backgroundTasks?.active]).toEqual([
       'idle',
       9000,
-      [{ id: 'b3vtm9fpi', description: 'Follow act video generation until done' }]
+      [{ id: 'b3vtm9fpi', description: 'Follow act video generation until done', kind: 'shell' }]
     ])
   })
 })

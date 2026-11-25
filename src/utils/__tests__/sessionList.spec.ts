@@ -362,35 +362,58 @@ describe('rowActivityOf', () => {
 
 describe('a chat whose turn ended while something runs in the background', () => {
   // Task ids as Claude Code lists them: a background shell (`local_bash`) and an agent.
-  const backgroundOf = (taskId: string) => ({
-    active: [{ id: taskId, description: 'Follow act video generation until done' }],
-    at: NOON
-  })
+  const SHELL = {
+    id: 'b3vtm9fpi',
+    description: 'Follow act video generation until done',
+    kind: 'shell' as const
+  }
+  const AGENT = {
+    id: 'a472665f67fbbf6fa',
+    description: 'Check the release',
+    kind: 'agent' as const
+  }
 
-  it.each([
-    ['a background shell', 'b3vtm9fpi'],
-    ['a background agent', 'a472665f67fbbf6fa']
-  ])('should be under "done" while %s runs', (_, taskId) => {
+  it('should be under "done" while a background shell runs', () => {
     const idle = tab('b', {
       status: 'idle',
       finishedAt: NOON - MINUTE,
-      backgroundTasks: backgroundOf(taskId)
+      backgroundTasks: { active: [SHELL], at: NOON, agentsSince: null }
     })
     const [row] = sessionRowsOf([idle], [], NOON)
     expect([row.group, row.status, row.since]).toEqual(['done', 'idle', NOON - MINUTE])
   })
 
-  it('should light the machine dot as done', () => {
+  it('should stay under "running" since the agent started while a background agent runs', () => {
+    const idle = tab('b', {
+      status: 'idle',
+      backgroundTasks: { active: [SHELL, AGENT], at: NOON, agentsSince: NOON - 2 * MINUTE }
+    })
+    const [row] = sessionRowsOf([idle], [], NOON)
+    expect([row.group, row.status, row.since]).toEqual(['running', 'working', NOON - 2 * MINUTE])
+  })
+
+  it('should light the machine dot as done while only a shell runs', () => {
     const idle = tab('b', {
       status: 'idle',
       finishedAt: NOON - MINUTE,
-      backgroundTasks: backgroundOf('b3vtm9fpi')
+      backgroundTasks: { active: [SHELL], at: NOON, agentsSince: null }
     })
     expect(machineStateOf([idle], NOON)).toBe('done')
   })
 
+  it('should light the machine dot as running while an agent runs', () => {
+    const idle = tab('b', {
+      status: 'idle',
+      backgroundTasks: { active: [AGENT], at: NOON, agentsSince: NOON }
+    })
+    expect(machineStateOf([idle], NOON)).toBe('running')
+  })
+
   it('should say nothing as its activity: the row names the task on its own line', () => {
-    const idle = tab('b', { status: 'idle', backgroundTasks: backgroundOf('b3vtm9fpi') })
+    const idle = tab('b', {
+      status: 'idle',
+      backgroundTasks: { active: [AGENT], at: NOON, agentsSince: NOON }
+    })
     expect(rowActivityOf(idle)).toBe(null)
   })
 
@@ -399,7 +422,7 @@ describe('a chat whose turn ended while something runs in the background', () =>
       status: 'working',
       finishedAt: NOON - 10 * MINUTE,
       turn: { startedAt: NOON - MINUTE, afterUuid: null },
-      backgroundTasks: { active: [], at: NOON - MINUTE }
+      backgroundTasks: { active: [], at: NOON - MINUTE, agentsSince: null }
     })
     expect(keysByGroup([reply])).toEqual([['running', ['b']]])
   })

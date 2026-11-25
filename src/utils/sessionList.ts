@@ -185,7 +185,8 @@ const rowOfTab = (tab: ChatTabState, modified: Map<string, number>, today: numbe
     account: tab.account,
     status: listed.status,
     group,
-    since: isBusy ? (tab.turn?.startedAt ?? null) : finishedAt
+    // A chat held by a background agent has no turn: it runs since the agent does.
+    since: isBusy ? (tab.turn?.startedAt ?? tab.backgroundTasks?.agentsSince ?? null) : finishedAt
   }
 }
 

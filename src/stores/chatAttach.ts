@@ -10,6 +10,7 @@ import { isDesktopApp } from '@/lib/platform'
 import { runningTabsOn } from '@/lib/runningTabs'
 import { useBrowserTabsStore } from '@/stores/browserTabs'
 import { newTab, type ChatTabState, type SavedTab } from '@/utils/chatTab'
+import { NO_LIVE_BLOCK } from '@/utils/liveStream'
 
 const RECONNECT_FIRST_MS = 250
 const RECONNECT_MAX_MS = 30_000
@@ -164,8 +165,7 @@ export const useChatAttach = ({
             ...tab,
             status: 'ended',
             statusBeforeMove: null,
-            streaming: '',
-            thinking: null,
+            live: NO_LIVE_BLOCK,
             turn: null,
             permission: null,
             notice

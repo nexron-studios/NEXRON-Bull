@@ -3,21 +3,18 @@
 //! explains; `machine_install` copies agentd over with the same calls. The first call asks which
 //! system the machine runs (`machine_os`), the others are written for it.
 
-use std::process::Command;
-
 use serde::Serialize;
 use tauri::State;
 
-use crate::connections;
 use crate::machine_os::{self, MachineOs, Platform, UNAME_COMMAND};
 use crate::machines::{self, MachineEntry, MachineStore};
 use crate::remote_call::{Asked, ask, ssh};
+use crate::ssh_config;
 
 const HELLO_LINE: &str = r#"{"op":"hello","id":1}"#;
 /// ssh's own exit code for its failures; anything else is the remote command's.
 pub(crate) const SSH_FAILED: i32 = 255;
 const SHELL_COMMAND_MISSING: i32 = 127;
-const DEFAULT_SSH_PORT: &str = "22";
 const MAX_DETAIL_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -107,7 +104,7 @@ fn agentd_answer(entry: &MachineEntry, should_accept_new_key: bool, os: MachineO
 
 fn ssh_failed(entry: &MachineEntry, stderr: &str) -> Probe {
     let reason = ssh_failure(stderr);
-    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| known_host_of(entry)).flatten();
+    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| ssh_config::known_host_of(entry)).flatten();
     Probe { known_host, ..Probe::of(reason, stderr) }
 }
 
@@ -148,30 +145,6 @@ pub(crate) fn detail_of(stderr: &str) -> Option<String> {
     let lines: Vec<&str> = stderr.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
     let tail = lines[lines.len().saturating_sub(3)..].join("\n");
     (!tail.is_empty()).then(|| tail.chars().take(MAX_DETAIL_CHARS).collect())
-}
-
-/// The name `known_hosts` keeps the machine under, from `ssh -G` (reads the config, connects
-/// nowhere).
-fn known_host_of(entry: &MachineEntry) -> Option<String> {
-    let mut command = Command::new(connections::ssh_program());
-    command.arg("-G").args(entry.ssh_args());
-    let asked = ask(command, "", "").ok()?;
-    known_host_in(&asked.stdout)
-}
-
-/// `hostkeyalias` wins over `hostname`; a port other than 22 is stored as `[host]:port`.
-fn known_host_in(config: &str) -> Option<String> {
-    let value = |key: &str| {
-        config.lines().find_map(|line| {
-            let (name, value) = line.split_once(' ')?;
-            name.eq_ignore_ascii_case(key).then(|| value.trim().to_string())
-        })
-    };
-    let host = value("hostkeyalias").filter(|alias| alias != "none").or_else(|| value("hostname"))?;
-    match value("port").filter(|port| port != DEFAULT_SSH_PORT) {
-        Some(port) => Some(format!("[{host}]:{port}")),
-        None => Some(host),
-    }
 }
 
 /// Checks a machine the user typed in or picked; it need not be in the list yet. A listed one
@@ -218,14 +191,6 @@ mod tests {
         let github = "Hi alex! You've successfully authenticated, but GitHub does not provide shell access.";
         assert_eq!(presence_reason(&asked(1, github)), ProbeReason::UnsupportedSystem);
         assert_eq!(presence_reason(&asked(255, "Connection closed by 10.0.0.2 port 22")), ProbeReason::Offline);
-    }
-
-    #[test]
-    fn names_the_machine_as_known_hosts_stores_it() {
-        assert_eq!(known_host_in("user nexron\nhostname 100.64.0.10\nport 22\n").as_deref(), Some("100.64.0.10"));
-        assert_eq!(known_host_in("hostname box\nport 2222\n").as_deref(), Some("[box]:2222"));
-        assert_eq!(known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(), Some("pc"));
-        assert_eq!(known_host_in("hostname box\nhostkeyalias none\n").as_deref(), Some("box"));
     }
 
     #[test]

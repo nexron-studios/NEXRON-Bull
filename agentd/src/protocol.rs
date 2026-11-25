@@ -269,6 +269,27 @@ pub struct HistoryParams {
     pub is_fresh: bool,
 }
 
+/// What a streamed block is: reasoning or the reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockKind {
+    Thinking,
+    Writing,
+}
+
+/// The block Claude is streaming, as the app shows it. One block streams at a time: Claude Code
+/// sends each finished block as its own message before the next one starts. `Cut`: it outgrew what
+/// agentd keeps, so the app drops its further deltas until its finished message.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LiveBlock {
+    #[default]
+    None,
+    Thinking { text: String },
+    Writing { text: String },
+    Cut { of: BlockKind },
+}
+
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
@@ -286,6 +307,10 @@ pub enum Event {
     /// Any other stdout line of Claude, passed through untouched; an open permission ask sent
     /// again to an attaching app carries `"replay": true`.
     Claude { tab: String, event: Value },
+    /// The block Claude is streaming since its last finished message, sent to an app that attaches
+    /// mid-turn; never while nothing streamed. `message_id` and `chars` are the API call it belongs
+    /// to and the characters streamed in it, for the app's token estimate.
+    StreamReplay { tab: String, message_id: Option<String>, chars: u64, block: LiveBlock },
     Stderr { tab: String, text: String },
     Exited { tab: String, code: Option<i32> },
     History { id: Option<u64>, messages: Vec<ChatMessage>, has_more: bool },

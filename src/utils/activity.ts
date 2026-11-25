@@ -1,4 +1,5 @@
 import { hasRepliedThisTurn, turnMessagesOf, type ChatTabState } from '@/utils/chatTab'
+import { liveActivityOf } from '@/utils/liveStream'
 import { shortTarget, toolInfoOf, type Activity } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
 import { resultsByToolId, type ToolResultBlock, type ToolUseBlock } from '@/utils/toolPairs'
@@ -24,7 +25,7 @@ const runningCall = (
 
 /** Sent, but Claude has neither written, thought nor called a tool yet in this turn. */
 export const isAwaitingReply = (tab: ChatTabState): boolean => {
-  if (tab.status !== 'working' || !tab.turn || tab.streaming || tab.thinking !== null) return false
+  if (tab.status !== 'working' || !tab.turn || tab.live.kind !== 'none') return false
   return !hasRepliedThisTurn(tab)
 }
 
@@ -33,8 +34,8 @@ export const activityOfTab = (
   results: Map<string, ToolResultBlock>
 ): TabActivity => {
   if (tab.permission) return { kind: 'asking' }
-  if (tab.thinking !== null) return { kind: 'thinking' }
-  if (tab.streaming) return { kind: 'writing' }
+  const live = liveActivityOf(tab.live)
+  if (live) return { kind: live }
   const call = runningCall(tab, results)
   if (!call) return { kind: 'working' }
   return {

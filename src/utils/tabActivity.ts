@@ -5,6 +5,7 @@ import {
   turnMessagesOf,
   type ChatTabState
 } from '@/utils/chatTab'
+import { liveActivityOf } from '@/utils/liveStream'
 import { askReasonOf, type NotifyReason } from '@/utils/notifications'
 import {
   AGENT_TOOL_NAMES,
@@ -220,8 +221,8 @@ export const activityStateOf = (tab: ChatTabState, turn: TurnTools): ActivitySta
   }
   if (isStartingTurn(tab)) return { kind: 'running', current: null, phase: 'thinking' }
   if (tab.status !== 'working') return { kind: 'idle', summary: turn.summary }
-  if (tab.thinking !== null) return { kind: 'running', current: null, phase: 'thinking' }
-  if (tab.streaming) return { kind: 'running', current: null, phase: 'writing' }
+  const live = liveActivityOf(tab.live)
+  if (live) return { kind: 'running', current: null, phase: live }
   const current = turn.tools.findLast((tool) => tool.status === 'running') ?? null
   return { kind: 'running', current, phase: 'working' }
 }

@@ -76,4 +76,28 @@ describe('markdown', () => {
       '<ul>\n<li><a href="https://a.dev">link</a></li>\n</ul>\n'
     )
   })
+
+  it('should put an open-in-preview button after a link to a local page', () => {
+    const html = markdown.render('Siehe [Kalender](http://localhost:5173/kalender).')
+    const button = /<\/a><button type="button" class="preview-link" data-preview="([^"]+)"/.exec(
+      html
+    )
+    expect(button?.[1]).toBe('http://localhost:5173/kalender')
+  })
+
+  it('should give a bare localhost address the button too', () => {
+    expect(markdown.render('http://127.0.0.1:1483/').match(/data-preview="[^"]+"/g)).toEqual([
+      'data-preview="http://127.0.0.1:1483/"'
+    ])
+  })
+
+  it('should leave a link without an address without the button', () => {
+    expect(markdown.render('[leer]()')).not.toContain('data-preview')
+  })
+
+  it('should leave links to other hosts without the button', () => {
+    expect(markdown.render('[Doku](https://vuejs.org)')).toBe(
+      '<p><a href="https://vuejs.org">Doku</a></p>\n'
+    )
+  })
 })

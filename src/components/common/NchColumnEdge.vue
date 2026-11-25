@@ -2,50 +2,51 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import NchResizeEdge from '@/components/common/NchResizeEdge.vue'
-import {
-  INFO_PANEL_MIN_WIDTH,
-  infoPanelSizeAtDrag,
-  infoPanelWidthAfterKey,
-  type InfoPanelSize
-} from '@/utils/infoPanel'
+import { columnSizeAtDrag, columnWidthAfterKey, type ColumnSize } from '@/utils/sideColumn'
 
-// The info panel's left edge: drag or arrow keys change its width, dragged far right or Enter
-// shuts the panel like the toolbar button, a double click resets the width.
+// The left edge of a column right of the chat: drag or arrow keys change its width, dragged far
+// right or Enter shuts the column like its toolbar button, a double click resets the width.
 const {
+  label,
   width,
+  minWidth,
   maxWidth,
   isClosing = false
 } = defineProps<{
+  label: string
   width: number
+  minWidth: number
   maxWidth: number
-  /** The drag would shut the panel on release */
+  /** The drag would shut the column on release */
   isClosing?: boolean
 }>()
 // `preview` follows the pointer, `resize` stores the result once, on release or per key.
 const emit = defineEmits<{
-  preview: [size: InfoPanelSize]
-  resize: [size: InfoPanelSize]
+  preview: [size: ColumnSize]
+  resize: [size: ColumnSize]
   reset: []
-  /** Enter shut the panel; the owner moves the focus, the edge is gone with it */
+  /** Enter shut the column; the owner moves the focus, the edge is gone with it */
   close: []
 }>()
 
 let startX = 0
 let startWidth = width
-let latest: InfoPanelSize | null = null
+let latest: ColumnSize | null = null
 
 const { t } = useI18n()
 
-const hint = computed(() => (isClosing ? t('panel.close_hint') : t('panel.width_px', { width })))
+const hint = computed(() =>
+  isClosing ? t('side_column.close_hint') : t('side_column.width_px', { width })
+)
 
 const handleStart = (x: number) => {
   startX = x
   startWidth = width
   latest = null
 }
-// The panel grows to the left: moving the pointer left by some pixels widens it by as many.
+// The column grows to the left: moving the pointer left by some pixels widens it by as many.
 const handleMove = (x: number) => {
-  latest = infoPanelSizeAtDrag(startWidth + startX - x, maxWidth)
+  latest = columnSizeAtDrag(startWidth + startX - x, minWidth, maxWidth)
   emit('preview', latest)
 }
 const handleEnd = () => {
@@ -58,7 +59,7 @@ const handleKeydown = (event: KeyboardEvent) => {
     emit('close')
     return
   }
-  const next = infoPanelWidthAfterKey(event.key, event.shiftKey, width, maxWidth)
+  const next = columnWidthAfterKey(event.key, event.shiftKey, width, minWidth, maxWidth)
   if (next === null) return
   event.preventDefault()
   emit('resize', { isOpen: true, width: next })
@@ -66,11 +67,11 @@ const handleKeydown = (event: KeyboardEvent) => {
 </script>
 
 <template>
-  <!-- Inside the panel, not across its border: the chat's scrollbar ends right at the border. -->
+  <!-- Inside the column, not across its border: the chat's scrollbar ends right at the border. -->
   <NchResizeEdge
-    :label="t('panel.resize')"
+    :label
     :value-now="width"
-    :value-min="INFO_PANEL_MIN_WIDTH"
+    :value-min="minWidth"
     :value-max="maxWidth"
     :hint
     hint-side="left"

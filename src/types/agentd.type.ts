@@ -239,6 +239,18 @@ export interface ClaudeEvent {
   [key: string]: unknown
 }
 
+/** What a streamed block is: reasoning or the reply. */
+export type LiveBlockKind = 'thinking' | 'writing'
+
+/**
+ * The block Claude is streaming, before its message is complete. One streams at a time: Claude Code
+ * sends each finished block as its own message before the next one starts. `cut`: too long for
+ * agentd to replay on attach, so its further deltas are dropped until its finished message and
+ * the reply never shows starting mid-way.
+ */
+export type LiveBlock =
+  { kind: 'none' } | { kind: LiveBlockKind; text: string } | { kind: 'cut'; of: LiveBlockKind }
+
 /** A running tab as `tabs` lists it; `null` model, mode or effort is the profile's default. */
 export interface TabInfoProps {
   tab: string
@@ -276,6 +288,17 @@ export type AgentdEvent =
   | { type: 'limits_set'; id: number | null }
   | { type: 'message'; tab: string; message: ChatMessage }
   | { type: 'claude'; tab: string; event: ClaudeEvent }
+  /**
+   * The block Claude is streaming since its last finished message; agentd sends it to an app that
+   * attaches mid-turn. `message_id` and `chars`: the API call and the characters streamed in it.
+   */
+  | {
+      type: 'stream_replay'
+      tab: string
+      message_id: string | null
+      chars: number
+      block: LiveBlock
+    }
   | { type: 'stderr'; tab: string; text: string }
   | { type: 'exited'; tab: string; code: number | null }
   | { type: 'history'; id: number | null; messages: ChatMessage[]; has_more: boolean }

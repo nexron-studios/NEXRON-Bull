@@ -90,7 +90,9 @@ describe('ChatPane', () => {
     vi.advanceTimersByTime(16)
     const firstFrame = scroller.box.top
     scroller.box.height = 10_300
-    await wrapper.setProps({ tab: { ...tab, streaming: 'Noch ein Absatz' } })
+    await wrapper.setProps({
+      tab: { ...tab, live: { kind: 'writing', text: 'Noch ein Absatz' } }
+    })
     await flushPromises()
     vi.advanceTimersByTime(FOLLOW_SETTLE_MS)
 
@@ -116,7 +118,9 @@ describe('ChatPane', () => {
     wrapper.findComponent(NchIconButton).vm.$emit('click')
     vi.advanceTimersByTime(48)
     scroller.scrollTo(8_600, 'scroll')
-    await wrapper.setProps({ tab: { ...tab, streaming: 'Fertig.' } })
+    await wrapper.setProps({
+      tab: { ...tab, live: { kind: 'writing', text: 'Fertig.' } }
+    })
     await flushPromises()
     vi.advanceTimersByTime(FOLLOW_SETTLE_MS)
 
@@ -135,7 +139,9 @@ describe('ChatPane', () => {
     scroller.scrollTo(9_400, 'scroll')
 
     scroller.box.height = 10_100
-    await wrapper.setProps({ tab: { ...tab, streaming: 'Eine neue Zeile' } })
+    await wrapper.setProps({
+      tab: { ...tab, live: { kind: 'writing', text: 'Eine neue Zeile' } }
+    })
     await flushPromises()
     vi.advanceTimersByTime(16)
     const firstFrame = scroller.box.top
@@ -158,7 +164,9 @@ describe('ChatPane', () => {
     scroller.scrollTo(9_400, 'scroll')
 
     scroller.box.height = 11_000
-    await wrapper.setProps({ tab: { ...tab, streaming: 'Ein langer Codeblock' } })
+    await wrapper.setProps({
+      tab: { ...tab, live: { kind: 'writing', text: 'Ein langer Codeblock' } }
+    })
     await flushPromises()
     vi.advanceTimersByTime(48)
     scroller.scrollTo(5_000, 'scroll')
@@ -182,7 +190,9 @@ describe('ChatPane', () => {
     const moves: number[] = []
     for (let chunk = 1; chunk <= 5; chunk++) {
       scroller.box.height = 10_000 + chunk * 100
-      await wrapper.setProps({ tab: { ...tab, streaming: 'Zeile '.repeat(chunk) } })
+      await wrapper.setProps({
+        tab: { ...tab, live: { kind: 'writing', text: 'Zeile '.repeat(chunk) } }
+      })
       await flushPromises()
       for (let frame = 0; frame < 3; frame++) {
         const before = scroller.box.top
@@ -209,7 +219,9 @@ describe('ChatPane', () => {
     scroller.scrollTo(9_400, 'scroll')
 
     scroller.box.height = 10_400
-    await wrapper.setProps({ tab: { ...tab, streaming: 'Ein Absatz' } })
+    await wrapper.setProps({
+      tab: { ...tab, live: { kind: 'writing', text: 'Ein Absatz' } }
+    })
     await flushPromises()
     vi.advanceTimersByTime(32)
     // A touchpad creeping up: the move stays inside the old 2 px slack.

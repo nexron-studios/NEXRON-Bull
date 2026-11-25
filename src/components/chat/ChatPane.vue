@@ -66,6 +66,8 @@ import { isChatSearchShortcut } from '@/utils/shortcuts'
 // `isCompact`: the phone screen. Its own top bar shows machine and account, so the session bar
 // goes, and the composer sits on the home indicator's safe area.
 const { tab, isCompact = false } = defineProps<{ tab: ChatTabState; isCompact?: boolean }>()
+/** A local page's "Preview" button in an answer was clicked; the owner knows where it can show */
+const emit = defineEmits<{ preview: [url: string] }>()
 
 const scroller = ref<HTMLElement | null>(null)
 const composer = ref<InstanceType<typeof ChatComposer> | null>(null)
@@ -111,8 +113,7 @@ const isEmpty = computed(
     tab.history === 'loaded' &&
     !messages.value.length &&
     !tab.hasMore &&
-    !tab.streaming &&
-    tab.thinking === null &&
+    tab.live.kind === 'none' &&
     !tab.permission &&
     !isWorking.value &&
     !isQueued.value
@@ -203,7 +204,7 @@ const settleArrival = (event: AnimationEvent, key: string) => {
   if (event.target === event.currentTarget && event.animationName === last) arrivals.delete(key)
 }
 
-watch(() => [messages.value.length, tab.streaming, tab.thinking, tab.permission] as const, follow)
+watch(() => [messages.value.length, tab.live, tab.permission] as const, follow)
 watch(() => tab.id, scrollToBottom, { immediate: true })
 // Before the render that adds them, so they mount already rising.
 watch(
@@ -220,11 +221,18 @@ watch(
   },
   { flush: 'pre' }
 )
+// The buttons sit in rendered markdown (v-html, markdown.ts): one listener here serves them all.
+const handlePreviewClick = (event: MouseEvent) => {
+  if (!(event.target instanceof Element)) return
+  const url = event.target.closest<HTMLElement>('[data-preview]')?.dataset.preview
+  if (url) emit('preview', url)
+}
 </script>
 
 <template>
   <section
     class="relative isolate flex min-h-0 flex-1 flex-col"
+    @click="handlePreviewClick"
     @dragover.prevent="isDragging = true"
     @dragleave.self="isDragging = false"
     @drop.prevent="handleDrop"
@@ -286,15 +294,15 @@ watch(
           />
           <ChatRetryCard v-if="tab.retry" :retry="tab.retry" class="message-fade" />
           <ChatReasoning
-            v-if="tab.thinking !== null"
-            :text="tab.thinking"
+            v-if="tab.live.kind === 'thinking'"
+            :text="tab.live.text"
             is-streaming
             class="message-fade"
           />
           <!-- self-start: as wide as the finished reply that replaces it, so no line rewraps then. -->
           <ChatMarkdown
-            v-if="tab.streaming"
-            :text="tab.streaming"
+            v-if="tab.live.kind === 'writing'"
+            :text="tab.live.text"
             class="message-fade self-start"
           />
           <ChatShellRuns :tab-id="tab.id" />

@@ -49,6 +49,10 @@ export const machineService = {
   remove: (name: string): Promise<MachineEntry[]> =>
     invoke<MachineEntry[]>('remove_machine', { name }),
 
+  /** The host ssh connects to for this machine (`HostName` from `ssh -G`); `null` if unknown */
+  hostName: (name: string): Promise<string | null> =>
+    invoke<string | null>('machine_host_name', { name }),
+
   test: (entry: MachineEntry): Promise<MachineProbe> =>
     invoke<MachineProbe>('test_machine', { entry }),
 

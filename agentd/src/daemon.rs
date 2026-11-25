@@ -13,10 +13,11 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
+use crate::attach::{self, Replayable};
 use crate::catalog;
 use crate::chat;
 use crate::claude;
-use crate::commands::{self, SlashCommand};
+use crate::commands;
 use crate::file_diff;
 use crate::files;
 use crate::shell;
@@ -73,9 +74,7 @@ pub(crate) struct Session {
     stdin: Option<ChildStdin>,
     pub(crate) session_id: String,
     /// Between a sent message and its result; told to an app that attaches later.
-    is_working: bool,
-    /// Unanswered `can_use_tool` requests, sent again to an app that attaches later.
-    asks: Vec<Value>,
+    pub(crate) is_working: bool,
     /// The session a sent `/clear` replaces, until Claude reports the new one in `system`/`init`.
     clearing: Option<String>,
     /// How Claude was started, to start it again on another account.
@@ -98,12 +97,8 @@ pub(crate) struct Session {
     pub(crate) in_flight: Vec<Queued>,
     /// The queue is going out, one message per finished turn.
     pub(crate) is_draining: bool,
-    /// What Claude listed last, sent again to an app that attaches later.
-    commands: Option<Vec<SlashCommand>>,
-    /// Claude's last `background_tasks_changed`, sent again to an app that attaches later: Claude
-    /// sends it only on a change, and without it the app would show a chat whose shells or agents
-    /// still run as finished.
-    background_tasks: Option<Value>,
+    /// What an app that attaches later gets again, see `attach`.
+    pub(crate) replayable: Arc<Mutex<Replayable>>,
     /// Mode, model or effort changes Claude has not answered yet.
     pub(crate) configuring: Vec<PendingChange>,
 }
@@ -205,7 +200,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Send { tab, content } => self.send_prompt(&tab, &content).inspect(|()| self.retitle(&tab, &content)),
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
-                self.with_session(&tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
+                self.forget_ask(&tab, &request_id);
                 let answered = self.write(&tab, &json!({
                     "type": "control_response",
                     "response": { "subtype": "success", "request_id": &request_id, "response": decision },
@@ -355,37 +350,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
 
     pub(crate) fn start(self: &Arc<Self>, id: Option<u64>, mut params: StartParams) -> Result<(), DaemonError> {
         // A reloaded window or a reconnected app asks again for a tab that never stopped: report
-        // the running session with its state instead of failing, so its queued message goes through.
-        let running = self
-            .sessions()
-            .get(&params.tab)
-            .map(|session| {
-                let working = session.is_working || session.clearing.is_some();
-                let replayed = Replayed { asks: session.asks.clone(), commands: session.commands.clone(), background_tasks: session.background_tasks.clone() };
-                let place = (session.params.profile.clone(), session.params.cwd.clone());
-                (session.session_id.clone(), working, replayed, place, session.limit.clone())
-            });
-        if let Some((session_id, working, Replayed { asks, commands, background_tasks }, (profile, cwd), limit)) = running {
-            let (profile, account) = Self::account_of(profile);
-            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id: session_id.clone(), working, profile, account, cwd });
-            if let Some(commands) = commands {
-                self.emit(&Event::Commands { tab: params.tab.clone(), commands });
-            }
-            self.replay_title(&params.tab, &session_id);
-            // Marked, so the app can tell an approval it already knew from a new one.
-            for mut event in asks {
-                if let Some(fields) = event.as_object_mut() {
-                    fields.insert("replay".into(), Value::Bool(true));
-                }
-                self.emit(&Event::Claude { tab: params.tab.clone(), event });
-            }
-            if let Some(event) = background_tasks {
-                self.emit(&Event::Claude { tab: params.tab.clone(), event });
-            }
-            if limit != LimitState::None {
-                self.emit(&Event::Limit { tab: params.tab.clone(), state: limit });
-            }
-            return self.catch_up(&params.tab, &params);
+        // the running session with its state instead of failing.
+        if let Some(attached) = self.attach_running(id, &params) {
+            return attached;
         }
         if let Some(plan) = params.worktree.take() {
             return self.start_in_worktree(id, params, plan);
@@ -398,12 +365,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
         let tab = params.tab.clone();
         let (profile, account) = Self::account_of(params.profile.clone());
         let cwd = params.cwd.clone();
+        let replayable = Arc::new(Mutex::new(Replayable::default()));
         let session = Session {
             stdin: child.stdin.take(),
             child,
             session_id: session_id.clone(),
             is_working: false,
-            asks: Vec::new(),
             clearing: None,
             params,
             rate: None,
@@ -414,9 +381,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
             is_handling_limit: false,
             in_flight: Vec::new(),
             is_draining: false,
-            commands: None,
-            background_tasks: None,
             configuring: Vec::new(),
+            replayable: Arc::clone(&replayable),
         };
         self.sessions().insert(tab.clone(), session);
         // Lists the commands and skills and makes Claude ready for control requests.
@@ -433,12 +399,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
         }
         if let Some(stdout) = stdout {
             let daemon = Arc::clone(self);
-            thread::spawn(move || daemon.pump(&tab, stdout));
+            thread::spawn(move || daemon.pump(&tab, stdout, &replayable));
         }
         Ok(())
     }
 
-    fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read) {
+    fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read, replayable: &Mutex<Replayable>) {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let event: Value = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));
             if let Some(answer) = self.waiting_control(&event) {
@@ -446,16 +412,25 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 let _ = answer.send(event["response"].clone());
                 continue;
             }
+            let message = chat::message_from(&event);
+            // From taking the line in through its emit, see `attach`.
+            let mut replayable = attach::locked(replayable);
             self.with_session(tab, |session| track_turn(session, &event));
+            replayable.track(&event);
             self.observe_limits(tab, &event);
             if let Some(commands) = commands::commands_in(&event) {
-                self.with_session(tab, |session| session.commands = Some(commands.clone()));
+                replayable.commands = Some(commands.clone());
                 self.emit(&Event::Commands { tab: tab.to_string(), commands });
             }
             self.settle_setting(tab, &event);
             // Messages arrive parsed, everything else (deltas, results, permission asks) raw.
-            match chat::message_from(&event) {
-                Some(message) => self.emit(&Event::Message { tab: tab.to_string(), message }),
+            match message {
+                Some(message) => {
+                    if message.role == chat::Role::Assistant {
+                        replayable.partial.finish_block();
+                    }
+                    self.emit(&Event::Message { tab: tab.to_string(), message })
+                }
                 None => self.emit(&Event::Claude { tab: tab.to_string(), event }),
             }
         }
@@ -574,6 +549,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
     }
 
     fn clear(&self, id: Option<u64>, tab: &str, session_id: &str) -> Result<(), DaemonError> {
+        let replayable = self.replayable_of(tab).ok_or_else(|| DaemonError::NoTab(tab.to_string()))?;
+        // Before the sessions lock, in the order the pump takes both.
+        let mut replayable = attach::locked(&replayable);
         let (asks, is_working) = {
             let mut sessions = self.sessions();
             let session = sessions.get_mut(tab).ok_or_else(|| DaemonError::NoTab(tab.to_string()))?;
@@ -588,8 +566,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 return Ok(());
             }
             session.clearing = Some(session_id.to_string());
-            (std::mem::take(&mut session.asks), session.is_working)
+            (std::mem::take(&mut replayable.asks), session.is_working)
         };
+        drop(replayable);
         // Claude holds a queued `/clear` until the turn ends, and an open ask never ends it.
         for ask in asks {
             self.write(tab, &json!({
@@ -789,14 +768,7 @@ fn tab_of(request: &Request) -> Option<String> {
     }
 }
 
-/// What a running session sends again to an app that attaches later.
-struct Replayed {
-    asks: Vec<Value>,
-    commands: Option<Vec<SlashCommand>>,
-    background_tasks: Option<Value>,
-}
-
-/// Keeps what an app attaching later needs: whether a turn runs and which asks are open.
+/// Keeps what an app attaching later needs: whether a turn runs, and the session it runs as.
 fn track_turn(session: &mut Session, event: &Value) {
     // The mode Claude reports (`status` on every change, `init` per turn), also one it switched to
     // itself after a plan: a restart on another account starts Claude in it again.
@@ -806,15 +778,9 @@ fn track_turn(session: &mut Session, event: &Value) {
         }
     }
     match event["type"].as_str() {
-        // A finished or interrupted turn leaves no ask open.
-        Some("result") => {
-            session.is_working = false;
-            session.asks.clear();
-        }
-        Some("control_request") if event["request"]["subtype"] == "can_use_tool" => session.asks.push(event.clone()),
+        Some("result") => session.is_working = false,
         // `/clear` starts a new session in the same process; later checks and replays need its id.
         // A subagent's events carry its parent call and say nothing about the tab's session.
-        Some("system") if event["subtype"] == "background_tasks_changed" => session.background_tasks = Some(event.clone()),
         Some("system") if event["subtype"] == "init" && event["parent_tool_use_id"].is_null() => {
             if let Some(id) = event["session_id"].as_str() {
                 if session.clearing.as_deref().is_some_and(|old| old != id) {

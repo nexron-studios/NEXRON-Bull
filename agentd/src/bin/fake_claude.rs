@@ -3,12 +3,27 @@
 //! reply and asks for a permission when the text says "write". "args" answers with its
 //! own command line; "/clear" starts a new session like the real one; "limit" fails the turn
 //! like a full account. `get_context_usage` answers with a token count, a control request of
-//! subtype "refuse" with an error. Called with `--no-session-persistence` it is the title call
-//! and names a request containing "name me".
+//! subtype "refuse" with an error. "stream" starts a streamed reply and leaves it unfinished
+//! ("Hallo ", the second part a moment later, so a test can detach in between); "finish" ends it
+//! with "Welt", the complete message and the result. Called with `--no-session-persistence` it
+//! is the title call and names a request containing "name me".
 
 use std::io::{self, BufRead, Write};
+use std::thread;
+use std::time::Duration;
 
 use serde_json::{json, Value};
+
+/// Between the two parts of "stream": long enough for a test to close its app in between.
+const STREAM_PAUSE: Duration = Duration::from_millis(300);
+
+fn stream_event(inner: Value) -> Value {
+    json!({ "type": "stream_event", "uuid": "stream", "parent_tool_use_id": null, "event": inner })
+}
+
+fn text_delta(text: &str) -> Value {
+    stream_event(json!({ "type": "content_block_delta", "index": 1, "delta": { "type": "text_delta", "text": text } }))
+}
 
 /// What the one-shot title call (`agentd::titles`) gets back. Only a request that asks for it is
 /// named, so the other tests never write a title into the real home folder.
@@ -74,6 +89,26 @@ fn main() {
                         say(json!({ "type": "result", "subtype": "success", "is_error": true,
                             "result": "You've hit your session limit · resets 3am" }));
                     }
+                    continue;
+                }
+                if text == "stream" {
+                    say(stream_event(json!({ "type": "message_start", "message": { "id": "msg_stream" } })));
+                    say(stream_event(json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "thinking" } })));
+                    say(stream_event(json!({ "type": "content_block_delta", "index": 0,
+                        "delta": { "type": "thinking_delta", "thinking": "Erst lesen." } })));
+                    say(json!({ "type": "assistant", "uuid": "stream-thinking",
+                        "message": { "role": "assistant", "content": [{ "type": "thinking", "thinking": "Erst lesen." }] } }));
+                    say(text_delta("Hal"));
+                    thread::sleep(STREAM_PAUSE);
+                    say(text_delta("lo "));
+                    continue;
+                }
+                if text == "finish" {
+                    say(text_delta("Welt"));
+                    say(json!({ "type": "assistant", "uuid": "stream-text",
+                        "message": { "role": "assistant", "content": [{ "type": "text", "text": "Hallo Welt" }] } }));
+                    say(stream_event(json!({ "type": "message_delta", "usage": { "output_tokens": 5 } })));
+                    say(json!({ "type": "result", "subtype": "success", "result": "Hallo Welt" }));
                     continue;
                 }
                 // A shell left running in the background, as Claude Code lists it after the start.

@@ -15,7 +15,7 @@ import {
   type ChatTabState,
   type SavedTab
 } from '../chatTab'
-import type { ChatMessage } from '@/types/agentd.type'
+import type { ChatMessage, LiveBlock } from '@/types/agentd.type'
 import { pendingMessageOf } from '../pendingPrompts'
 
 const tab = (): ChatTabState =>
@@ -158,14 +158,17 @@ describe('applyEvent', () => {
 
   it('should collect streamed text and drop it when the full message arrives', () => {
     const streaming = applyEvent(applyEvent(tab(), delta('Hal')), delta('lo'))
-    expect([streaming.streaming, streaming.status]).toEqual(['Hallo', 'working'])
+    expect([streaming.live, streaming.status]).toEqual([
+      { kind: 'writing', text: 'Hallo' },
+      'working'
+    ])
 
     const done = applyEvent(streaming, {
       type: 'message',
       tab: 't1',
       message: message('a1', 'assistant', 'Hallo')
     })
-    expect([done.streaming, done.messages.length]).toEqual(['', 1])
+    expect([done.live, done.messages.length]).toEqual([{ kind: 'none' }, 1])
   })
 
   it('should title the tab after the first prompt and ignore a repeated message', () => {
@@ -293,7 +296,11 @@ describe('applyEvent', () => {
         blocks: [{ type: 'thinking', text: 'Erst lesen' }]
       }
     })
-    expect([started.thinking, stopped.thinking, landed.thinking]).toEqual(['', 'Erst lesen', null])
+    expect([started.live, stopped.live, landed.live]).toEqual([
+      { kind: 'thinking', text: '' },
+      { kind: 'thinking', text: 'Erst lesen' },
+      { kind: 'none' }
+    ])
   })
 
   it('should mark a prompt that arrives after Claude answered in the running turn', () => {
@@ -389,7 +396,7 @@ describe('applyEvent with a subagent', () => {
       tab: 't1',
       event: { ...delta('intern').event, parent_tool_use_id: 'toolu_1' }
     })
-    expect(next.streaming).toBe('')
+    expect(next.live).toEqual({ kind: 'none' })
   })
 })
 
@@ -760,5 +767,110 @@ describe('streamed usage and retries', () => {
       applyEvent(waiting, { type: 'claude', tab: 't1', event: { type: 'result' } }).retry
     ).toBeNull()
     expect(applyEvent(waiting, { type: 'exited', tab: 't1', code: 0 }).retry).toBeNull()
+  })
+})
+
+describe('a block agentd replays on attach', () => {
+  const replay = (block: LiveBlock, chars = 17) => ({
+    type: 'stream_replay' as const,
+    tab: 't1',
+    message_id: 'msg_1',
+    chars,
+    block
+  })
+  const writing = (text: string): LiveBlock => ({ kind: 'writing', text })
+  const cut: LiveBlock = { kind: 'cut', of: 'writing' }
+
+  it('should show what Claude streamed while the app was away', () => {
+    const next = applyEvent(tab(), replay(writing('Hallo ')))
+    expect([next.live, next.streamUsage]).toEqual([
+      { kind: 'writing', text: 'Hallo ' },
+      { messageId: 'msg_1', chars: 17 }
+    ])
+  })
+
+  it('should mark an idle tab working while a replayed block streams', () => {
+    const idle = { ...tab(), status: 'idle' as const }
+    expect([
+      applyEvent(idle, replay(writing('Hallo '))).status,
+      applyEvent(idle, replay({ kind: 'thinking', text: '' })).status,
+      applyEvent(idle, replay(cut)).status,
+      applyEvent(idle, replay({ kind: 'none' })).status
+    ]).toEqual(['working', 'working', 'working', 'idle'])
+  })
+
+  it('should leave an app that already shows the text as it is and keep appending', () => {
+    let next = applyEvent(tab(), delta('Hal'))
+    next = applyEvent(next, delta('lo '))
+    next = applyEvent(next, replay(writing('Hallo ')))
+    next = applyEvent(next, delta('Welt'))
+    expect(next.live).toEqual({ kind: 'writing', text: 'Hallo Welt' })
+  })
+
+  it('should keep its text when another app attaching gets a block too long to replay', () => {
+    const start = {
+      type: 'stream_event',
+      event: { type: 'message_start', message: { id: 'msg_1' } }
+    }
+    let next = applyEvent(tab(), { type: 'claude', tab: 't1', event: start })
+    next = applyEvent(next, delta('Hallo '))
+    next = applyEvent(next, replay(cut, 2_000_000))
+    next = applyEvent(next, delta('Welt'))
+    expect([next.live, next.streamUsage.chars]).toEqual([writing('Hallo Welt'), 10])
+  })
+
+  it('should show the reply once when its finished message arrives', () => {
+    let next = applyEvent(tab(), replay(writing('Hallo ')))
+    next = applyEvent(next, delta('Welt'))
+    next = applyEvent(next, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    expect([next.live, next.messages.map((known) => known.uuid)]).toEqual([
+      { kind: 'none' },
+      ['a1']
+    ])
+  })
+
+  it('should drop the replayed text when the history already brought its finished message', () => {
+    let next = applyEvent(tab(), replay(writing('Hallo Welt')))
+    next = withHistory(next, [message('a1', 'assistant', 'Hallo Welt')], false)
+    next = applyEvent(next, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    expect([next.live, next.messages.map((known) => known.uuid)]).toEqual([
+      { kind: 'none' },
+      ['a1']
+    ])
+  })
+
+  it('should keep the tab as it is when a known message comes again with nothing live', () => {
+    const known = applyEvent(tab(), {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    const again = applyEvent(known, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Hallo Welt')
+    })
+    expect(again).toBe(known)
+  })
+
+  it('should drop the rest of a block too long to replay until its finished message', () => {
+    let next = applyEvent(tab(), replay(cut, 2_000_000))
+    next = applyEvent(next, delta('mitten im Satz'))
+    const whileCut = [next.live, next.streamUsage.chars]
+    next = applyEvent(next, {
+      type: 'message',
+      tab: 't1',
+      message: message('a1', 'assistant', 'Ganzer Text')
+    })
+    next = applyEvent(next, delta('Neu'))
+    expect([...whileCut, next.live]).toEqual([cut, 2_000_014, writing('Neu')])
   })
 })

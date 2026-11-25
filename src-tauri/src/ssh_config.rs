@@ -1,9 +1,17 @@
-//! The host aliases of `~/.ssh/config` that could be Bull machines: the first list adopts them,
-//! later they are the setup assistant's suggestions. Git hosts are left out.
+//! What ssh makes of a machine. The host aliases of `~/.ssh/config` that could be Bull machines:
+//! the first list adopts them, later they are the setup assistant's suggestions (Git hosts are
+//! left out). And one machine's options as `ssh -G` resolves them: the name `known_hosts` keeps it
+//! under, and the host the preview reaches its dev servers at.
 
 use std::fs;
+use std::net::IpAddr;
+use std::process::Command;
 
-use crate::connections::home_folder;
+use crate::connections::{self, home_folder};
+use crate::machines::{self, MachineEntry};
+use crate::remote_call::ask;
+
+const DEFAULT_SSH_PORT: &str = "22";
 
 /// The login GitHub, GitLab and other Git hosts expect over ssh.
 const GIT_USER: &str = "git";
@@ -96,6 +104,67 @@ fn aliases_in(patterns: &str) -> Vec<String> {
         .collect()
 }
 
+/// What `ssh -G` makes of the machine: one `key value` line per option (reads the config, connects
+/// nowhere).
+fn resolved_of(entry: &MachineEntry) -> Option<String> {
+    let mut command = Command::new(connections::ssh_program());
+    command.arg("-G").args(entry.ssh_args());
+    Some(ask(command, "", "").ok()?.stdout)
+}
+
+fn resolved_value(resolved: &str, key: &str) -> Option<String> {
+    resolved.lines().find_map(|line| {
+        let (name, value) = line.split_once(' ')?;
+        name.eq_ignore_ascii_case(key).then(|| value.trim().to_string())
+    })
+}
+
+/// The name `known_hosts` keeps the machine under.
+pub(crate) fn known_host_of(entry: &MachineEntry) -> Option<String> {
+    known_host_in(&resolved_of(entry)?)
+}
+
+/// `hostkeyalias` wins over `hostname`; a port other than 22 is stored as `[host]:port`.
+fn known_host_in(resolved: &str) -> Option<String> {
+    let value = |key: &str| resolved_value(resolved, key);
+    let host = value("hostkeyalias").filter(|alias| alias != "none").or_else(|| value("hostname"))?;
+    match value("port").filter(|port| port != DEFAULT_SSH_PORT) {
+        Some(port) => Some(format!("[{host}]:{port}")),
+        None => Some(host),
+    }
+}
+
+/// The host ssh connects to directly. `None` behind a proxy (the host may not be reachable from
+/// here) or for a loopback `HostName` (a forwarded port into a VM or WSL): there `localhost` would
+/// show this machine's page under the other machine's name.
+fn direct_host_in(resolved: &str) -> Option<String> {
+    let value = |key: &str| resolved_value(resolved, key).filter(|value| value != "none");
+    if value("proxyjump").is_some() || value("proxycommand").is_some() {
+        return None;
+    }
+    value("hostname").filter(|host| !is_loopback_host(host))
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    match bare.parse::<IpAddr>() {
+        Ok(ip) => ip.is_loopback() || ip.is_unspecified(),
+        Err(_) => {
+            let name = bare.to_ascii_lowercase();
+            name == "localhost" || name.ends_with(".localhost")
+        }
+    }
+}
+
+/// The host ssh really connects to for a machine (`HostName`, the alias resolved), for the
+/// preview: a dev server's `localhost` there is that host from here. `None` when ssh cannot say
+/// or the machine is not directly reachable (`direct_host_in`).
+#[tauri::command(async)]
+pub fn machine_host_name(name: String) -> Result<Option<String>, machines::MachinesError> {
+    let entry = machines::resolve(&name)?;
+    Ok(resolved_of(&entry).and_then(|resolved| direct_host_in(&resolved)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +193,40 @@ mod tests {
     fn reads_the_first_user_like_ssh() {
         let config = "Host shared\n  User git\n  User admin\nHost server\n  User admin\n  User git\n";
         assert_eq!(hosts_in(config), vec!["server"]);
+    }
+
+    #[test]
+    fn names_the_machine_as_known_hosts_stores_it() {
+        assert_eq!(known_host_in("user nexron\nhostname 100.64.0.10\nport 22\n").as_deref(), Some("100.64.0.10"));
+        assert_eq!(known_host_in("hostname box\nport 2222\n").as_deref(), Some("[box]:2222"));
+        assert_eq!(known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(), Some("pc"));
+        assert_eq!(known_host_in("hostname box\nhostkeyalias none\n").as_deref(), Some("box"));
+    }
+
+    #[test]
+    fn reads_one_option_of_ssh_g() {
+        let resolved = "user dev\nhostname devbox.example\nport 22\n";
+        assert_eq!(resolved_value(resolved, "hostname").as_deref(), Some("devbox.example"));
+        assert_eq!(resolved_value(resolved, "HostName").as_deref(), Some("devbox.example"));
+        assert_eq!(resolved_value(resolved, "proxyjump"), None);
+    }
+
+    #[test]
+    fn takes_a_direct_host_name() {
+        let resolved = "hostname devbox.example\nproxycommand none\n";
+        assert_eq!(direct_host_in(resolved).as_deref(), Some("devbox.example"));
+    }
+
+    #[test]
+    fn refuses_a_host_behind_a_proxy() {
+        assert_eq!(direct_host_in("hostname devbox.example\nproxyjump gate.example\n"), None);
+        assert_eq!(direct_host_in("hostname devbox.example\nproxycommand nc %h %p\n"), None);
+    }
+
+    #[test]
+    fn refuses_a_loopback_host_name() {
+        for host in ["localhost", "127.0.0.1", "127.0.1.1", "::1", "[::1]", "0.0.0.0", "vm.localhost"] {
+            assert_eq!(direct_host_in(&format!("hostname {host}\nport 2222\n")), None, "{host}");
+        }
     }
 }

@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/common'
 import i18n from '@/i18n'
 import { calloutOf, type CalloutProps } from '@/utils/callouts'
+import { isLocalUrl } from '@/utils/previewUrl'
 
 const HTML_ESCAPES: Record<string, string> = {
   '&': '&amp;',
@@ -43,6 +44,34 @@ const taskLists = (md: InstanceType<typeof MarkdownIt>) => {
   })
 }
 
+// A deliberate copy of Lucide's "app-window" (the `AppWindow` the preview's toggle and menu entry
+// use from @lucide/vue): a component cannot render inside v-html. Copy it again if Lucide redraws it.
+const PREVIEW_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/></svg>'
+
+// A link to a local page (a dev server) gets a button after it that opens the page in Bull's
+// preview; the link itself still opens the browser. ChatPane handles clicks on [data-preview].
+const previewLinks = (md: InstanceType<typeof MarkdownIt>) => {
+  md.core.ruler.after('inline', 'preview_links', (state) => {
+    for (const token of state.tokens) {
+      if (token.type !== 'inline' || !token.children) continue
+      // The href of each link still open; markdown-it types an attribute as string, number or null.
+      const opens: string[] = []
+      token.children = token.children.flatMap((child) => {
+        if (child.type === 'link_open') opens.push(String(child.attrGet('href') ?? ''))
+        if (child.type !== 'link_close') return [child]
+        const href = opens.pop()
+        if (!href || !isLocalUrl(href)) return [child]
+        const label = escape(i18n.global.t('preview.open_in_preview'))
+        const short = escape(i18n.global.t('preview.open_in_preview_short'))
+        const button = new state.Token('html_inline', '', 0)
+        button.content = `<button type="button" class="preview-link" data-preview="${escape(href)}" aria-label="${label}">${PREVIEW_ICON}<span>${short}</span></button>`
+        return [child, button]
+      })
+    }
+  })
+}
+
 // html: false escapes any HTML in Claude's text, so v-html only ever gets markdown output.
 // breaks: true keeps single line breaks, as Claude Code shows them in the terminal.
 export const markdown = new MarkdownIt({
@@ -50,7 +79,9 @@ export const markdown = new MarkdownIt({
   linkify: true,
   breaks: true,
   highlight
-}).use(taskLists)
+})
+  .use(taskLists)
+  .use(previewLinks)
 
 export type MarkdownSegment =
   { kind: 'markdown'; html: string } | { kind: 'callout'; callout: CalloutProps; html: string }

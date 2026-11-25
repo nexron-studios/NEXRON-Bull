@@ -1,3 +1,4 @@
+pub mod attach;
 pub mod branches;
 pub mod catalog;
 pub mod chat;
@@ -11,6 +12,7 @@ pub mod live;
 pub mod login_path;
 pub mod removal;
 pub mod rewind;
+pub mod partial_reply;
 pub mod paths;
 pub mod profile_setup;
 pub mod server;

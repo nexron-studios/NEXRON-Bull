@@ -1256,6 +1256,9 @@ export default {
     empty_title: 'No page yet',
     empty_hint: 'When Claude names a localhost address, the page shows up here. Or type one above.',
     remote_hint: 'localhost is {machine} here. Bull loads {src}.',
+    app_only_title: 'Preview only in the Bull app',
+    app_only_hint:
+      'In this browser localhost would be this device, not the machine running the chat. Open the preview in Bull on that machine.',
     no_host_title: '{machine} is not directly reachable from here',
     no_host_hint:
       'ssh has no direct name for the machine, as behind a proxy or a forwarded port. Open the page in a browser there.',

@@ -1,6 +1,7 @@
 import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { machineService } from '@/api/services/machine.service'
+import { isDesktopApp } from '@/lib/platform'
 import { usePreviewStore } from '@/stores/preview'
 import type { ChatTabState } from '@/utils/chatTab'
 import {
@@ -17,6 +18,8 @@ const PROBE_TIMEOUT_MS = 4 * 1000
 /** What the pane can show for a tab right now. */
 export type PreviewTarget =
   | { kind: 'empty' }
+  /** A browser on another device: its `localhost` is that device, not the chat's machine */
+  | { kind: 'app_only'; url: string }
   /** The tab runs on another machine whose host name is still being looked up */
   | { kind: 'resolving'; url: string }
   /** ssh could not say which host the machine is, so its `localhost` cannot be reached */
@@ -64,7 +67,7 @@ export const usePreviewTarget = (tab: MaybeRefOrGetter<ChatTabState>) => {
     retry: false
   })
   const src = computed(() => {
-    if (!url.value) return null
+    if (!url.value || !isDesktopApp()) return null
     if (!remoteMachine.value) return loadableUrlOf(url.value)
     return hostQuery.data.value ? previewUrlOn(url.value, hostQuery.data.value) : null
   })
@@ -82,6 +85,7 @@ export const usePreviewTarget = (tab: MaybeRefOrGetter<ChatTabState>) => {
 
   const target = computed((): PreviewTarget => {
     if (!url.value) return { kind: 'empty' }
+    if (!isDesktopApp()) return { kind: 'app_only', url: url.value }
     if (!src.value)
       return { kind: hostQuery.isPending.value ? 'resolving' : 'no_host', url: url.value }
     if (probe.isPending.value) return { kind: 'checking', url: url.value, src: src.value }

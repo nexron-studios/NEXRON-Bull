@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AppWindow, ExternalLink, RotateCw, ServerOff, Unplug } from '@lucide/vue'
-import { openUrl } from '@tauri-apps/plugin-opener'
+import {
+  AppWindow,
+  ExternalLink,
+  MonitorSmartphone,
+  RotateCw,
+  ServerOff,
+  Unplug
+} from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchEmpty from '@/components/common/NchEmpty.vue'
 import { Button } from '@/components/ui/button'
@@ -10,6 +16,7 @@ import PreviewToolbar from '@/components/preview/PreviewToolbar.vue'
 import { useMachineLabel } from '@/composables/useMachineLabel'
 import { usePreviewTarget } from '@/composables/usePreviewTarget'
 import { handleError } from '@/lib/error'
+import { openLink } from '@/lib/links'
 import { usePreviewStore } from '@/stores/preview'
 import type { ChatTabState } from '@/utils/chatTab'
 import { frameSandboxOf } from '@/utils/previewUrl'
@@ -30,7 +37,7 @@ const { origin } = window.location
 const machineName = computed(() => labelOf(tab.machine) ?? tab.machine ?? '')
 
 const openExternal = () => {
-  if (src.value) openUrl(src.value).catch(handleError)
+  if (src.value) openLink(src.value).catch(handleError)
 }
 </script>
 
@@ -57,6 +64,13 @@ const openExternal = () => {
         :icon="AppWindow"
         :title="t('preview.empty_title')"
         :hint="t('preview.empty_hint')"
+        size="sm"
+      />
+      <NchEmpty
+        v-else-if="target.kind === 'app_only'"
+        :icon="MonitorSmartphone"
+        :title="t('preview.app_only_title')"
+        :hint="t('preview.app_only_hint')"
         size="sm"
       />
       <NchEmpty

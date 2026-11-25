@@ -1277,6 +1277,9 @@ export default {
     empty_hint:
       'Nennt Claude eine localhost-Adresse, erscheint die Seite hier. Oder gib oben eine ein.',
     remote_hint: 'localhost ist hier {machine}. Bull lädt {src}.',
+    app_only_title: 'Vorschau nur in der Bull-App',
+    app_only_hint:
+      'Hier im Browser wäre localhost dieses Gerät, nicht der Rechner mit dem Chat. Öffne die Vorschau in Bull auf dem Rechner.',
     no_host_title: '{machine} ist von hier nicht direkt erreichbar',
     no_host_hint:
       'ssh kennt keinen direkten Namen für den Rechner, etwa hinter einem Proxy oder einem weitergeleiteten Port. Öffne die Seite dort im Browser.',

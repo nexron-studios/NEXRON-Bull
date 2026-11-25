@@ -10,6 +10,9 @@ import { textPiecesOf, type Highlight } from '@/utils/textPieces'
 // `@ChatComposer.vue`). Both always keep a scrollbar's room, so a long draft wraps alike in both.
 // A mention only needs a tint; an image reference becomes a chip, so while one is there the copy
 // shows the text and the textarea above keeps only caret and selection.
+// Both wrap, so neither ever scrolls sideways: `overflow-x-hidden` says so, because the system
+// WebView (WebKit regression 311766@main, fixed upstream in 312927@main) sometimes gave the empty
+// field a horizontal scrollbar anyway.
 const {
   placeholder,
   label,
@@ -92,7 +95,7 @@ defineExpose({ focus, isFocused, selection, setCaret, field })
       v-if="hasHighlight"
       ref="mirror"
       aria-hidden="true"
-      class="pointer-events-none col-start-1 row-start-1 max-h-60 overflow-y-scroll px-4 pt-3 pb-1 text-body break-words whitespace-pre-wrap [&::-webkit-scrollbar-thumb]:bg-transparent"
+      class="pointer-events-none col-start-1 row-start-1 max-h-60 overflow-x-hidden overflow-y-scroll px-4 pt-3 pb-1 text-body break-words whitespace-pre-wrap [&::-webkit-scrollbar-thumb]:bg-transparent"
       :class="hasChip ? 'text-foreground' : 'text-transparent'"
     >
       <ChatTextPieces :pieces />

@@ -6,12 +6,12 @@ import ChatImageTooltip from '@/components/chat/ChatImageTooltip.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import { MOVE_CHORD } from '@/utils/shortcuts'
-import { naturalSizeOf, type Size } from '@/utils/markup'
+import { naturalSizeOf, noteTextOf, type Size } from '@/utils/markup'
 import type { PendingImage } from '@/utils/content'
 
 // One attachment in the composer (Figma "20c"): thumbnail, name cut at 16 characters, remove.
-// The notes of its marks only show as a count here and in full in the tooltip; they are changed by
-// opening the image again.
+// The notes of its marks show as a count here and in full in the tooltip; the preview, opened by a
+// click, lists them to change or remove.
 const { image } = defineProps<{ image: PendingImage }>()
 const emit = defineEmits<{ open: []; remove: []; keydown: [event: KeyboardEvent] }>()
 
@@ -31,7 +31,12 @@ const label = computed(() => {
   <div
     class="flex h-9 items-center gap-1 rounded-lg border border-border bg-secondary py-0.5 pr-0.5 pl-0.5 transition-colors hover:border-muted-foreground"
   >
-    <ChatImageTooltip :name="image.name" :bytes="image.bytes" :size :notes="image.notes">
+    <ChatImageTooltip
+      :name="image.name"
+      :bytes="image.bytes"
+      :size
+      :notes="image.notes?.map(noteTextOf)"
+    >
       <button
         type="button"
         :aria-label="label"

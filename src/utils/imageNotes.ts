@@ -1,5 +1,6 @@
 import { prependLine } from '@/utils/attachments'
 import type { PendingImage } from '@/utils/content'
+import type { MarkNote } from '@/utils/markup'
 
 /**
  * The text of a message with the notes of its marked images in front: one line per image with
@@ -11,7 +12,7 @@ import type { PendingImage } from '@/utils/content'
 export const withImageNotes = (
   text: string,
   images: readonly PendingImage[],
-  lineOf: (n: number, image: PendingImage, notes: readonly string[]) => string
+  lineOf: (n: number, image: PendingImage, notes: readonly MarkNote[]) => string
 ) => {
   const lines = images.flatMap((image, at) =>
     image.notes?.length ? [lineOf(at + 1, image, image.notes)] : []

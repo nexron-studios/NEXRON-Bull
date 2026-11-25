@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'vue-sonner'
 import i18n from '@/i18n'
 import type { PendingImage } from '@/utils/content'
+import type { MarkNote } from '@/utils/markup'
 import { prependLine } from '@/utils/attachments'
 import { useComposerMarkup } from '../useComposerMarkup'
 import { useImageAttachments } from '../useImageAttachments'
@@ -20,6 +21,8 @@ const imageOf = (id: string, name: string): PendingImage => ({
   bytes: 3
 })
 
+const note = (number: number, text: string): MarkNote => ({ number, text })
+
 const NBSP = '\u00a0'
 /** A reference as the composer writes it: no-break spaces, so its chip never wraps. */
 const chipOf = (n: number, name: string) => `[Image${NBSP}${n}${NBSP}(${name})]`
@@ -33,7 +36,7 @@ const setup = ({
   isShellAtStart = false,
   hasChips = true
 } = {}) => {
-  const sent: { text: string; images: { name: string; notes?: string[] }[] }[] = []
+  const sent: { text: string; images: { name: string; notes?: MarkNote[] }[] }[] = []
   const images = ref<PendingImage[]>([])
   const draft = ref('')
   const isShell = ref(isShellAtStart)
@@ -74,7 +77,7 @@ describe('useComposerMarkup', () => {
     vi.mocked(toast.error).mockClear()
   })
 
-  it('should send the image with its comment on it, and take the sent attachment away', () => {
+  it('should send a comment as text naming the image, and take the sent attachment away', () => {
     const shot = imageOf('a', 'shot.png')
     const { handOver, sent, draft, images } = setup({ attached: [shot] })
 
@@ -82,7 +85,9 @@ describe('useComposerMarkup', () => {
       true
     )
 
-    expect(sent).toEqual([{ text: '', images: [{ name: 'shot.png', notes: ['blue'] }] }])
+    expect(sent).toEqual([
+      { text: 'About [Image 1 (shot.png)]: blue', images: [{ name: 'shot.png', notes: [] }] }
+    ])
     expect(images.value).toEqual([])
     expect(draft.value).toBe('')
   })
@@ -142,11 +147,16 @@ describe('useComposerMarkup', () => {
     const { handOver, draft, images } = setup({ attached: [shot] })
     draft.value = `${chipOf(1, 'shot.png')} please crop`
 
-    const result = { sourceId: 'a', images: [marked], comment: '', notes: ['① bigger', '② bluer'] }
+    const result = {
+      sourceId: 'a',
+      images: [marked],
+      comment: '',
+      notes: [note(1, 'bigger'), note(2, 'bluer')]
+    }
     expect(handOver(result, 'compose')).toBe(true)
 
     expect(images.value.map(({ id, notes }) => ({ id, notes }))).toEqual([
-      { id: 'm', notes: ['① bigger', '② bluer'] }
+      { id: 'm', notes: [note(1, 'bigger'), note(2, 'bluer')] }
     ])
     expect(draft.value).toBe(`${chipOf(1, 'shot.png')} please crop`)
   })
@@ -157,15 +167,38 @@ describe('useComposerMarkup', () => {
     const second = { ...imageOf('m2', 'shot.png'), isMarked: true, markCount: 2 }
     const { handOver, draft, sent } = setup({ attached: [shot] })
     draft.value = `${chipOf(1, 'shot.png')} please crop`
-    handOver({ sourceId: 'a', images: [first], comment: '', notes: ['① bigger'] }, 'compose')
-    handOver({ sourceId: 'm1', images: [second], comment: '', notes: ['② bluer'] }, 'compose')
+    handOver({ sourceId: 'a', images: [first], comment: '', notes: [note(1, 'bigger')] }, 'compose')
+    // The preview hands over every note the image has: the earlier ones, then this round's.
+    const both = [note(1, 'bigger'), note(2, 'bluer')]
+    handOver({ sourceId: 'm1', images: [second], comment: '', notes: both }, 'compose')
 
-    handOver({ sourceId: 'm2', images: [second], comment: '', notes: [] }, 'send')
+    handOver({ sourceId: 'm2', images: [second], comment: '', notes: both }, 'send')
 
     expect(sent).toEqual([
-      { text: '', images: [{ name: 'shot.png', notes: ['① bigger', '② bluer'] }] }
+      { text: '', images: [{ name: 'shot.png', notes: [note(1, 'bigger'), note(2, 'bluer')] }] }
     ])
     expect(draft.value).toBe('please crop')
+  })
+
+  it('should write notes changed in the preview back onto the attachment itself', () => {
+    const shot = { ...imageOf('a', 'shot.png'), notes: [note(1, 'bigger'), note(2, 'bluer')] }
+    const { handOver, images } = setup({ attached: [shot] })
+
+    handOver({ sourceId: 'a', images: [], comment: '', notes: [note(2, 'much bluer')] }, 'compose')
+
+    expect(images.value.map(({ id, notes }) => ({ id, notes }))).toEqual([
+      { id: 'a', notes: [note(2, 'much bluer')] }
+    ])
+  })
+
+  it('should send the words alone when the image cannot go along, and not keep them twice', () => {
+    const shot = { ...imageOf('a', 'shot.png'), notes: [note(1, 'bigger')] }
+    const { handOver, sent, images } = setup({ attached: [shot] })
+
+    handOver({ sourceId: 'a', images: [], comment: '', notes: [note(1, 'bigger')] }, 'send')
+
+    expect(sent).toEqual([{ text: '① bigger', images: [] }])
+    expect(images.value.map(({ id, notes }) => ({ id, notes }))).toEqual([{ id: 'a', notes: [] }])
   })
 
   describe('with two images', () => {
@@ -181,12 +214,18 @@ describe('useComposerMarkup', () => {
       const { handOver, draft, images } = setup({ attached: [one, two] })
       draft.value = LINE
 
-      handOver({ sourceId: 'b', images: [markedTwo], comment: '', notes: ['① smaller'] }, 'compose')
-      handOver({ sourceId: 'a', images: [markedOne], comment: '', notes: ['① bigger'] }, 'compose')
+      handOver(
+        { sourceId: 'b', images: [markedTwo], comment: '', notes: [note(1, 'smaller')] },
+        'compose'
+      )
+      handOver(
+        { sourceId: 'a', images: [markedOne], comment: '', notes: [note(1, 'bigger')] },
+        'compose'
+      )
 
       expect(notesOf(images)).toEqual([
-        { name: 'one.png', notes: ['① bigger'] },
-        { name: 'two.png', notes: ['① smaller'] }
+        { name: 'one.png', notes: [note(1, 'bigger')] },
+        { name: 'two.png', notes: [note(1, 'smaller')] }
       ])
       expect(draft.value).toBe(LINE)
     })
@@ -194,24 +233,41 @@ describe('useComposerMarkup', () => {
     it("should take only the removed image's notes away", () => {
       const { handOver, draft, images, removeImage } = setup({ attached: [one, two] })
       draft.value = LINE
-      handOver({ sourceId: 'a', images: [markedOne], comment: '', notes: ['① bigger'] }, 'compose')
-      handOver({ sourceId: 'b', images: [markedTwo], comment: '', notes: ['① smaller'] }, 'compose')
+      handOver(
+        { sourceId: 'a', images: [markedOne], comment: '', notes: [note(1, 'bigger')] },
+        'compose'
+      )
+      handOver(
+        { sourceId: 'b', images: [markedTwo], comment: '', notes: [note(1, 'smaller')] },
+        'compose'
+      )
 
       removeImage('m1')
 
-      expect(notesOf(images)).toEqual([{ name: 'two.png', notes: ['① smaller'] }])
+      expect(notesOf(images)).toEqual([{ name: 'two.png', notes: [note(1, 'smaller')] }])
       expect(draft.value).toBe(`${chipOf(1, 'two.png')} compare them`)
     })
 
     it("should send only the image's own notes along", () => {
       const { handOver, sent, images } = setup({ attached: [one, two] })
-      handOver({ sourceId: 'a', images: [markedOne], comment: '', notes: ['① bigger'] }, 'compose')
-      handOver({ sourceId: 'b', images: [markedTwo], comment: '', notes: ['① smaller'] }, 'compose')
+      handOver(
+        { sourceId: 'a', images: [markedOne], comment: '', notes: [note(1, 'bigger')] },
+        'compose'
+      )
+      handOver(
+        { sourceId: 'b', images: [markedTwo], comment: '', notes: [note(1, 'smaller')] },
+        'compose'
+      )
 
-      handOver({ sourceId: 'm2', images: [markedTwo], comment: '', notes: [] }, 'send')
+      handOver(
+        { sourceId: 'm2', images: [markedTwo], comment: '', notes: [note(1, 'smaller')] },
+        'send'
+      )
 
-      expect(sent).toEqual([{ text: '', images: [{ name: 'two.png', notes: ['① smaller'] }] }])
-      expect(notesOf(images)).toEqual([{ name: 'one.png', notes: ['① bigger'] }])
+      expect(sent).toEqual([
+        { text: '', images: [{ name: 'two.png', notes: [note(1, 'smaller')] }] }
+      ])
+      expect(notesOf(images)).toEqual([{ name: 'one.png', notes: [note(1, 'bigger')] }])
     })
   })
 })

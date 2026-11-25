@@ -99,6 +99,37 @@ describe('useLightboxActions', () => {
     expect(flattenImage).not.toHaveBeenCalled()
   })
 
+  it('should hand over the earlier notes as changed in the preview', async () => {
+    const noted = {
+      ...attached,
+      notes: [
+        { number: 1, text: 'bigger' },
+        { number: 2, text: 'bluer' }
+      ]
+    }
+    const { markup, actions, target } = setup(noted)
+    markup.load(noted)
+
+    markup.setEarlierNote(2, 'much bluer')
+    markup.removeEarlierNote(1)
+    await actions.apply()
+
+    expect(target).toHaveBeenCalledWith(
+      { sourceId: 'a', images: [], comment: '', notes: [{ number: 2, text: 'much bluer' }] },
+      'compose'
+    )
+  })
+
+  it('should not count earlier notes as a change until one is changed', () => {
+    const noted = { ...attached, notes: [{ number: 1, text: 'bigger' }] }
+    const { markup } = setup(noted)
+    markup.load(noted)
+
+    expect(markup.isDirty.value).toBe(false)
+    markup.setEarlierNote(1, 'bigger ')
+    expect(markup.isDirty.value).toBe(false)
+  })
+
   it('should warn once before leaving drops a comment', () => {
     const { markup, actions } = setup(attached)
     markup.comment.value = 'note'

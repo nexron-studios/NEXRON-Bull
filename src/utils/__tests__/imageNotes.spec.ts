@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { PendingImage } from '@/utils/content'
+import { noteTextOf, type MarkNote } from '@/utils/markup'
 import { withImageNotes } from '../imageNotes'
 
-const imageOf = (name: string, notes?: string[]): PendingImage => ({
+const imageOf = (name: string, notes?: MarkNote[]): PendingImage => ({
   id: name,
   name,
   mediaType: 'image/png',
@@ -12,12 +13,16 @@ const imageOf = (name: string, notes?: string[]): PendingImage => ({
   notes
 })
 
-const lineOf = (n: number, image: PendingImage, notes: readonly string[]) =>
-  `Zu [Bild ${n} (${image.name})]: ${notes.join(' ')}`
+const lineOf = (n: number, image: PendingImage, notes: readonly MarkNote[]) =>
+  `Zu [Bild ${n} (${image.name})]: ${notes.map(noteTextOf).join(' ')}`
 
 describe('withImageNotes', () => {
   it('should put a line per image with notes in front, numbered by its place', () => {
-    const images = [imageOf('a.png', ['① bigger']), imageOf('b.png'), imageOf('c.png', ['① x'])]
+    const images = [
+      imageOf('a.png', [{ number: 1, text: 'bigger' }]),
+      imageOf('b.png'),
+      imageOf('c.png', [{ number: 1, text: 'x' }])
+    ]
 
     expect(withImageNotes('please crop', images, lineOf)).toBe(
       'Zu [Bild 1 (a.png)]: ① bigger\nZu [Bild 3 (c.png)]: ① x\n\nplease crop'
@@ -29,7 +34,7 @@ describe('withImageNotes', () => {
   })
 
   it('should send the notes alone when nothing was typed', () => {
-    expect(withImageNotes('', [imageOf('a.png', ['① bigger'])], lineOf)).toBe(
+    expect(withImageNotes('', [imageOf('a.png', [{ number: 1, text: 'bigger' }])], lineOf)).toBe(
       'Zu [Bild 1 (a.png)]: ① bigger'
     )
   })

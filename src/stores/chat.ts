@@ -54,6 +54,7 @@ import {
 } from '@/utils/finishOrder'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
 import { withImageNotes } from '@/utils/imageNotes'
+import { noteTextOf, type MarkNote } from '@/utils/markup'
 import { IMAGE_REF_SLOTS, imageRefFormatOf, withPlainImageRefs } from '@/utils/imageRefs'
 import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
@@ -79,10 +80,10 @@ const imageRefFormat = () => imageRefFormatOf(i18n.global.t('images.reference', 
  */
 const messageTextOf = (text: string, images: readonly PendingImage[]) => {
   const format = imageRefFormat()
-  const lineOf = (n: number, image: PendingImage, notes: readonly string[]) =>
+  const lineOf = (n: number, image: PendingImage, notes: readonly MarkNote[]) =>
     i18n.global.t('images.comment_line', {
       ref: format.render(n, image.name),
-      comment: notes.join(' ')
+      comment: notes.map(noteTextOf).join(' ')
     })
   return withPlainImageRefs(withImageNotes(text, images, lineOf), format)
 }

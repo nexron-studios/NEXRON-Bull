@@ -351,6 +351,7 @@ export default {
     note_placeholder: 'What should change here?',
     remove_mark: 'Remove mark {n}',
     remove_mark_unnumbered: 'Remove mark',
+    remove_note: 'Remove note {n}',
     text_label: 'Text in the image',
     text_placeholder: 'Text, Enter places it',
     comment_hint:

@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentdEvent, AgentdRequest, PromptBlock } from '@/types/agentd.type'
 import { newTab, type ChatTabState } from '@/utils/chatTab'
+import type { MarkNote } from '@/utils/markup'
 import { useChatStore } from '../chat'
 import { useDraftStore } from '../drafts'
 import { useHeldPromptsStore } from '../heldPrompts'
@@ -247,7 +248,8 @@ describe('useChatStore with the composer', () => {
 })
 
 describe('useChatStore with the notes of marked images', () => {
-  const noted = (id: string, name: string, notes: string[]) => ({
+  const note = (number: number, text: string): MarkNote => ({ number, text })
+  const noted = (id: string, name: string, notes: MarkNote[]) => ({
     id,
     name,
     mediaType: 'image/png' as const,
@@ -267,9 +269,9 @@ describe('useChatStore with the notes of marked images', () => {
 
   it("should write each image's notes in front of the text as the message goes out", () => {
     const chat = openTab('idle')
-    const one = noted('a', 'one.png', ['① bigger', '② bluer'])
+    const one = noted('a', 'one.png', [note(1, 'bigger'), note(2, 'bluer')])
     const two = noted('b', 'two.png', [])
-    const three = noted('c', 'three.png', ['① smaller'])
+    const three = noted('c', 'three.png', [note(1, 'smaller')])
 
     chat.send('t1', 'please crop', [one, two, three])
 
@@ -282,14 +284,14 @@ describe('useChatStore with the notes of marked images', () => {
 
   it('should give a held message back with its notes on the images, not in the text', () => {
     const chat = openTab('working')
-    const one = noted('a', 'one.png', ['① bigger'])
+    const one = noted('a', 'one.png', [note(1, 'bigger')])
 
     chat.send('t1', 'please crop', [one])
     void chat.interrupt('t1')
 
     const draft = useDraftStore().draftOf('t1')
     expect(draft.text).toBe('please crop')
-    expect(draft.images.map((image) => image.notes)).toEqual([['① bigger']])
+    expect(draft.images.map((image) => image.notes)).toEqual([[note(1, 'bigger')]])
   })
 
   it('should send a prompt from the history as it was, with no notes added again', () => {

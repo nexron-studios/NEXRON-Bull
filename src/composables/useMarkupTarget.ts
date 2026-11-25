@@ -1,5 +1,6 @@
 import { inject, provide, type InjectionKey } from 'vue'
 import type { PendingImage } from '@/utils/content'
+import type { MarkNote } from '@/utils/markup'
 
 /** What the preview hands to the composer once an image is marked. */
 export interface MarkupResult {
@@ -12,8 +13,11 @@ export interface MarkupResult {
   images: PendingImage[]
   /** The general comment, trimmed; empty when nothing was written */
   comment: string
-  /** The marks' notes behind their numbers ("① bigger"), one per mark that has one */
-  notes: string[]
+  /**
+   * Every note the image has: an attachment's earlier ones as changed in the preview, then this
+   * round's, each with its mark's number
+   */
+  notes: MarkNote[]
 }
 
 /**

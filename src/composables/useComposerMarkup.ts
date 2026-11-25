@@ -5,6 +5,8 @@ import type { useImageReferences } from '@/composables/useImageReferences'
 import type { MarkupHandoff, MarkupResult } from '@/composables/useMarkupTarget'
 import { MAX_IMAGES_PER_MESSAGE } from '@/utils/attachments'
 import type { PendingImage } from '@/utils/content'
+import { withPlainImageRefs } from '@/utils/imageRefs'
+import { noteTextOf, type MarkNote } from '@/utils/markup'
 
 interface ComposerMarkupOptions {
   images: Ref<PendingImage[]>
@@ -36,29 +38,32 @@ export const useComposerMarkup = ({
 }: ComposerMarkupOptions) => {
   const { t } = useI18n()
 
-  /** The notes the attachment `id` has from earlier rounds; none for an image from the history. */
-  const earlierNotesOf = (id: string | null) =>
-    images.value.find((image) => image.id === id)?.notes ?? []
+  const isAttached = (id: string | null) => images.value.some((image) => image.id === id)
 
-  /** The marked copy with every note so far on it; the images behind it go as they are. */
-  const withNotes = (outgoing: PendingImage[], notes: readonly string[]): PendingImage[] => {
+  /** The attachment `id` with `notes` in place of the ones it had. */
+  const setNotesOf = (id: string, notes: MarkNote[]) => {
+    images.value = images.value.map((image) => (image.id === id ? { ...image, notes } : image))
+  }
+
+  /** The marked copy with every note on it; the images behind it go as they are. */
+  const withNotes = (outgoing: PendingImage[], notes: MarkNote[]): PendingImage[] => {
     const [marked, ...rest] = outgoing
-    if (!marked || !notes.length) return outgoing
-    return [{ ...marked, notes: [...notes] }, ...rest]
+    return marked ? [{ ...marked, notes }, ...rest] : outgoing
   }
 
   /**
-   * A marked image from the preview into the draft; nothing is sent. Its notes go onto the
-   * attachment, after those of earlier rounds, and into the text only when the message goes out,
-   * so the draft names the image once, by the chip it has. A comment (only a sent image has a
-   * field for one) goes in front of the draft as text to edit, naming the image by a reference.
+   * A marked image from the preview into the draft; nothing is sent. Its notes (the earlier ones
+   * as changed there, then the new ones) go onto the attachment: the marked copy, or the image
+   * itself when only its notes changed. They go into the text only when the message goes out, so
+   * the draft names the image once, by its chip. A comment (only a sent image has a field for
+   * one) goes in front of the draft as text to edit, naming the image by a reference.
    */
   const takeMarkup = ({ sourceId, images: incoming, comment, notes }: MarkupResult) => {
-    const noted = withNotes(incoming, [...earlierNotesOf(sourceId), ...notes])
-    if (noted.length && !placeMarkedImages(sourceId, noted)) return false
+    if (incoming.length && !placeMarkedImages(sourceId, withNotes(incoming, notes))) return false
+    if (!incoming.length && sourceId && isAttached(sourceId)) setNotesOf(sourceId, notes)
     // The comment line in front of a shell command would run as part of it.
     isShell.value = false
-    const anchorId = noted[0]?.id ?? sourceId
+    const anchorId = incoming[0]?.id ?? sourceId
     const at = images.value.findIndex((image) => image.id === anchorId)
     const anchor = images.value[at]
     if (!comment || !anchor) {
@@ -70,27 +75,40 @@ export const useComposerMarkup = ({
     return true
   }
 
+  /** The comment as the text of a message whose first image it is about; empty without one. */
+  const commentLineOf = (image: PendingImage, comment: string) => {
+    if (!comment) return ''
+    const ref = references.format.value.render(1, image.name)
+    return withPlainImageRefs(t('images.comment_line', { ref, comment }), references.format.value)
+  }
+
   /**
    * "Senden" in the preview: the image goes out as a message of its own, by the same way as any
-   * message (queue, limit), the comment and every note so far on it, written into the text as the
-   * message leaves. The draft stays for later; only an attachment that just went out leaves it,
-   * with its references. A shell command waiting in the draft stays one: nothing is written into
-   * it.
+   * message (queue, limit). The comment is its text, to change like any text should the message
+   * come back; the notes ride on the image and are written in as it leaves. The draft stays for
+   * later; only an attachment that just went out leaves it, with its references. A shell command
+   * waiting in the draft stays one: nothing is written into it.
    */
   const sendMarkup = ({ sourceId, images: outgoing, comment, notes }: MarkupResult) => {
     if (outgoing.length > MAX_IMAGES_PER_MESSAGE) {
       toast.error(t('images.marked_limit', { max: MAX_IMAGES_PER_MESSAGE }))
       return false
     }
-    const allNotes = [comment, ...earlierNotesOf(sourceId), ...notes].filter(Boolean)
-    // An image Claude would not take (no base64 data URL) cannot go along; its words still can.
-    if (!outgoing.length) {
-      if (!allNotes.length) toast.error(t('images.send_empty'))
-      else send(allNotes.join(' '), [])
-      return allNotes.length > 0
+    const [first] = outgoing
+    if (first) {
+      send(commentLineOf(first, comment), withNotes(outgoing, notes))
+      if (sourceId && isAttached(sourceId)) remove(sourceId)
+      return true
     }
-    send('', withNotes(outgoing, allNotes))
-    if (sourceId && images.value.some((image) => image.id === sourceId)) remove(sourceId)
+    // An image Claude would not take (no base64 data URL) cannot go along; what was written about
+    // it still can, and then no longer waits on the attachment to go out a second time.
+    const text = [comment, ...notes.map(noteTextOf)].filter(Boolean).join(' ')
+    if (!text) {
+      toast.error(t('images.send_empty'))
+      return false
+    }
+    send(text, [])
+    if (sourceId && isAttached(sourceId)) setNotesOf(sourceId, [])
     return true
   }
 

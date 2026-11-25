@@ -7,6 +7,7 @@ import { withPlainImageRefs } from '@/utils/imageRefs'
 
 interface ComposerMarkupOptions {
   images: Ref<PendingImage[]>
+  isShell: Ref<boolean>
   references: ReturnType<typeof useImageReferences>
   /** False when the message has no room left */
   placeMarkedImages: (sourceId: string | null, incoming: PendingImage[]) => boolean
@@ -26,6 +27,7 @@ interface ComposerMarkupOptions {
  */
 export const useComposerMarkup = ({
   images,
+  isShell,
   references,
   placeMarkedImages,
   remove,
@@ -48,6 +50,8 @@ export const useComposerMarkup = ({
    */
   const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
     if (incoming.length && !placeMarkedImages(sourceId, incoming)) return false
+    // The comment line in front of a shell command would run as part of it.
+    isShell.value = false
     const anchorId = incoming[0]?.id ?? sourceId
     const at = images.value.findIndex((image) => image.id === anchorId)
     const anchor = images.value[at]
@@ -63,7 +67,8 @@ export const useComposerMarkup = ({
   /**
    * "Senden" in the preview: image and comment go out as a message of their own, by the same way
    * as any message (queue, limit). The draft stays for later; only an attachment that just went
-   * out leaves it, with its references.
+   * out leaves it, with its references. A shell command waiting in the draft stays one: nothing
+   * is written into it.
    */
   const sendMarkup = ({ sourceId, images: outgoing, comment }: MarkupResult) => {
     const [first] = outgoing

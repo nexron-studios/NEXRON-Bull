@@ -23,7 +23,7 @@ const pasteEventOf = (files: File[]) =>
     preventDefault: vi.fn()
   }) as unknown as ClipboardEvent
 
-const setup = (accept: (files: File[]) => File[] = (files) => files) => {
+const setup = (accept: (files: File[]) => File[] = (files) => files, isShell = false) => {
   const onSinglePaste = vi.fn()
   let api: ReturnType<typeof useComposerPaste> | undefined
   mount(
@@ -32,7 +32,7 @@ const setup = (accept: (files: File[]) => File[] = (files) => files) => {
         api = useComposerPaste({
           images: ref<PendingImage[]>([]),
           pastes: ref<PastedText[]>([]),
-          isShell: ref(false),
+          isShell: ref(isShell),
           addFiles: async (files) => accept([...files]).map(pendingOf),
           onSinglePaste
         })
@@ -59,6 +59,15 @@ describe('useComposerPaste', () => {
     const { handlePaste, onSinglePaste } = setup()
 
     handlePaste(pasteEventOf([png('a.png'), png('b.png')]))
+    await new Promise((resolve) => setTimeout(resolve))
+
+    expect(onSinglePaste).not.toHaveBeenCalled()
+  })
+
+  it('should not open anything for a screenshot pasted into a shell command', async () => {
+    const { handlePaste, onSinglePaste } = setup(undefined, true)
+
+    handlePaste(pasteEventOf([png('shot.png')]))
     await new Promise((resolve) => setTimeout(resolve))
 
     expect(onSinglePaste).not.toHaveBeenCalled()

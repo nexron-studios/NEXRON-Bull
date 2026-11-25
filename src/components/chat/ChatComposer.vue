@@ -110,6 +110,7 @@ const prependComment = (line: string) => {
 
 const { openImage, handOver } = useComposerMarkup({
   images,
+  isShell,
   references,
   placeMarkedImages,
   remove,

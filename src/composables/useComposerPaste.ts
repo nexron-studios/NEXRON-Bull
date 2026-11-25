@@ -36,11 +36,13 @@ export const useComposerPaste = ({
       return [...named, new File([file], name, { type: file.type })]
     }, [])
 
-  // Several images at once are a batch to send, not one screenshot to point at.
+  // Several images at once are a batch to send, not one screenshot to point at. A shell command
+  // has no room for a comment on it either.
   const pasteImages = async (files: File[]) => {
     const added = await addFiles(namePasted(files))
     const [image] = added
-    if (files.length === 1 && added.length === 1 && image) onSinglePaste(image)
+    if (isShell.value || files.length !== 1 || added.length !== 1 || !image) return
+    onSinglePaste(image)
   }
 
   const handlePaste = (event: ClipboardEvent) => {

@@ -212,6 +212,16 @@ describe('useChatStore: a message sent into the running turn', () => {
     expect([chat.tabs[0].pending.length, useDraftStore().draftOf('t1').text]).toEqual([1, ''])
   })
 
+  it('should give the withdrawal only a short wait so a silent Claude cannot hold up the stop', async () => {
+    ask.mockResolvedValue({ type: 'control_result', id: 1, tab: 't1', response: {} })
+    const chat = workingTab()
+    chat.send('t1', 'use the blue one', [])
+
+    await chat.interrupt('t1')
+
+    expect(ask.mock.calls.at(-1)?.[2]).toBe(1500)
+  })
+
   it('should not show a message with shell output as read before Claude came to a tool result', async () => {
     ask.mockResolvedValue({
       type: 'shell_result',

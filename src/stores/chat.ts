@@ -111,6 +111,8 @@ const PLAN_ADJUST_MESSAGE =
 const RUNNING_TIMEOUT_MS = 10_000
 /** agentd gives up on Claude after 60 s; this only covers a connection that drops meanwhile. */
 const CONTROL_TIMEOUT_MS = 70_000
+// Stop waits for the withdrawal before it interrupts; an older Claude Code may never answer it.
+const WITHDRAW_TIMEOUT_MS = 1_500
 
 /**
  * Why a tab's chat was left alone: it went on with another session since the user asked, it lost
@@ -586,12 +588,13 @@ export const useChatStore = defineStore(
     /** A control request to the tab's Claude (`get_context_usage`, `rewind_files`, …); its answer. */
     const askClaude = async (
       id: string,
-      request: { subtype: string } & Record<string, unknown>
+      request: { subtype: string } & Record<string, unknown>,
+      timeoutMs = CONTROL_TIMEOUT_MS
     ) => {
       const { response } = await agentdService.ask<'control_result'>(
         { op: 'control', tab: id, request },
         tabOf(id)?.machine ?? null,
-        CONTROL_TIMEOUT_MS
+        timeoutMs
       )
       return response
     }
@@ -678,7 +681,11 @@ export const useChatStore = defineStore(
 
     const isWithdrawn = async (id: string, stamp: string): Promise<boolean> => {
       try {
-        const answer = await askClaude(id, { subtype: 'cancel_async_message', message_uuid: stamp })
+        const answer = await askClaude(
+          id,
+          { subtype: 'cancel_async_message', message_uuid: stamp },
+          WITHDRAW_TIMEOUT_MS
+        )
         return (answer as { cancelled?: unknown } | null)?.cancelled === true
       } catch (error: unknown) {
         // An older Claude Code without the request: the message stays and runs after the stop.

@@ -379,7 +379,7 @@ export default {
       earlier: 'Earlier'
     },
     empty_chat: 'waiting for the first prompt',
-    session_id: 'Session ID {id}',
+    session_id_copy: 'Session ID {id}, click to copy',
     age_running: 'running for {age}',
     age_finished: 'finished {age} ago',
     empty_title: 'No chat open',
@@ -1184,7 +1184,8 @@ export default {
       last_prompt: 'Last prompt:',
       claude: 'Claude:',
       asks_for: 'Asks for:',
-      to_chat: 'Go to chat'
+      to_chat: 'Go to chat',
+      copy_session_id: '{name}, copy session ID'
     },
     resume: 'Continue',
     resume_label: 'Continue {title}',

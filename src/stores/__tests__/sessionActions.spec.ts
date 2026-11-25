@@ -1,18 +1,22 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from '@/i18n'
 import { newTab } from '@/utils/chatTab'
 import { targetOfTab } from '@/utils/sessionActions'
 import { useChatStore } from '../chat'
 import { useHiddenSessionsStore } from '../hiddenSessions'
 import { useSessionActionsStore } from '../sessionActions'
 
-const { toast, ask, send } = vi.hoisted(() => ({
+const { toast, toastSuccess, ask, send } = vi.hoisted(() => ({
   toast: vi.fn(),
+  toastSuccess: vi.fn(),
   ask: vi.fn(),
   send: vi.fn(() => Promise.resolve())
 }))
 
-vi.mock('vue-sonner', () => ({ toast: Object.assign(toast, { error: vi.fn(), success: vi.fn() }) }))
+vi.mock('vue-sonner', () => ({
+  toast: Object.assign(toast, { error: vi.fn(), success: toastSuccess })
+}))
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
   agentdService: { ask, send, onEvent: () => () => {}, onReady: () => () => {}, waitFor: vi.fn() }
@@ -91,5 +95,19 @@ describe('useSessionActionsStore', () => {
 
     undoLastToast()
     expect([Object.keys(hidden.hidden), chat.tabs.map((open) => open.id)]).toEqual([[], ['a']])
+  })
+
+  it('should copy the full session ID and say so', async () => {
+    i18n.global.locale.value = 'de'
+    // jsdom is a browser without Tauri: the copy goes through the web clipboard.
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const chat = useChatStore()
+    chat.tabs = [tab('a')]
+
+    useSessionActionsStore().act('copy_id', targetOfTab(chat.tabs[0]))
+
+    await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Kopiert'))
+    expect(writeText).toHaveBeenCalledWith('s-a')
   })
 })

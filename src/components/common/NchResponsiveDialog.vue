@@ -25,7 +25,7 @@ const {
   description,
   contentClass = '',
   restoresFocus = true,
-  focusesFirst = true
+  shouldFocusFirst = true
 } = defineProps<{
   title: string
   description: string
@@ -34,7 +34,7 @@ const {
   /** `false` when closing moved focus somewhere else on purpose, so it stays there */
   restoresFocus?: boolean
   /** `false` keeps the focus on the box itself instead of its first field (no phone keyboard) */
-  focusesFirst?: boolean
+  shouldFocusFirst?: boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -48,8 +48,12 @@ const { hasMoreAbove } = useScrollEdges(sheetBody)
 const keepFocus = (event: Event) => {
   if (!restoresFocus) event.preventDefault()
 }
+// The box itself takes the focus instead (FocusScope gives it tabindex -1): skipping the auto focus
+// alone would leave it on the button behind the modal.
 const skipFirstField = (event: Event) => {
-  if (!focusesFirst) event.preventDefault()
+  if (shouldFocusFirst) return
+  event.preventDefault()
+  if (event.target instanceof HTMLElement) event.target.focus({ preventScroll: true })
 }
 </script>
 

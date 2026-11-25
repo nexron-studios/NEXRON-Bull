@@ -1,10 +1,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { useStorage } from '@vueuse/core'
+import { StorageSerializers, useStorage } from '@vueuse/core'
 import { useLayoutSnap } from '@/composables/useLayoutSnap'
 import { useChatStore } from '@/stores/chat'
 import type { ChatTabState } from '@/utils/chatTab'
-import { PREVIEW_DEFAULT_WIDTH } from '@/utils/previewPane'
 import { latestPreviewOf, type SavedPreview } from '@/utils/previewUrl'
 
 const URLS_STORAGE_KEY = 'bull.preview.urls'
@@ -24,7 +23,10 @@ export const PREVIEW_TOGGLE_ID = 'preview-toggle'
 export const usePreviewStore = defineStore('preview', () => {
   const saved = useStorage<Record<string, SavedPreview>>(URLS_STORAGE_KEY, {})
   const isOpen = useStorage(OPEN_STORAGE_KEY, false)
-  const storedWidth = useStorage(WIDTH_STORAGE_KEY, PREVIEW_DEFAULT_WIDTH)
+  /** `null` until the edge is dragged: the pane then takes the roomy width (`clampPreviewWidth`) */
+  const storedWidth = useStorage<number | null>(WIDTH_STORAGE_KEY, null, undefined, {
+    serializer: StorageSerializers.object
+  })
   const isSheetOpen = ref(false)
   /** Whether the pane fits beside the chat right now; kept up to date by `usePreviewPane` */
   const hasRoom = ref(false)
@@ -36,7 +38,11 @@ export const usePreviewStore = defineStore('preview', () => {
     const kept = Object.entries(saved.value).filter(([id]) => openIds.has(id))
     saved.value = {
       ...Object.fromEntries(kept),
-      [tab.id]: { url, detectedIn: latestPreviewOf(tab.messages)?.messageId ?? null }
+      [tab.id]: {
+        url,
+        detectedIn: latestPreviewOf(tab.messages)?.messageId ?? null,
+        savedAt: Date.now()
+      }
     }
   }
 

@@ -12,10 +12,9 @@ import { usePreviewTarget } from '@/composables/usePreviewTarget'
 import { handleError } from '@/lib/error'
 import { usePreviewStore } from '@/stores/preview'
 import type { ChatTabState } from '@/utils/chatTab'
+import { frameSandboxOf } from '@/utils/previewUrl'
 
-// A localhost page of the chat's project, beside the chat or in a sheet. The page runs in a frame
-// from another origin: it may run scripts and forms, but never navigate or open Bull's window.
-const FRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads'
+// A localhost page of the chat's project, beside the chat or in a sheet, in a sandboxed frame.
 
 const { tab, canClose = true } = defineProps<{ tab: ChatTabState; canClose?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -27,6 +26,7 @@ const { target, remoteMachine, reloadCount, reload } = usePreviewTarget(() => ta
 
 const shownUrl = computed(() => (target.value.kind === 'empty' ? null : target.value.url))
 const src = computed(() => ('src' in target.value ? target.value.src : null))
+const { origin } = window.location
 const machineName = computed(() => labelOf(tab.machine) ?? tab.machine ?? '')
 
 const openExternal = () => {
@@ -98,7 +98,7 @@ const openExternal = () => {
         :key="`${target.src}#${reloadCount}`"
         :src="target.src"
         :title="t('preview.frame_title', { url: target.url })"
-        :sandbox="FRAME_SANDBOX"
+        :sandbox="frameSandboxOf(target.src, origin)"
         class="motion-fade-in min-h-0 flex-1 border-0 bg-white"
       />
     </div>

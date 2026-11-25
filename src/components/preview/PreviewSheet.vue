@@ -23,7 +23,7 @@ const { isSheetOpen } = storeToRefs(usePreviewStore())
     :title="t('preview.label')"
     :description="t('preview.sheet_hint')"
     content-class="sm:max-w-[min(64rem,calc(100vw-2rem))]"
-    :focuses-first="false"
+    :should-focus-first="false"
   >
     <div class="-mx-4 flex h-[70dvh] min-h-0 flex-col overflow-hidden border-t border-border">
       <PreviewPane :key="tab.id" :tab :can-close="isPhone" @close="isSheetOpen = false" />

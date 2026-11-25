@@ -28,6 +28,14 @@ describe('clampPreviewWidth', () => {
     expect(clampPreviewWidth('wide', 1000)).toBe(560)
   })
 
+  it('should leave the chat its roomy width until the edge is dragged', () => {
+    expect([clampPreviewWidth(null, 480), clampPreviewWidth(null, 1000)]).toEqual([400, 560])
+  })
+
+  it('should not go below the minimum for the roomy width', () => {
+    expect(clampPreviewWidth(null, 400)).toBe(360)
+  })
+
   it('should hold a width inside minimum and maximum', () => {
     expect([clampPreviewWidth(100, 1000), clampPreviewWidth(2000, 1000)]).toEqual([360, 1000])
   })

@@ -54,6 +54,7 @@ import {
   isSidebarShortcut,
   isTerminalDrawerShortcut
 } from '@/utils/shortcuts'
+import { INFO_PANEL_MIN_WIDTH } from '@/utils/infoPanel'
 import { RAIL_WIDTH } from '@/utils/sidebarLayout'
 
 const isNewOpen = ref(false)
@@ -93,21 +94,24 @@ const isChatShown = computed(() => isNarrow.value || layout.value !== 'full')
 useFinishTracking(() => (isChatShown.value && !isDrawerOpen.value ? shownChatId.value : null))
 const sidebarWidth = () => (layout.value === 'rail' ? RAIL_WIDTH : panelWidth.value)
 const previewStore = usePreviewStore()
-// Beside the chat, between it and the info panel; the drawer of a narrow window takes no room.
-const previewPane = usePreviewPane(
-  windowWidth,
-  () => (isNarrow.value ? 0 : sidebarWidth()),
-  () => isChatRoute.value && !!activeTab.value && !shownTerminal.value && isChatShown.value
-)
+// The preview is read lazily (below): it keeps room for the open panel, the panel fits beside it.
 const infoPanel = useInfoPanel(
   windowWidth,
-  () => sidebarWidth() + previewPane.takenWidth.value,
+  sidebarWidth,
   () =>
     isChatRoute.value &&
     !!activeTab.value &&
     !shownTerminal.value &&
     isChatShown.value &&
-    !isPhone.value
+    !isPhone.value,
+  () => previewPane.takenWidth.value
+)
+// Beside the chat, between it and the info panel; the drawer of a narrow window takes no room.
+const previewPane = usePreviewPane(
+  windowWidth,
+  () => (isNarrow.value ? 0 : sidebarWidth()),
+  () => isChatRoute.value && !!activeTab.value && !shownTerminal.value && isChatShown.value,
+  () => (infoPanel.isShown.value ? INFO_PANEL_MIN_WIDTH : 0)
 )
 const asideWidth = computed(() => {
   if (layout.value === 'rail') return `${RAIL_WIDTH}px`

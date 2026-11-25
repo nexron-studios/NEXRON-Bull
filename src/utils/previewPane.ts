@@ -4,6 +4,8 @@ import { CHAT_BESIDE_PANEL_MIN_WIDTH } from '@/utils/infoPanel'
 /** Wide enough for a phone-sized page, the narrowest layout a web app is built for. */
 export const PREVIEW_MIN_WIDTH = 360
 export const PREVIEW_DEFAULT_WIDTH = 560
+/** Until the edge is dragged the pane leaves the chat this much: at its minimum it feels cramped. */
+export const CHAT_BESIDE_PREVIEW_ROOMY_WIDTH = 560
 
 /** Where a drag or a key on the pane's edge leaves it; shut keeps the stored width. */
 export type PreviewSize = { isOpen: false } | { isOpen: true; width: number }
@@ -19,9 +21,20 @@ export const hasPreviewRoom = (windowWidth: number, sidebarWidth: number): boole
 export const previewMaxWidth = (windowWidth: number, sidebarWidth: number): number =>
   Math.max(PREVIEW_MIN_WIDTH, roomFor(windowWidth, sidebarWidth))
 
-/** A stored or dragged width, held between the minimum and what the window allows. */
+/** The width before any drag: the default, or less so the chat keeps its roomy width. */
+const roomyWidthFor = (maxWidth: number): number =>
+  Math.min(
+    PREVIEW_DEFAULT_WIDTH,
+    maxWidth - (CHAT_BESIDE_PREVIEW_ROOMY_WIDTH - CHAT_BESIDE_PANEL_MIN_WIDTH)
+  )
+
+/**
+ * A stored or dragged width, held between the minimum and what the window allows. No number (never
+ * dragged, reset, or edited by hand) means the roomy width.
+ */
 export const clampPreviewWidth = (value: unknown, maxWidth: number): number => {
-  const width = typeof value === 'number' && Number.isFinite(value) ? value : PREVIEW_DEFAULT_WIDTH
+  const width =
+    typeof value === 'number' && Number.isFinite(value) ? value : roomyWidthFor(maxWidth)
   return Math.round(Math.min(Math.max(width, PREVIEW_MIN_WIDTH), maxWidth))
 }
 

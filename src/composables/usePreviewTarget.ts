@@ -3,7 +3,13 @@ import { useQuery } from '@tanstack/vue-query'
 import { machineService } from '@/api/services/machine.service'
 import { usePreviewStore } from '@/stores/preview'
 import type { ChatTabState } from '@/utils/chatTab'
-import { isLocalUrl, latestPreviewOf, previewUrlOf, previewUrlOn } from '@/utils/previewUrl'
+import {
+  isLocalUrl,
+  latestPreviewOf,
+  loadableUrlOf,
+  previewUrlOf,
+  previewUrlOn
+} from '@/utils/previewUrl'
 
 /** A dev server answers within milliseconds; an offline machine never does. */
 const PROBE_TIMEOUT_MS = 4 * 1000
@@ -52,7 +58,8 @@ export const usePreviewTarget = (tab: MaybeRefOrGetter<ChatTabState>) => {
     retry: false
   })
   const src = computed(() => {
-    if (!url.value || !remoteMachine.value) return url.value
+    if (!url.value) return null
+    if (!remoteMachine.value) return loadableUrlOf(url.value)
     return hostQuery.data.value ? previewUrlOn(url.value, hostQuery.data.value) : null
   })
   const probe = useQuery({
@@ -60,6 +67,10 @@ export const usePreviewTarget = (tab: MaybeRefOrGetter<ChatTabState>) => {
     queryFn: () => isReachable(src.value ?? ''),
     enabled: computed(() => !!src.value),
     staleTime: 0,
+    // Only a new address or reload asks again: a dev server restarting while Bull regains focus
+    // would otherwise swap a working frame (its scroll and route) for "does not answer".
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: false
   })
 

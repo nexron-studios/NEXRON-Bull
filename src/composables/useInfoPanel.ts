@@ -28,7 +28,9 @@ export const INFO_PANEL_TOGGLE_ID = 'info-panel-toggle'
 export const useInfoPanel = (
   windowWidth: MaybeRefOrGetter<number>,
   sidebarWidth: MaybeRefOrGetter<number>,
-  hasChat: MaybeRefOrGetter<boolean>
+  hasChat: MaybeRefOrGetter<boolean>,
+  /** Taken beside the chat by another pane (the preview): narrows the panel, never hides it */
+  besideWidth: MaybeRefOrGetter<number> = 0
 ) => {
   const isOpen = useStorage(OPEN_STORAGE_KEY, true)
   const storedWidth = useStorage(WIDTH_STORAGE_KEY, INFO_PANEL_DEFAULT_WIDTH)
@@ -42,7 +44,9 @@ export const useInfoPanel = (
   const isShown = computed(() => isOpen.value && canShow.value)
   /** A drag that would shut the panel on release; it stays on screen until then, to come back */
   const isClosing = computed(() => draft.value?.isOpen === false)
-  const maxWidth = computed(() => infoPanelMaxWidth(toValue(windowWidth), toValue(sidebarWidth)))
+  const maxWidth = computed(() =>
+    infoPanelMaxWidth(toValue(windowWidth), toValue(sidebarWidth) + toValue(besideWidth))
+  )
   /** The width shown right now, e.g. narrower than stored after the sidebar was widened */
   const width = computed(() => {
     if (isClosing.value) return INFO_PANEL_MIN_WIDTH

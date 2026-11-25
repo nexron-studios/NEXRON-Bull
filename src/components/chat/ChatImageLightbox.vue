@@ -94,11 +94,13 @@ const focusStage = (event: Event) => {
   stage.value?.focus()
 }
 
+/** Undo and redo of the drawing; false for any other key. */
 const handleMarkKey = (event: KeyboardEvent) => {
   const action = historyStepOf(event)
-  if (!action) return
+  if (!action) return false
   event.preventDefault()
   markup[action]()
+  return true
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -110,7 +112,9 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
   // The comment field keeps its own keys: text undo, and arrows that move the caret.
   if (isTextField(event.target)) return
-  if (isMarking.value) return handleMarkKey(event)
+  if (isMarking.value && handleMarkKey(event)) return
+  // Arrows page while marking too, since the composer's images open ready to mark; unsaved
+  // marks are asked about first, as on closing (`step` goes through `mayLeave`).
   const delta = KEY_STEPS[event.key]
   if (!delta || !hasSeveral.value) return
   event.preventDefault()

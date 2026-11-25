@@ -27,6 +27,10 @@ const strokeCount = computed(() =>
   t('images.stroke_count', { n: markup.strokes.value.length }, markup.strokes.value.length)
 )
 const subtitle = computed(() => (counter ? `${counter} · ${meta}` : meta))
+// The desktop draws on every markable image, so the counter keeps its place next to the strokes.
+const status = computed(() =>
+  isMarking ? [counter, strokeCount.value].filter(Boolean).join(' · ') : counter
+)
 
 // Icon buttons on the dark stage: light icon, a faint light hover; touch size on phones.
 const ON_STAGE = 'text-stage-foreground hover:bg-stage-foreground/10 hover:text-stage-foreground'
@@ -93,7 +97,7 @@ const ON_STAGE_PHONE = `size-11 ${ON_STAGE}`
       </DialogDescription>
     </div>
     <span class="text-small tabular-nums opacity-70" aria-live="polite">
-      {{ isMarking ? strokeCount : counter }}
+      {{ status }}
     </span>
     <NchIconButton
       :label="t('chat.close_image')"

@@ -99,16 +99,12 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const redo = () => {
     history.value = redoHistory(history.value)
   }
-  /** Back to viewing: the drawing goes, the comment stays for the same image. */
-  const clearStrokes = () => {
+  /** A fresh sheet for the next image; tool, colour and size stay as chosen. */
+  const reset = () => {
     history.value = emptyHistory()
     notes.value = {}
     editingId.value = null
     isKeepingOriginal.value = false
-  }
-  /** A fresh sheet for the next image; tool, colour and size stay as chosen. */
-  const reset = () => {
-    clearStrokes()
     comment.value = ''
     earlierNotes.value = [...savedNotes.value]
   }
@@ -138,7 +134,6 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
     removeMark,
     undo,
     redo,
-    clearStrokes,
     reset
   }
 })

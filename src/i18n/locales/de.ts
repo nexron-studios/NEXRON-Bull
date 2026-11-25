@@ -306,8 +306,6 @@ export default {
     open_marked: '{name} ansehen, markiert',
     note_count: 'keine Notiz | {n} Notiz | {n} Notizen',
     marked: 'markiert',
-    mode: 'Modus',
-    view: 'Ansehen',
     mark: 'Markieren',
     zoom_out: 'Verkleinern',
     zoom_in: 'Vergrößern',

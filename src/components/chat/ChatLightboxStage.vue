@@ -9,7 +9,8 @@ import type { LightboxImage } from '@/utils/attachments'
 import { fitSize, naturalSizeOf, type Size } from '@/utils/markup'
 
 // The image in the middle of the preview, fitted and zoomed, with the drawing layer on top while
-// marking. Desktop pages with arrows on the image, phones by swiping it.
+// marking. Desktop pages with arrows on the image, while marking too; phones by swiping it, which
+// drawing with a finger would trigger, so not while marking.
 const { image, natural, zoom, isMarking, canPage, isPhone } = defineProps<{
   image: LightboxImage
   natural: Size | null
@@ -69,7 +70,7 @@ defineExpose({ focus })
         <ChatMarkupCanvas v-if="isMarking && natural" :key="image.src" :natural />
       </div>
     </div>
-    <template v-if="canPage && !isPhone && !isMarking">
+    <template v-if="canPage && !isPhone">
       <NchIconButton
         :label="t('chat.previous_image')"
         variant="secondary"

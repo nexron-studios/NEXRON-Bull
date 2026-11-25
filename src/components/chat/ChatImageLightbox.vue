@@ -21,8 +21,10 @@ import { isTextField } from '@/utils/textField'
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
 // "M20"): view and page, or draw on it. A sent image can take a comment along to the composer; an
 // image still in the composer only takes its marks and their notes, as it is written about next
-// to its chip there. `initialMode`: what an opening starts in. The composer's own images open
-// ready to draw on; sent ones open to look at.
+// to its chip there. The desktop always offers the drawing tools next to zoom and paging (Jonas,
+// 25.11.2026: no switch between viewing and marking). The phone has no room for both, so it
+// still switches; `initialMode` is what it opens in: the composer's own images ready to draw on,
+// sent ones to look at.
 const { images, initialMode = 'view' } = defineProps<{
   images: LightboxImage[]
   initialMode?: LightboxMode
@@ -43,7 +45,7 @@ const mode = ref<LightboxMode>(startModeOf(initialMode, !!target))
 
 const current = computed(() => images[index.value] ?? null)
 const hasSeveral = computed(() => images.length > 1)
-const isMarking = computed(() => mode.value === 'mark')
+const isMarking = computed(() => !!target && (!isPhone.value || mode.value === 'mark'))
 // An image still in the composer is written about there, next to its chip: the preview only adds
 // marks (and their notes), no comment of its own.
 const isAttachment = computed(() => !!current.value?.id)
@@ -56,7 +58,7 @@ const counter = computed(() =>
     : null
 )
 
-const { isApplying, mayLeave, mayStopMarking, apply, copy, download } = useLightboxActions({
+const { isApplying, mayLeave, apply, copy, download } = useLightboxActions({
   current,
   target,
   markup,
@@ -78,13 +80,6 @@ const step = (delta: number) => {
 // Every way out (Esc, ×, the overlay) comes through here, so unsaved markup is asked about once.
 const setOpen = (next: boolean) => {
   if (next || mayLeave()) isOpen.value = next
-}
-
-// Back to viewing hides the drawing tools and drops the strokes; the comment stays.
-const setMode = (next: LightboxMode) => {
-  if (next === 'view' && !mayStopMarking()) return
-  if (next === 'view') markup.clearStrokes()
-  mode.value = next
 }
 
 const discard = () => {
@@ -194,7 +189,7 @@ watch(isOpen, (open) => {
             :is-applying
             @step="step"
             @copy="copy"
-            @mark="setMode('mark')"
+            @mark="mode = 'mark'"
             @apply="apply('compose')"
             @send="apply('send')"
           />
@@ -217,9 +212,7 @@ watch(isOpen, (open) => {
           <ChatLightboxToolbar
             v-model:zoom="zoom"
             class="max-w-full flex-wrap justify-center"
-            :mode
             :can-mark="!!target"
-            @update:mode="setMode"
             @copy="copy"
             @download="download"
           />

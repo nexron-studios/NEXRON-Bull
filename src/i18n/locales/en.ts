@@ -303,8 +303,6 @@ export default {
     open_marked: 'View {name}, marked',
     note_count: 'no notes | {n} note | {n} notes',
     marked: 'marked',
-    mode: 'Mode',
-    view: 'View',
     mark: 'Mark up',
     zoom_out: 'Zoom out',
     zoom_in: 'Zoom in',

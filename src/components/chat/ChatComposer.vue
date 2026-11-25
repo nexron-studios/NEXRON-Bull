@@ -198,7 +198,10 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (event.key !== 'Enter' || event.shiftKey) return
   event.preventDefault()
   // While Claude works, Enter queues for the turn's end and Ctrl/Cmd+Enter sends into the turn.
-  submit(isSendShortcut(event) ? 'intoTurn' : 'afterTurn')
+  // During an approval the turn is blocked: a quick Ctrl+Enter there is mostly meant for the card,
+  // so it waits too; the queue's own button still sends it in on purpose.
+  const isIntoTurn = isSendShortcut(event) && tab.status !== 'asking'
+  submit(isIntoTurn ? 'intoTurn' : 'afterTurn')
 }
 
 /** A held message goes back into the field to change it; sent again, it queues anew. */

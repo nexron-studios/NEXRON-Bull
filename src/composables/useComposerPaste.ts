@@ -8,7 +8,7 @@ interface ComposerPasteOptions {
   images: Ref<PendingImage[]>
   pastes: Ref<PastedText[]>
   isShell: Ref<boolean>
-  addFiles: (files: Iterable<File>) => Promise<unknown>
+  addFiles: (files: Iterable<File>) => Promise<void>
 }
 
 /**

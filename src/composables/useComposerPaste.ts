@@ -8,22 +8,14 @@ interface ComposerPasteOptions {
   images: Ref<PendingImage[]>
   pastes: Ref<PastedText[]>
   isShell: Ref<boolean>
-  addFiles: (files: Iterable<File>) => Promise<PendingImage[]>
-  /** A single pasted image arrived: it is about to be written about, so it opens for marking */
-  onSinglePaste: (image: PendingImage) => void
+  addFiles: (files: Iterable<File>) => Promise<unknown>
 }
 
 /**
  * Paste into the composer: a screenshot becomes an image, a long text a chip (Figma 30), so the
  * field stays readable. Short text and anything in shell mode keeps its normal path.
  */
-export const useComposerPaste = ({
-  images,
-  pastes,
-  isShell,
-  addFiles,
-  onSinglePaste
-}: ComposerPasteOptions) => {
+export const useComposerPaste = ({ images, pastes, isShell, addFiles }: ComposerPasteOptions) => {
   const { t } = useI18n()
 
   // A screenshot comes as "image.png"; the time of the paste tells it apart, a number the rest.
@@ -36,22 +28,13 @@ export const useComposerPaste = ({
       return [...named, new File([file], name, { type: file.type })]
     }, [])
 
-  // Several images at once are a batch to send, not one screenshot to point at. A shell command
-  // has no room for a comment on it either.
-  const pasteImages = async (files: File[]) => {
-    const added = await addFiles(namePasted(files))
-    const [image] = added
-    if (isShell.value || files.length !== 1 || added.length !== 1 || !image) return
-    onSinglePaste(image)
-  }
-
   const handlePaste = (event: ClipboardEvent) => {
     const files = [...(event.clipboardData?.files ?? [])].filter((file) =>
       file.type.startsWith('image/')
     )
     if (files.length) {
       event.preventDefault()
-      void pasteImages(files)
+      void addFiles(namePasted(files))
       return
     }
     const text = event.clipboardData?.getData('text/plain') ?? ''

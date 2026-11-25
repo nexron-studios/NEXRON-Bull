@@ -1,4 +1,4 @@
-import { nextTick, type Ref } from 'vue'
+import type { Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import type { useImageReferences } from '@/composables/useImageReferences'
@@ -14,8 +14,6 @@ interface ComposerMarkupOptions {
   /** False when the message has no room left */
   placeMarkedImages: (sourceId: string | null, incoming: PendingImage[]) => boolean
   remove: (id: string) => void
-  /** The preview of the attachment at `at`, from 0 */
-  openAt: (at: number) => void
   /** A line in front of the draft, the field focused */
   prependComment: (line: string) => void
   focusField: () => void
@@ -24,8 +22,8 @@ interface ComposerMarkupOptions {
 }
 
 /**
- * The composer's side of the image preview: opening an attachment in it, and taking back what was
- * marked there, either into the draft ("Ins Eingabefeld") or out as a message ("Senden").
+ * The composer's side of the image preview: taking back what was marked there, either into the
+ * draft ("Ins Eingabefeld") or out as a message ("Senden").
  */
 export const useComposerMarkup = ({
   images,
@@ -33,18 +31,11 @@ export const useComposerMarkup = ({
   references,
   placeMarkedImages,
   remove,
-  openAt,
   prependComment,
   focusField,
   send
 }: ComposerMarkupOptions) => {
   const { t } = useI18n()
-
-  /** The preview of an attachment; the list may only just have appeared with it. */
-  const openImage = async (id: string) => {
-    await nextTick()
-    openAt(images.value.findIndex((image) => image.id === id))
-  }
 
   /**
    * A marked image from the preview, its comment in front of the draft; nothing is sent. The
@@ -99,5 +90,5 @@ export const useComposerMarkup = ({
   const handOver = (result: MarkupResult, handoff: MarkupHandoff) =>
     handoff === 'send' ? sendMarkup(result) : takeMarkup(result)
 
-  return { openImage, handOver }
+  return { handOver }
 }

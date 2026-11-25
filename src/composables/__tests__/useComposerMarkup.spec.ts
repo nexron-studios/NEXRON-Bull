@@ -34,7 +34,6 @@ const setup = (attached: PendingImage[] = [], isShellAtStart = false) => {
           references: useImageReferences(draft, images),
           placeMarkedImages: () => true,
           remove: (id) => removed.push(id),
-          openAt: () => {},
           prependComment: (line) => {
             draft.value = line
           },

@@ -90,16 +90,15 @@ const history = usePromptHistory(() => [...tab.messages, ...tab.pending], draft,
  * Pasted, dropped or picked images: each also gets a reference where the user writes, or at the
  * end when the field never had the caret. A shell command has no room for one.
  */
-const attachFiles = async (files: Iterable<File>): Promise<PendingImage[]> => {
+const attachFiles = async (files: Iterable<File>) => {
   const added = await addFiles(files)
-  if (isShell.value) return added
+  if (isShell.value) return
   const isFocused = field.value?.isFocused() ?? false
   const selection = field.value?.selection() ?? null
   // Only a paste replaces selected text; a picked or dropped file lands after it.
   const at = selection && !isFocused ? { start: selection.end, end: selection.end } : selection
   const caretAfter = references.insert(added, at)
   if (caretAfter !== null && isFocused) setCaret(caretAfter)
-  return added
 }
 
 /** A comment on an image or on lines goes in front of the draft; nothing is sent. */
@@ -108,25 +107,18 @@ const prependComment = (line: string) => {
   focusField()
 }
 
-const { openImage, handOver } = useComposerMarkup({
+const { handOver } = useComposerMarkup({
   images,
   isShell,
   references,
   placeMarkedImages,
   remove,
-  openAt: (at) => attachmentList.value?.openAt(at),
   prependComment,
   focusField,
   send: (text, outgoing) => emit('send', text, outgoing)
 })
 
-const { handlePaste } = useComposerPaste({
-  images,
-  pastes,
-  isShell,
-  addFiles: attachFiles,
-  onSinglePaste: (image) => void openImage(image.id)
-})
+const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles: attachFiles })
 
 // Images still being read would otherwise miss this message and turn up in the next one.
 const canSend = computed(

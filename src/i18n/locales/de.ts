@@ -4,7 +4,9 @@ export default {
     studio_name: 'NEXRON Studios',
     cancel: 'Abbrechen',
     save: 'Speichern',
-    undo: 'Rückgängig'
+    undo: 'Rückgängig',
+    session_id: 'Session-ID {id}',
+    session_id_copy: 'Session-ID {id}, Klick kopiert sie'
   },
   bridge: {
     title: 'Bull mit diesem Gerät verbinden',
@@ -75,6 +77,8 @@ export default {
     send: 'Senden',
     stop: 'Stoppen',
     load_older: 'Ältere Nachrichten laden',
+    loading_older: 'Ältere Nachrichten werden geladen',
+    load_older_failed: 'Ältere Nachrichten nicht geladen · erneut versuchen',
     compacted: 'Verlauf wurde zusammengefasst',
     interrupted: 'Abgebrochen',
     agent_report: 'Rückmeldung von Subagent „{name}“',
@@ -388,7 +392,6 @@ export default {
       earlier: 'Früher'
     },
     empty_chat: 'wartet auf die erste Anfrage',
-    session_id: 'Session-ID {id}',
     age_running: 'läuft seit {age}',
     age_finished: 'fertig vor {age}',
     empty_title: 'Kein Chat offen',
@@ -1208,7 +1211,8 @@ export default {
       last_prompt: 'Letzte Anfrage:',
       claude: 'Claude:',
       asks_for: 'Fragt nach:',
-      to_chat: 'Zum Chat'
+      to_chat: 'Zum Chat',
+      copy_session_id: '{name}, Session-ID kopieren'
     },
     resume: 'Fortsetzen',
     resume_label: '{title} fortsetzen',

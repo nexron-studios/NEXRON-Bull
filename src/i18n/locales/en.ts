@@ -1358,7 +1358,8 @@ export default {
     binary_title: 'Binary file',
     binary_hint: 'This file has no lines to show.',
     nothing_title: 'No changes',
-    nothing_hint: 'The file matches the last commit, and the chat has no lines for it.',
+    nothing_hint: 'Neither git nor this chat has lines for this file.',
+    nothing_hint_unchanged: 'The file matches the last commit, and the chat has no lines for it.',
     diff_label: 'Changes in {path}',
     diff_hint:
       'Arrow keys pick a line, with Shift several. Enter writes a comment, Esc clears the selection. J and K switch the file.',

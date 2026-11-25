@@ -1387,7 +1387,9 @@ export default {
     binary_title: 'Binärdatei',
     binary_hint: 'Diese Datei hat keine Zeilen, die sich zeigen lassen.',
     nothing_title: 'Keine Änderungen',
-    nothing_hint: 'Die Datei gleicht dem letzten Commit, und der Chat hat keine Zeilen dazu.',
+    nothing_hint: 'Weder git noch dieser Chat haben Zeilen zu dieser Datei.',
+    nothing_hint_unchanged:
+      'Die Datei gleicht dem letzten Commit, und der Chat hat keine Zeilen dazu.',
     diff_label: 'Änderungen in {path}',
     diff_hint:
       'Pfeiltasten wählen eine Zeile, mit Umschalt mehrere. Eingabe schreibt einen Kommentar, Esc hebt die Auswahl auf. J und K wechseln die Datei.',

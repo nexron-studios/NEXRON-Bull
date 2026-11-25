@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { countsOf, hunksOfChange, hunksOfPatch, rowsOfHunks, withoutNumbers } from '../diffRows'
+import {
+  countsOf,
+  hunksOfChange,
+  hunksOfPatch,
+  rowsOfHunks,
+  shapeOf,
+  withoutNumbers
+} from '../diffRows'
 
 describe('hunksOfPatch', () => {
   it('should split each line into its mark and its text', () => {
@@ -99,5 +106,16 @@ describe('withoutNumbers', () => {
     expect(withoutNumbers([{ old_start: 4, new_start: 4, lines }])).toEqual([
       { old_start: null, new_start: null, lines }
     ])
+  })
+})
+
+describe('shapeOf', () => {
+  it('should be equal for the same diff read again and differ once lines move', () => {
+    const read = () => hunksOfPatch([{ old_start: 3, new_start: 3, lines: ['-a', '+b'] }])
+
+    expect(shapeOf(read())).toBe(shapeOf(read()))
+    expect(shapeOf(read())).not.toBe(
+      shapeOf(hunksOfPatch([{ old_start: 3, new_start: 3, lines: ['-a', '+b', '+c'] }]))
+    )
   })
 })

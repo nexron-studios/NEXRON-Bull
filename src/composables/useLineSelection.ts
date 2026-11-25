@@ -1,4 +1,5 @@
 import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { rangeOf, type LineRange } from '@/utils/diffReview'
 
 /**
@@ -26,7 +27,6 @@ export const useLineSelection = (indices: MaybeRefOrGetter<number[]>) => {
     event.preventDefault()
     select(index, event.shiftKey)
     isDragging.value = true
-    window.addEventListener('pointerup', () => (isDragging.value = false), { once: true })
   }
 
   const sweep = (index: number) => {
@@ -42,6 +42,9 @@ export const useLineSelection = (indices: MaybeRefOrGetter<number[]>) => {
     if (target === undefined) return
     select(target, isExtending)
   }
+
+  // A drag also ends when the pointer is taken away or the window loses focus mid-drag.
+  useEventListener(window, ['pointerup', 'pointercancel', 'blur'], () => (isDragging.value = false))
 
   const clear = () => {
     anchor.value = null

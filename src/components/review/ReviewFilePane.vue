@@ -31,7 +31,15 @@ const path = computed(() => displayPathOf(file.path, tab.cwd))
 const lines = computed(() =>
   rowsOfHunks(review.value.hunks).filter((row): row is DiffLineRow => row.kind === 'line')
 )
-const counts = computed(() => countsOf(review.value.hunks))
+// Without lines (binary, too big) the review counts nothing; the chat's counts still hold.
+const counts = computed(() =>
+  review.value.hunks.length
+    ? countsOf(review.value.hunks)
+    : { added: file.added, removed: file.removed }
+)
+const emptyHintKey = computed(() =>
+  review.value.source === 'unchanged' ? 'review.nothing_hint_unchanged' : 'review.nothing_hint'
+)
 const comments = computed(() =>
   store.commentsOf(tab.id).filter((comment) => comment.fileKey === file.key)
 )
@@ -75,7 +83,7 @@ const addComment = (range: LineRange, text: string) => {
       v-else-if="review.source === 'binary' || !lines.length"
       :icon="FileQuestion"
       :title="t(review.source === 'binary' ? 'review.binary_title' : 'review.nothing_title')"
-      :hint="t(review.source === 'binary' ? 'review.binary_hint' : 'review.nothing_hint')"
+      :hint="t(review.source === 'binary' ? 'review.binary_hint' : emptyHintKey)"
       size="sm"
     />
     <ReviewDiff

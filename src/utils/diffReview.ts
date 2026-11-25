@@ -1,4 +1,5 @@
 import type { FileDiffAnswer, FileDiffProps, FileStatus } from '@/types/agentd.type'
+import { fileKeyOf } from '@/utils/changedFiles'
 import { hunksOfPatch, type DiffHunk, type DiffLineRow, type DiffRow } from '@/utils/diffRows'
 
 /**
@@ -18,9 +19,14 @@ export const MIN_FOLDED_LINES = 4
 
 /**
  * Folds every unchanged stretch that is longer than its context: `CONTEXT_LINES` stay next to a
- * change, the rest is one fold unless `expanded` holds its id.
+ * change, the rest is one fold unless `expanded` holds its id. A `pinned` line (one a comment
+ * names) stays visible like a change, so a pending comment never hides in a fold.
  */
-export const foldRows = (rows: DiffRow[], expanded: ReadonlySet<number>): ReviewRow[] => {
+export const foldRows = (
+  rows: DiffRow[],
+  expanded: ReadonlySet<number>,
+  pinned: ReadonlySet<number> = new Set()
+): ReviewRow[] => {
   const out: ReviewRow[] = []
   let run: DiffLineRow[] = []
   const flush = (isChangeAfter: boolean) => {
@@ -37,7 +43,7 @@ export const foldRows = (rows: DiffRow[], expanded: ReadonlySet<number>): Review
     run = []
   }
   for (const row of rows) {
-    if (row.kind === 'line' && row.sign === ' ') {
+    if (row.kind === 'line' && row.sign === ' ' && !pinned.has(row.index)) {
       run.push(row)
       continue
     }
@@ -86,10 +92,18 @@ export const lineSpanOf = (
 export const displayPathOf = (path: string, cwd: string): string => {
   const slashed = path.replaceAll('\\', '/')
   const base = cwd.replaceAll('\\', '/').replace(/\/+$/, '')
-  // Windows paths ignore case; a wrong-case prefix still names the same folder.
-  const isInside = slashed.toLowerCase().startsWith(`${base.toLowerCase()}/`)
+  // Compared as file keys: a Windows path ignores case, a POSIX one does not.
+  const isInside = fileKeyOf(slashed).startsWith(`${fileKeyOf(base)}/`)
   return base && isInside ? slashed.slice(base.length + 1) : slashed
 }
+
+/** Every line a comment names, so the diff keeps them out of its folds. */
+export const commentedIndicesOf = (comments: ReviewComment[]): Set<number> =>
+  new Set(
+    comments.flatMap(({ range }) =>
+      Array.from({ length: range.end - range.start + 1 }, (_, at) => range.start + at)
+    )
+  )
 
 export interface ReviewComment {
   id: string
@@ -138,14 +152,17 @@ export interface Review {
   isTruncated: boolean
 }
 
-const fromChat = (source: ReviewSource, chatHunks: DiffHunk[]): Review => ({
+/** The chat's edits, read only when they stand in: a new chat message then changes nothing. */
+type ChatHunks = () => DiffHunk[]
+
+const fromChat = (source: ReviewSource, chatHunks: ChatHunks): Review => ({
   source,
   status: null,
-  hunks: chatHunks,
+  hunks: chatHunks(),
   isTruncated: false
 })
 
-const reviewOfDiff = (diff: FileDiffProps, chatHunks: DiffHunk[]): Review => {
+const reviewOfDiff = (diff: FileDiffProps, chatHunks: ChatHunks): Review => {
   if (diff.is_binary)
     return { source: 'binary', status: diff.status, hunks: [], isTruncated: false }
   switch (diff.status) {
@@ -176,7 +193,7 @@ const reviewOfDiff = (diff: FileDiffProps, chatHunks: DiffHunk[]): Review => {
 export const reviewOf = (
   reply: { answer: FileDiffAnswer } | undefined,
   isError: boolean,
-  chatHunks: DiffHunk[]
+  chatHunks: ChatHunks
 ): Review => {
   if (isError) return fromChat('failed', chatHunks)
   if (!reply) return fromChat('loading', chatHunks)

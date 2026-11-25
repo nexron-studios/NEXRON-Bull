@@ -97,6 +97,13 @@ export const rowsOfHunks = (hunks: DiffHunk[]): DiffRow[] => {
   })
 }
 
+/**
+ * Where the hunks start and how many lines each has: equal for a diff read again unchanged, so
+ * what was chosen in it can stay.
+ */
+export const shapeOf = (hunks: DiffHunk[]): string =>
+  hunks.map((hunk) => `${hunk.old_start},${hunk.new_start},${hunk.lines.length}`).join(';')
+
 /** Added and removed lines, for the `+3 −1` in a head. */
 export const countsOf = (hunks: DiffHunk[]): { added: number; removed: number } => {
   const signs = hunks.flatMap((hunk) => hunk.lines.map((line) => line.sign))

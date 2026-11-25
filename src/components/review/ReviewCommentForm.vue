@@ -15,7 +15,7 @@ const emit = defineEmits<{ submit: [text: string]; cancel: [] }>()
 const SUBMIT_CHORD = { modifier: 'command', keys: ['Enter'] } as const
 
 const text = ref('')
-const field = useTemplateRef<InstanceType<typeof Textarea>>('field')
+const form = useTemplateRef<HTMLFormElement>('form')
 
 const fieldId = useId()
 const { t } = useI18n()
@@ -38,11 +38,16 @@ const handleKeydown = (event: KeyboardEvent) => {
   submit()
 }
 
-onMounted(() => (field.value?.$el as HTMLTextAreaElement | undefined)?.focus())
+const focus = () => form.value?.querySelector('textarea')?.focus()
+
+defineExpose({ focus })
+
+onMounted(focus)
 </script>
 
 <template>
   <form
+    ref="form"
     class="motion-fade-in mx-2 my-1.5 flex flex-col gap-2 rounded-lg border bg-card p-2 font-sans"
     @submit.prevent="submit"
     @keydown="handleKeydown"
@@ -52,7 +57,6 @@ onMounted(() => (field.value?.$el as HTMLTextAreaElement | undefined)?.focus())
     }}</label>
     <Textarea
       :id="fieldId"
-      ref="field"
       v-model="text"
       class="min-h-16 text-small"
       :placeholder="t('review.comment_placeholder')"

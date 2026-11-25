@@ -8,17 +8,19 @@ import ReviewCommentForm from '@/components/review/ReviewCommentForm.vue'
 import ReviewDiffLine from '@/components/review/ReviewDiffLine.vue'
 import { useLineSelection } from '@/composables/useLineSelection'
 import {
+  commentedIndicesOf,
   foldRows,
   isCommentable,
   type LineRange,
   type ReviewComment,
   type ReviewRow
 } from '@/utils/diffReview'
-import { rowsOfHunks, type DiffHunk, type DiffLineRow } from '@/utils/diffRows'
+import { rowsOfHunks, shapeOf, type DiffHunk, type DiffLineRow } from '@/utils/diffRows'
 
 // A file's diff to comment on (Figma "30" look, both line numbers): choose one line or a range
 // with the pointer on the numbers or with the arrow keys, Enter writes a comment below it. Long
-// unchanged stretches are folded until opened.
+// unchanged stretches are folded until opened; lines a comment names never are. An open comment
+// form stays until it is added or cancelled, whatever is chosen meanwhile.
 const { hunks, comments, label, referenceOf } = defineProps<{
   hunks: DiffHunk[]
   /** This file's pending comments, shown below the lines they name */
@@ -32,13 +34,14 @@ const emit = defineEmits<{ comment: [range: LineRange, text: string]; remove: [i
 const expanded = ref(new Set<number>())
 const box = useTemplateRef<HTMLElement>('box')
 const formRange = ref<LineRange | null>(null)
+const forms = useTemplateRef<InstanceType<typeof ReviewCommentForm>[]>('form')
 
 const baseId = useId()
 const hintId = useId()
 const { t } = useI18n()
 
 const allLines = computed(() => rowsOfHunks(hunks))
-const rows = computed(() => foldRows(allLines.value, expanded.value))
+const rows = computed(() => foldRows(allLines.value, expanded.value, commentedIndicesOf(comments)))
 const choosable = computed(() =>
   rows.value.flatMap((row) => (row.kind === 'line' && isCommentable(row) ? [row.index] : []))
 )
@@ -46,6 +49,7 @@ const selection = useLineSelection(choosable)
 const rangeReference = computed(() =>
   selection.range.value ? referenceOf(selection.range.value) : null
 )
+const formReference = computed(() => (formRange.value ? referenceOf(formRange.value) : null))
 const cursorId = computed(() =>
   selection.cursor.value === null ? undefined : `${baseId}-${selection.cursor.value}`
 )
@@ -64,6 +68,11 @@ const commentsByEnd = computed(() => {
     byEnd.set(comment.range.end, [...(byEnd.get(comment.range.end) ?? []), comment])
   return byEnd
 })
+// Comments on lines this reading of the file no longer has: still pending, so still shown.
+const strayComments = computed(() => {
+  const shown = new Set(rows.value.flatMap((row) => (row.kind === 'line' ? [row.index] : [])))
+  return comments.filter((comment) => !shown.has(comment.range.end))
+})
 
 const keyOf = (row: ReviewRow, at: number) => {
   if (row.kind === 'line') return row.index
@@ -74,12 +83,16 @@ const isChosen = (index: number) => {
   return range !== null && index >= range.start && index <= range.end
 }
 const press = (index: number, event: PointerEvent) => {
-  formRange.value = null
   selection.press(index, event)
   // The press keeps focus where it was; the arrow keys go on from the line just chosen.
   box.value?.focus({ preventScroll: true })
 }
 const openForm = () => {
+  // One form at a time: Enter goes back to the one being written instead of dropping its text.
+  if (formRange.value) {
+    forms.value?.[0]?.focus()
+    return
+  }
   if (!rangeReference.value || !selection.range.value) return
   formRange.value = selection.range.value
 }
@@ -112,7 +125,6 @@ const handleKeydown = (event: KeyboardEvent) => {
   const step = STEPS[event.key]
   if (step !== undefined) {
     event.preventDefault()
-    formRange.value = null
     selection.move(step, event.shiftKey)
     return
   }
@@ -127,9 +139,9 @@ const handleKeydown = (event: KeyboardEvent) => {
   selection.clear()
 }
 
-// Another file, or its lines read again: nothing chosen or opened carries over.
+// Lines that moved: nothing chosen or opened carries over. The same diff read again keeps it.
 watch(
-  () => hunks,
+  () => shapeOf(hunks),
   () => {
     expanded.value = new Set()
     formRange.value = null
@@ -157,6 +169,12 @@ watch(cursorId, async (id) => {
       class="min-h-0 flex-1 overflow-auto rounded-lg border bg-card py-1.5 font-mono text-meta outline-none focus-visible:ring-2 focus-visible:ring-ring"
       @keydown="handleKeydown"
     >
+      <ReviewCommentCard
+        v-for="comment in strayComments"
+        :key="comment.id"
+        :comment
+        @remove="emit('remove', comment.id)"
+      />
       <template v-for="(row, at) in rows" :key="keyOf(row, at)">
         <div v-if="row.kind === 'gap'" class="px-3 text-muted-foreground" aria-hidden="true">⋯</div>
         <button
@@ -184,8 +202,9 @@ watch(cursorId, async (id) => {
             @remove="emit('remove', comment.id)"
           />
           <ReviewCommentForm
-            v-if="formRange?.end === row.index && rangeReference"
-            :reference="rangeReference"
+            v-if="formRange?.end === row.index && formReference"
+            ref="form"
+            :reference="formReference"
             @submit="addComment"
             @cancel="closeForm"
           />

@@ -33,10 +33,14 @@ export const useFileDiff = (
     },
     enabled: computed(() => toValue(target) !== null),
     staleTime: 0,
+    // Read once per opening: a refetch on focus would only reset what the user chose meanwhile.
+    refetchOnWindowFocus: false,
     retry: false
   })
 
-  const review = computed(() => reviewOf(query.data.value, query.isError.value, toValue(chatHunks)))
+  const review = computed(() =>
+    reviewOf(query.data.value, query.isError.value, () => toValue(chatHunks))
+  )
 
   return { review, refetch: query.refetch }
 }

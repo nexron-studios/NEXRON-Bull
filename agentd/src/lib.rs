@@ -20,6 +20,7 @@ pub mod tokenscope;
 pub mod transfer;
 pub mod usage;
 pub mod worktree;
+pub mod worktree_flow;
 pub mod commands;
 pub mod files;
 pub mod hooks;

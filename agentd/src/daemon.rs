@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -35,7 +35,6 @@ use crate::subagents;
 use crate::title_flow::TitleRequest;
 use crate::titles::TitleStore;
 use crate::transfer;
-use crate::worktree;
 use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
 
 /// What Claude reads as the answer to the approval `/clear` cut short.
@@ -139,6 +138,8 @@ pub struct Daemon<W: Write + Send + 'static> {
     pub(crate) titles: TitleStore,
     /// Tabs with a title call running, each with the newest message sent meanwhile.
     title_waiting: Mutex<HashMap<String, Option<TitleRequest>>>,
+    /// Tabs whose worktree is being made before their Claude starts, see `worktree_flow`.
+    creating_worktrees: Mutex<HashSet<String>>,
 }
 
 impl<W: Write + Send + 'static> Daemon<W> {
@@ -157,6 +158,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
             carried: Mutex::new(HashMap::new()),
             titles: TitleStore::load(home().as_deref()),
             title_waiting: Mutex::new(HashMap::new()),
+            creating_worktrees: Mutex::new(HashSet::new()),
         });
         daemon.start_limit_clock();
         daemon
@@ -261,8 +263,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::QueueSend { tab } => self.resume(&tab, false),
             Request::Branch { cwd } => {
                 self.answer_later(move || {
-                    let worktree_root = git::linked_worktree_of(&cwd).map(|top| top.to_string_lossy().into_owned());
-                    Event::Branch { id, branch: git::branch_of(&cwd), is_worktree: worktree_root.is_some(), worktree_root }
+                    let checkout = git::checkout_of(&cwd);
+                    let worktree_root = checkout.as_ref().and_then(|c| c.worktree_root.as_ref()).map(|top| top.to_string_lossy().into_owned());
+                    Event::Branch { id, branch: checkout.and_then(|c| c.branch), worktree_root }
                 });
                 Ok(())
             }
@@ -306,8 +309,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Configure { tab, permission_mode, model, effort } => self.configure(id, &tab, permission_mode, model, effort),
             Request::ProfileDefaults { profile } => profile_dir(profile)
                 .map(|dir| self.emit(&Event::ProfileDefaults { id, defaults: profile_defaults::read(&dir) })),
-            request @ (Request::CreateWorktree { .. } | Request::MergeIntoPreview { .. } | Request::RemoveWorktree { .. }) => {
-                self.worktree_request(id, request);
+            Request::MergeIntoPreview { worktree } => {
+                self.merge_into_preview(id, worktree);
+                Ok(())
+            }
+            Request::RemoveWorktree { worktree } => {
+                self.remove_worktree(id, worktree);
                 Ok(())
             }
         };
@@ -328,45 +335,13 @@ impl<W: Write + Send + 'static> Daemon<W> {
         Ok(())
     }
 
-    /// A fetch or a merge takes seconds; like the other slow answers, on its own thread.
-    fn worktree_request(self: &Arc<Self>, id: Option<u64>, request: Request) {
-        let error = move |err: worktree::WorktreeError| Event::Error { id, tab: None, message: err.to_string() };
-        match request {
-            Request::CreateWorktree { cwd, hint, root, tab } => self.answer_later(move || {
-                worktree::create(&cwd, &hint, root.as_deref(), tab.as_deref())
-                    .map_or_else(error, |made| Event::WorktreeCreated { id, path: made.path, branch: made.branch, base: made.base })
-            }),
-            Request::MergeIntoPreview { worktree } => self.answer_later(move || {
-                worktree::merge_into_preview(&worktree).map_or_else(error, |merge| Event::PreviewMerged {
-                    id,
-                    branch: merge.branch,
-                    outcome: merge.outcome,
-                    created_preview: merge.created_preview,
-                    has_uncommitted: merge.has_uncommitted,
-                })
-            }),
-            Request::RemoveWorktree { worktree } => {
-                let daemon = Arc::clone(self);
-                // Any tab in the worktree counts, also one opened on a subfolder of it.
-                let is_in_use = move |top: &Path| {
-                    let top = top.to_string_lossy();
-                    daemon.sessions().values().any(|s| worktree::is_inside(&s.params.cwd, &top))
-                };
-                self.answer_later(move || {
-                    worktree::remove(&worktree, is_in_use).map_or_else(error, |outcome| Event::WorktreeRemoved { id, outcome })
-                })
-            }
-            _ => {}
-        }
-    }
-
     /// Computes the answer on its own thread and emits it from there.
-    fn answer_later(self: &Arc<Self>, answer: impl FnOnce() -> Event + Send + 'static) {
+    pub(crate) fn answer_later(self: &Arc<Self>, answer: impl FnOnce() -> Event + Send + 'static) {
         let daemon = Arc::clone(self);
         thread::spawn(move || daemon.emit(&answer()));
     }
 
-    pub(crate) fn start(self: &Arc<Self>, id: Option<u64>, params: StartParams) -> Result<(), DaemonError> {
+    pub(crate) fn start(self: &Arc<Self>, id: Option<u64>, mut params: StartParams) -> Result<(), DaemonError> {
         // A reloaded window or a reconnected app asks again for a tab that never stopped: report
         // the running session with its state instead of failing, so its queued message goes through.
         let running = self
@@ -375,11 +350,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
             .map(|session| {
                 let working = session.is_working || session.clearing.is_some();
                 let replayed = Replayed { asks: session.asks.clone(), commands: session.commands.clone(), background_tasks: session.background_tasks.clone() };
-                (session.session_id.clone(), working, replayed, session.params.profile.clone(), session.limit.clone())
+                let place = (session.params.profile.clone(), session.params.cwd.clone());
+                (session.session_id.clone(), working, replayed, place, session.limit.clone())
             });
-        if let Some((session_id, working, Replayed { asks, commands, background_tasks }, profile, limit)) = running {
+        if let Some((session_id, working, Replayed { asks, commands, background_tasks }, (profile, cwd), limit)) = running {
             let (profile, account) = Self::account_of(profile);
-            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id: session_id.clone(), working, profile, account });
+            self.emit(&Event::Started { id, tab: params.tab.clone(), session_id: session_id.clone(), working, profile, account, cwd });
             if let Some(commands) = commands {
                 self.emit(&Event::Commands { tab: params.tab.clone(), commands });
             }
@@ -399,6 +375,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
             }
             return self.catch_up(&params.tab, &params);
         }
+        if let Some(plan) = params.worktree.take() {
+            return self.start_in_worktree(id, params, plan);
+        }
         let (params, session_id) = session_to_start(params);
         let program = claude::find_claude()?;
         let generation = claude::generation_of(&program);
@@ -406,6 +385,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
         let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
         let tab = params.tab.clone();
         let (profile, account) = Self::account_of(params.profile.clone());
+        let cwd = params.cwd.clone();
         let session = Session {
             stdin: child.stdin.take(),
             child,
@@ -429,7 +409,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.sessions().insert(tab.clone(), session);
         // Lists the commands and skills and makes Claude ready for control requests.
         self.control(&tab, json!({ "subtype": "initialize" }))?;
-        self.emit(&Event::Started { id, tab: tab.clone(), session_id, working: false, profile, account });
+        self.emit(&Event::Started { id, tab: tab.clone(), session_id, working: false, profile, account, cwd });
         if let Some(stderr) = stderr {
             let daemon = Arc::clone(self);
             let tab = tab.clone();
@@ -550,6 +530,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
     }
 
     pub(crate) fn stop(&self, tab: &str) -> Result<(), DaemonError> {
+        if self.stop_worktree_start(tab) {
+            return Ok(());
+        }
         let mut sessions = self.sessions();
         let session = sessions.get_mut(tab).ok_or_else(|| DaemonError::NoTab(tab.to_string()))?;
         session.stdin = None;
@@ -671,6 +654,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.controls.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    pub(crate) fn creating_worktrees(&self) -> MutexGuard<'_, HashSet<String>> {
+        self.creating_worktrees.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub(crate) fn sessions(&self) -> MutexGuard<'_, HashMap<String, Session>> {
         // A panicked writer thread leaves the map intact; keep serving.
         self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -757,7 +744,6 @@ fn tab_of(request: &Request) -> Option<String> {
         // Only the asker hears of a refused change; it is no notice of the chat.
         | Request::Configure { .. }
         | Request::ProfileDefaults { .. }
-        | Request::CreateWorktree { .. }
         | Request::MergeIntoPreview { .. }
         | Request::RemoveWorktree { .. } => None,
     }

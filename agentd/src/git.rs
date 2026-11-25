@@ -10,8 +10,18 @@ use crate::usage::native_path;
 const SHORT_SHA_LEN: usize = 7;
 const HEADS_PREFIX: &str = "refs/heads/";
 
-/// `feat/chat-panel`, a short commit id when `HEAD` is detached, `None` outside a repository.
-pub fn branch_of(cwd: &str) -> Option<String> {
+/// A folder's place in git: the branch checked out and, in a linked worktree, that worktree's top
+/// folder.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Checkout {
+    /// `feat/chat-panel`, a short commit id when `HEAD` is detached, `None` when unreadable.
+    pub branch: Option<String>,
+    /// `None` in a main checkout.
+    pub worktree_root: Option<PathBuf>,
+}
+
+/// `None` outside a repository.
+pub fn checkout_of(cwd: &str) -> Option<Checkout> {
     let cwd = native_path(cwd);
     // A relative or empty folder would be looked up from agentd's own folder.
     if !cwd.is_absolute() {
@@ -21,6 +31,13 @@ pub fn branch_of(cwd: &str) -> Option<String> {
     // answer for it.
     let git = cwd.ancestors().map(|dir| dir.join(".git")).find(|git| git.exists())?;
     let git_dir = git_dir_of(&git)?;
+    // A linked worktree's `.git` file points into the main repository's `worktrees/`, a
+    // submodule's into `modules/`.
+    let is_linked = git.is_file() && git_dir.parent().and_then(Path::file_name).is_some_and(|name| name == "worktrees");
+    Some(Checkout { branch: head_of(&git_dir), worktree_root: is_linked.then(|| git.parent().map(Path::to_path_buf)).flatten() })
+}
+
+fn head_of(git_dir: &Path) -> Option<String> {
     let head = fs::read_to_string(git_dir.join("HEAD")).ok()?;
     let head = head.trim();
     match head.strip_prefix("ref:") {
@@ -32,26 +49,9 @@ pub fn branch_of(cwd: &str) -> Option<String> {
     }
 }
 
-/// The top folder of the linked worktree the folder is (inside): its `.git` is a file pointing into
-/// the main repository's `worktrees/`, unlike a submodule's, which points into `modules/`. `None`
-/// for a main checkout or outside a repository.
-pub fn linked_worktree_of(cwd: &str) -> Option<PathBuf> {
-    let cwd = native_path(cwd);
-    if !cwd.is_absolute() {
-        return None;
-    }
-    let git = cwd.ancestors().map(|dir| dir.join(".git")).find(|git| git.exists())?;
-    let is_linked = git.is_file()
-        && git_dir_of(&git).is_some_and(|dir| dir.parent().and_then(Path::file_name).is_some_and(|name| name == "worktrees"));
-    if !is_linked {
-        return None;
-    }
-    git.parent().map(Path::to_path_buf)
-}
-
 /// A `.git` folder itself, or for a linked worktree the folder its `.git` file points to (absolute
 /// or relative to the worktree). The worktree's own `HEAD` lives there, not in the main checkout.
-fn git_dir_of(git: &Path) -> Option<PathBuf> {
+pub(crate) fn git_dir_of(git: &Path) -> Option<PathBuf> {
     if git.is_dir() {
         return Some(git.to_path_buf());
     }
@@ -72,6 +72,14 @@ mod tests {
 
     fn text(path: &Path) -> String {
         path.to_string_lossy().into_owned()
+    }
+
+    fn branch_of(cwd: &str) -> Option<String> {
+        checkout_of(cwd)?.branch
+    }
+
+    fn worktree_root_of(cwd: &str) -> Option<PathBuf> {
+        checkout_of(cwd)?.worktree_root
     }
 
     #[test]
@@ -97,8 +105,8 @@ mod tests {
         fs::write(worktree.join(".git"), "gitdir: ../../repo/.git/worktrees/panel\n").unwrap();
 
         assert_eq!(branch_of(&text(&worktree)).as_deref(), Some("feat/panel"));
-        assert_eq!(linked_worktree_of(&text(&worktree.join("src"))), Some(worktree.clone()));
-        assert_eq!(linked_worktree_of(&text(&base.join("repo"))), None);
+        assert_eq!(worktree_root_of(&text(&worktree.join("src"))), Some(worktree.clone()));
+        assert_eq!(worktree_root_of(&text(&base.join("repo"))), None);
     }
 
     #[test]

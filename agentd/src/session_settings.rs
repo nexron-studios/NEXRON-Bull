@@ -185,6 +185,7 @@ mod tests {
             permission_mode: mode.map(String::from),
             is_fresh: false,
             effort: effort.map(String::from),
+            worktree: None,
         }
     }
 

@@ -1,7 +1,7 @@
 //! Where Claude keeps its profiles and transcripts on this machine.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::daemon::DaemonError;
 
@@ -33,6 +33,13 @@ pub const APP_FOLDER: &str = ".nexron-chat";
 
 pub fn home() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
+
+/// A folder in one written form, to compare two spellings of it: forward slashes, no trailing
+/// slash, and on Windows (case-insensitive) lower case.
+pub(crate) fn comparable(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/").trim_end_matches('/').to_string();
+    if cfg!(windows) { text.to_lowercase() } else { text }
 }
 
 #[cfg(test)]

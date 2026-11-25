@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use crate::claude_copy;
+use crate::paths;
 use crate::protocol::StartParams;
 
 /// Overrides the lookup, e.g. for tests or an unusual install.
@@ -191,8 +192,7 @@ fn is_default_profile(dir: &Path) -> bool {
     let Some(home) = env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) else {
         return false;
     };
-    let normalize = |path: &Path| path.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
-    normalize(dir) == normalize(&PathBuf::from(home).join(".claude"))
+    paths::comparable(dir) == paths::comparable(&PathBuf::from(home).join(".claude"))
 }
 
 /// Every child process goes through this; on Windows a console window flashes up otherwise.
@@ -209,7 +209,6 @@ pub(crate) fn hide_console(_command: &mut Command) {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths;
 
     fn params(resume: Option<&str>) -> StartParams {
         StartParams {
@@ -221,6 +220,7 @@ mod tests {
             permission_mode: None,
             is_fresh: false,
             effort: None,
+            worktree: None,
         }
     }
 

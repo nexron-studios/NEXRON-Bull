@@ -397,10 +397,8 @@ pub(crate) fn repository_root(cwd: &Path) -> Option<PathBuf> {
         if git.is_dir() {
             return Some(dir.to_path_buf());
         }
-        // A worktree's `.git` is a file: `gitdir: <main>/.git/worktrees/<name>`, absolute or
-        // relative to the worktree.
-        let pointer = fs::read_to_string(&git).ok()?;
-        let gitdir = normalized(&dir.join(pointer.trim().strip_prefix("gitdir:")?.trim()));
+        // A worktree's `.git` is a file: `gitdir: <main>/.git/worktrees/<name>`.
+        let gitdir = normalized(&crate::git::git_dir_of(&git)?);
         let text = gitdir.to_string_lossy().replace('\\', "/");
         let main = text.split_once(GIT_WORKTREE_MARKER).map(|(main, _)| normalized(Path::new(main)));
         Some(main.unwrap_or_else(|| dir.to_path_buf()))

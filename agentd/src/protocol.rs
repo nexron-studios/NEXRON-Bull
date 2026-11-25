@@ -15,7 +15,7 @@ use crate::quota::AccountQuota;
 use crate::rewind::RewindPoint;
 use crate::subagents::SubagentTranscript;
 use crate::usage::{SessionRow, ToolRow, UsageRow};
-use crate::worktree::{MergeOutcome, RemoveOutcome};
+use crate::worktree::{PreviewMerge, RefusalKind, RemoveOutcome};
 
 /// A request with an optional id, echoed back on the reply it causes.
 #[derive(Debug, Deserialize)]
@@ -98,10 +98,6 @@ pub enum Request {
     /// Sends running Bash calls and subagents to the background, like Ctrl+B in the terminal: only
     /// the one `tool_use_id` started, or every one in the foreground.
     Background { tab: String, tool_use_id: Option<String> },
-    /// A new worktree and `feat/…` branch for the repository of `cwd`, named after `hint` (the
-    /// chat's first prompt); `root` replaces the default folder beside the projects. Asked again for
-    /// the same `tab` (a retry after a lost answer), it returns the worktree made the first time.
-    CreateWorktree { cwd: String, hint: String, root: Option<String>, tab: Option<String> },
     /// Merges the worktree's branch into `preview` in the main checkout.
     MergeIntoPreview { worktree: String },
     /// Removes the worktree and its branch; refuses while anything in it could be lost.
@@ -223,6 +219,19 @@ pub struct StartParams {
     /// `low` … `max`; `None` keeps the profile's effort.
     #[serde(default)]
     pub effort: Option<String>,
+    /// Claude starts in a new worktree of the repository `cwd` is in, not in `cwd` itself.
+    #[serde(default)]
+    pub worktree: Option<WorktreePlan>,
+}
+
+/// The chat's own worktree, made when its Claude first starts.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorktreePlan {
+    /// The chat's first prompt; the branch is named after it.
+    pub hint: String,
+    /// Replaces the default folder for worktrees beside the projects.
+    #[serde(default)]
+    pub root: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -243,8 +252,9 @@ pub enum Event {
     /// `id` is new: an older agentd answers `hello` without one.
     Hello { id: Option<u64>, version: &'static str, os: &'static str },
     /// `working` is true while a turn runs; an app attaching mid-turn shows Claude as busy.
-    /// `profile` and `account` are where it runs now: a limit may have moved it meanwhile.
-    Started { id: Option<u64>, tab: String, session_id: String, working: bool, profile: Option<PathBuf>, account: Option<String> },
+    /// `profile` and `account` are where it runs now: a limit may have moved it meanwhile. `cwd` is
+    /// where: a chat with a `worktree` plan works in its new worktree.
+    Started { id: Option<u64>, tab: String, session_id: String, working: bool, profile: Option<PathBuf>, account: Option<String>, cwd: PathBuf },
     /// The limit card of a tab; sent again to an app that attaches later.
     Limit { tab: String, state: LimitState },
     LimitsSet { id: Option<u64> },
@@ -267,11 +277,16 @@ pub enum Event {
     Quota { id: Option<u64>, accounts: Vec<AccountQuota> },
     Usage { id: Option<u64>, days: u32, rows: Vec<UsageRow>, tools: Vec<ToolRow>, sessions: Vec<SessionRow> },
     /// `None` outside a repository; a short commit id when `HEAD` is detached.
-    /// `is_worktree`: the folder is in a linked git worktree, not the main checkout; `worktree_root`
-    /// is that worktree's top folder, the one a removal deletes.
-    Branch { id: Option<u64>, branch: Option<String>, is_worktree: bool, worktree_root: Option<String> },
-    WorktreeCreated { id: Option<u64>, path: String, branch: String, base: String },
-    PreviewMerged { id: Option<u64>, branch: String, outcome: MergeOutcome, created_preview: bool, has_uncommitted: bool },
+    /// `worktree_root`: the top folder of the linked git worktree the folder is in (the one a removal
+    /// deletes); `null` in a main checkout.
+    Branch { id: Option<u64>, branch: Option<String>, worktree_root: Option<String> },
+    PreviewMerged {
+        id: Option<u64>,
+        #[serde(flatten)]
+        merge: PreviewMerge,
+    },
+    /// A worktree was not made (`tab` set: its Claude did not start), merged or removed.
+    WorktreeRefused { id: Option<u64>, tab: Option<String>, kind: RefusalKind, message: String },
     WorktreeRemoved { id: Option<u64>, outcome: RemoveOutcome },
     /// Empty while the session has no transcript or never started a subagent.
     SubagentHistory { id: Option<u64>, agents: Vec<SubagentTranscript> },

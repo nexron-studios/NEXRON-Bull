@@ -85,11 +85,36 @@ fn repository(name: &str) -> (PathBuf, PathBuf) {
     (base, app)
 }
 
-fn create(agentd: &mut Agentd, id: u64, app: &Path, hint: &str) -> PathBuf {
-    let made = agentd.ask(id, json!({ "op": "create_worktree", "cwd": app, "hint": hint, "root": null }));
-    assert_eq!(made["type"], "worktree_created");
-    assert_eq!(made["base"], "origin/main");
-    PathBuf::from(made["path"].as_str().unwrap())
+/// `start` for a new chat on `cwd` that gets its own worktree.
+fn start_in_worktree(tab: &str, cwd: &Path, hint: &str, root: Option<&str>) -> Value {
+    json!({
+        "op": "start", "tab": tab, "cwd": cwd, "profile": null, "resume": null, "model": null,
+        "permission_mode": null, "worktree": { "hint": hint, "root": root }
+    })
+}
+
+fn wait_for_exit(agentd: &Agentd, tab: &str) {
+    loop {
+        let event = agentd.events.recv_timeout(WAIT).expect("exited before timeout");
+        if event["type"] == "exited" && event["tab"] == tab {
+            return;
+        }
+    }
+}
+
+fn stop(agentd: &mut Agentd, tab: &str) {
+    writeln!(agentd.stdin, "{}", json!({ "op": "stop", "tab": tab })).unwrap();
+    wait_for_exit(agentd, tab);
+}
+
+/// A chat started on `cwd` in its own worktree and stopped again, so nothing holds the folder; the
+/// folder its Claude worked in.
+fn create(agentd: &mut Agentd, id: u64, cwd: &Path, hint: &str) -> PathBuf {
+    let tab = format!("t{id}");
+    let started = agentd.ask(id, start_in_worktree(&tab, cwd, hint, None));
+    assert_eq!(started["type"], "started", "{started}");
+    stop(agentd, &tab);
+    PathBuf::from(started["cwd"].as_str().unwrap())
 }
 
 #[test]
@@ -100,9 +125,10 @@ fn a_chat_worktree_goes_through_preview_and_is_removed_once_merged() {
     let calendar = create(&mut agentd, 1, &app, "Bitte den Kalender um eine Wochenansicht erweitern");
     assert_eq!(calendar, base.join("worktrees").join("app-kalender-wochenansicht-erweitern"));
     assert_eq!(git(&calendar, &["branch", "--show-current"]), "feat/kalender-wochenansicht-erweitern");
-    let branch = agentd.ask(2, json!({ "op": "branch", "cwd": calendar }));
-    assert_eq!((&branch["branch"], &branch["is_worktree"]), (&json!("feat/kalender-wochenansicht-erweitern"), &json!(true)));
-    assert_eq!(agentd.ask(3, json!({ "op": "branch", "cwd": app }))["is_worktree"], false);
+    let branch = agentd.ask(2, json!({ "op": "branch", "cwd": calendar.join("src") }));
+    assert_eq!(branch["branch"], "feat/kalender-wochenansicht-erweitern");
+    assert_eq!(PathBuf::from(branch["worktree_root"].as_str().unwrap()), calendar);
+    assert_eq!(agentd.ask(3, json!({ "op": "branch", "cwd": app }))["worktree_root"], Value::Null);
 
     // The same topic again gets its own name.
     let again = create(&mut agentd, 4, &app, "Kalender Wochenansicht erweitern");
@@ -166,13 +192,7 @@ fn removal_waits_for_a_running_chat_and_spares_linked_folders() {
     agentd.ask(2, json!({ "op": "start", "tab": "t1", "cwd": worktree, "profile": null, "resume": null, "model": null, "permission_mode": null }));
     let busy = agentd.ask(3, json!({ "op": "remove_worktree", "worktree": worktree }));
     assert_eq!(busy["outcome"], json!({ "kind": "in_use" }));
-    writeln!(agentd.stdin, "{}", json!({ "op": "stop", "tab": "t1" })).unwrap();
-    loop {
-        let event = agentd.events.recv_timeout(WAIT).expect("exited before timeout");
-        if event["type"] == "exited" {
-            break;
-        }
-    }
+    stop(&mut agentd, "t1");
 
     // A junction to the main checkout's modules, ignored like node_modules is.
     let modules = app.join("node_modules");
@@ -241,15 +261,29 @@ fn a_chat_on_a_subfolder_works_in_the_same_subfolder_of_its_worktree() {
 }
 
 #[test]
-fn a_retry_for_the_same_tab_gets_the_worktree_made_the_first_time() {
+fn a_tab_started_again_gets_the_worktree_made_the_first_time() {
     let (base, app) = repository("retry");
     let mut agentd = Agentd::spawn();
-    let ask = |hint: &str| json!({ "op": "create_worktree", "cwd": app, "hint": hint, "root": null, "tab": "t1" });
 
-    let first = agentd.ask(1, ask("Login"));
-    let again = agentd.ask(2, ask("Login"));
-    assert_eq!((&again["path"], &again["branch"]), (&first["path"], &json!("feat/login")));
+    let first = agentd.ask(1, start_in_worktree("t1", &app, "Login", None));
+    stop(&mut agentd, "t1");
+    let again = agentd.ask(2, start_in_worktree("t1", &app, "Login", None));
+    assert_eq!(again["cwd"], first["cwd"]);
     assert!(!base.join("worktrees").join("app-login-2").exists());
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
+fn a_stop_while_the_worktree_is_made_starts_no_claude_and_takes_it_away() {
+    let (base, app) = repository("stopped");
+    let mut agentd = Agentd::spawn();
+
+    writeln!(agentd.stdin, "{}", start_in_worktree("t1", &app, "Gone", None)).unwrap();
+    stop(&mut agentd, "t1");
+    assert!(!base.join("worktrees").join("app-gone").exists());
+    assert_eq!(git(&app, &["branch", "--list", "feat/gone"]), "");
 
     drop(agentd.stdin);
     assert!(agentd.child.wait().unwrap().success());
@@ -262,10 +296,15 @@ fn a_default_branch_with_another_name_is_the_integration_branch() {
     git(&base.join("origin.git"), &["symbolic-ref", "HEAD", "refs/heads/trunk"]);
     git(&app, &["push", "--quiet", "origin", "--delete", "main"]);
     git(&app, &["remote", "set-head", "origin", "trunk"]);
+    // Only the remote's default branch has it.
+    git(&app, &["switch", "--quiet", "-c", "trunk-work"]);
+    commit(&app, "trunk.txt", "trunk\n");
+    git(&app, &["push", "--quiet", "origin", "HEAD:trunk"]);
+    git(&app, &["switch", "--quiet", "main"]);
     let mut agentd = Agentd::spawn();
 
-    let made = agentd.ask(1, json!({ "op": "create_worktree", "cwd": app, "hint": "Menu", "root": null }));
-    assert_eq!(made["base"], "origin/trunk");
+    let made = create(&mut agentd, 1, &app, "Menu");
+    assert!(made.join("trunk.txt").exists());
 
     drop(agentd.stdin);
     assert!(agentd.child.wait().unwrap().success());
@@ -276,15 +315,8 @@ fn a_relative_worktree_folder_is_refused() {
     let (_base, app) = repository("relative");
     let mut agentd = Agentd::spawn();
 
-    writeln!(agentd.stdin, "{}", json!({ "id": 1, "op": "create_worktree", "cwd": app, "hint": "x", "root": "trees" })).unwrap();
-    let answer = loop {
-        let event = agentd.events.recv_timeout(WAIT).expect("answer before timeout");
-        if event["id"] == 1 {
-            break event;
-        }
-    };
-    assert_eq!(answer["type"], "error");
-    assert!(answer["message"].as_str().unwrap().contains("not a full path"), "{answer}");
+    let refused = agentd.ask(1, start_in_worktree("t1", &app, "x", Some("trees")));
+    assert_eq!((&refused["type"], &refused["tab"], &refused["kind"]), (&json!("worktree_refused"), &json!("t1"), &json!("relative_root")));
 
     drop(agentd.stdin);
     assert!(agentd.child.wait().unwrap().success());

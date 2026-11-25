@@ -872,8 +872,13 @@ export default {
         'Claude Code logs in in the browser. Bull opens a terminal with the profile folder of this account for it.',
       command: 'Command for a terminal of your own',
       copy: 'Copy command',
-      fallback_here: 'Or copy the command and run it in PowerShell on this computer.',
-      fallback_remote: 'Or copy the command and run it in PowerShell on {machine}.',
+      fallback_here: 'Or copy the command and run it in {shell} on this computer.',
+      fallback_remote: 'Or copy the command and run it in {shell} on {machine}.',
+      shell: {
+        windows: 'PowerShell',
+        macos: 'a terminal',
+        linux: 'a terminal'
+      },
       open_terminal: 'Log in in a terminal',
       done: 'Done'
     },

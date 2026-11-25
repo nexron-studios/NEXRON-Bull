@@ -6,6 +6,7 @@ import type { Machine } from '@/api/services/agentd.service'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Button } from '@/components/ui/button'
 import { useAccountLogin } from '@/composables/useAccountLogin'
+import { useMachineOs } from '@/composables/useMachineOs'
 import { copyText } from '@/lib/clipboard'
 import type { ProfileProps } from '@/types/agentd.type'
 import { loginCommandLineOf } from '@/utils/accountLogin'
@@ -18,12 +19,15 @@ const emit = defineEmits<{ done: [] }>()
 const { t } = useI18n()
 const { openTerminal, refreshMachine } = useAccountLogin()
 
-const commandLine = computed(() => loginCommandLineOf(profile))
-const fallback = computed(() =>
-  machine === null
-    ? t('settings.login.fallback_here')
-    : t('settings.login.fallback_remote', { machine })
-)
+const { osOf } = useMachineOs()
+
+const commandLine = computed(() => loginCommandLineOf(profile, osOf(machine)))
+const fallback = computed(() => {
+  const shell = t(`settings.login.shell.${osOf(machine)}`)
+  return machine === null
+    ? t('settings.login.fallback_here', { shell })
+    : t('settings.login.fallback_remote', { shell, machine })
+})
 
 const finish = () => {
   void refreshMachine(machine)

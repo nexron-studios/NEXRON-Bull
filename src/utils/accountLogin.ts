@@ -1,5 +1,6 @@
 import type { Machine } from '@/api/services/agentd.service'
 import type { ProfileProps } from '@/types/agentd.type'
+import type { MachineOs } from '@/types/machine.type'
 import type { TerminalRequest } from '@/stores/terminalRequests'
 import { homeOfProfileDir } from '@/utils/accountSettings'
 import type { ChatTabState } from '@/utils/chatTab'
@@ -31,12 +32,28 @@ export const loginRequestOf = (
 /** A PowerShell literal: a quote inside is doubled, so a home folder like O'Brien stays one string. */
 const powershellStringOf = (value: string): string => `'${value.replaceAll("'", "''")}'`
 
-/** The same login typed by hand in PowerShell, for a terminal outside Bull. */
-export const loginCommandLineOf = (profile: ProfileProps): string => {
+/** A POSIX shell literal: a quote inside ends the string, adds an escaped quote and reopens it. */
+const posixStringOf = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
+
+/** How a shell sets the profile folder for the login command that follows. */
+const withConfigDirOn = (os: MachineOs, dir: string): string => {
+  switch (os) {
+    case 'windows':
+      return `$env:CLAUDE_CONFIG_DIR = ${powershellStringOf(dir)}; ${LOGIN_COMMAND}`
+    case 'macos':
+    case 'linux':
+      return `CLAUDE_CONFIG_DIR=${posixStringOf(dir)} ${LOGIN_COMMAND}`
+    default: {
+      const unhandled: never = os
+      throw new Error(`Unhandled machine system: ${unhandled}`)
+    }
+  }
+}
+
+/** The same login typed by hand in a terminal outside Bull, in the shell of the machine's system. */
+export const loginCommandLineOf = (profile: ProfileProps, os: MachineOs): string => {
   const dir = configEnvOf(profile).CLAUDE_CONFIG_DIR
-  return dir
-    ? `$env:CLAUDE_CONFIG_DIR = ${powershellStringOf(dir)}; ${LOGIN_COMMAND}`
-    : LOGIN_COMMAND
+  return dir ? withConfigDirOn(os, dir) : LOGIN_COMMAND
 }
 
 export const MCP_COMMAND = 'claude /mcp'

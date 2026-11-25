@@ -889,8 +889,13 @@ export default {
         'Claude Code meldet sich im Browser an. Bull öffnet dafür ein Terminal mit dem Profilordner dieses Kontos.',
       command: 'Befehl für ein eigenes Terminal',
       copy: 'Befehl kopieren',
-      fallback_here: 'Oder den Befehl kopieren und in PowerShell auf diesem @:computer ausführen.',
-      fallback_remote: 'Oder den Befehl kopieren und in PowerShell auf {machine} ausführen.',
+      fallback_here: 'Oder den Befehl kopieren und {shell} auf diesem @:computer ausführen.',
+      fallback_remote: 'Oder den Befehl kopieren und {shell} auf {machine} ausführen.',
+      shell: {
+        windows: 'in PowerShell',
+        macos: 'im Terminal',
+        linux: 'im Terminal'
+      },
       open_terminal: 'Im Terminal anmelden',
       done: 'Fertig'
     },

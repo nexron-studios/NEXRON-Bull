@@ -27,7 +27,7 @@ describe('loginRequestOf', () => {
 
 describe('loginCommandLineOf', () => {
   it('should set the profile folder for PowerShell before logging in', () => {
-    expect(loginCommandLineOf(fresh)).toBe(
+    expect(loginCommandLineOf(fresh, 'windows')).toBe(
       "$env:CLAUDE_CONFIG_DIR = 'C:\\Users\\Home\\.claude-kunde-x'; claude /login"
     )
   })
@@ -35,13 +35,30 @@ describe('loginCommandLineOf', () => {
   it('should double a quote in the folder so PowerShell reads one string', () => {
     const quoted = { ...fresh, dir: "C:/Users/O'Brien/.claude-kunde-x" }
 
-    expect(loginCommandLineOf(quoted)).toBe(
+    expect(loginCommandLineOf(quoted, 'windows')).toBe(
       "$env:CLAUDE_CONFIG_DIR = 'C:/Users/O''Brien/.claude-kunde-x'; claude /login"
     )
   })
 
+  it('should set the profile folder in front of the command for a macOS or Linux shell', () => {
+    const onMac = { ...fresh, dir: '/Users/home/.claude-kunde-x' }
+
+    expect([loginCommandLineOf(onMac, 'macos'), loginCommandLineOf(onMac, 'linux')]).toEqual([
+      "CLAUDE_CONFIG_DIR='/Users/home/.claude-kunde-x' claude /login",
+      "CLAUDE_CONFIG_DIR='/Users/home/.claude-kunde-x' claude /login"
+    ])
+  })
+
+  it('should escape a quote in the folder so a POSIX shell reads one string', () => {
+    const quoted = { ...fresh, dir: "/Users/o'brien/.claude-kunde-x" }
+
+    expect(loginCommandLineOf(quoted, 'macos')).toBe(
+      "CLAUDE_CONFIG_DIR='/Users/o'\\''brien/.claude-kunde-x' claude /login"
+    )
+  })
+
   it('should log the default profile in with the bare command', () => {
-    expect(loginCommandLineOf(standard)).toBe('claude /login')
+    expect(loginCommandLineOf(standard, 'windows')).toBe('claude /login')
   })
 })
 

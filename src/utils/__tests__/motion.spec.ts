@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendedKeys,
   isAnimatedOnArrival,
+  isSameMarkerBox,
   layoutLeftOf,
   markerGlideOf,
   springStepOf,
@@ -89,6 +90,21 @@ describe('markerGlideOf', () => {
 
   it('should not glide from or to a hidden choice of zero width', () => {
     expect(markerGlideOf({ x: 0, width: 0 }, { x: 42, width: 80 })).toBeNull()
+  })
+})
+
+describe('isSameMarkerBox', () => {
+  it('should count float noise as the same box', () => {
+    expect(isSameMarkerBox({ x: 40, width: 80 }, { x: 40.000001, width: 79.999999 })).toBe(true)
+  })
+
+  it('should count a tenth of a pixel as a new box', () => {
+    expect(isSameMarkerBox({ x: 40, width: 80 }, { x: 40.1, width: 80 })).toBe(false)
+  })
+
+  it('should count no box as the same only as no box', () => {
+    expect(isSameMarkerBox(null, null)).toBe(true)
+    expect(isSameMarkerBox(null, { x: 40, width: 80 })).toBe(false)
   })
 })
 

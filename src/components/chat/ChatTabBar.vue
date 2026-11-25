@@ -56,23 +56,22 @@ const activeCell = () =>
 const { skipNext: skipNextMove } = useFlipMove(bar, 'data-tab-cell', tabOrder)
 // The underline glides to a newly selected tab and along with the active tab when the order
 // changes, on the same spring as the tabs.
-const { box: underline, measure: measureUnderline } = useSlidingMarker(
-  bar,
-  line,
-  () => `${activeId}|${tabOrder()}`,
-  activeCell
-)
+const {
+  box: underline,
+  measure: measureUnderline,
+  skipNext: skipNextUnderline
+} = useSlidingMarker(bar, line, () => `${activeId}|${tabOrder()}`, activeCell)
 
 const handleDrop = (moved: ChatTabState[]) => {
   skipNextMove()
+  skipNextUnderline()
   emit(
     'reorder',
     moved.map((tab) => tab.id)
   )
 }
-// The active tab changing width (a title, a status icon, the font arriving) resizes itself; a chat
-// tab left of it moves it and resizes the whole list.
-useResizeObserver(activeCell, measureUnderline)
+// The sliding marker observes the active tab itself (terminal tabs sit outside `list`). A chat tab
+// left of it that changes width moves it without resizing it, but resizes the whole list.
 useResizeObserver(list, measureUnderline)
 
 // Ctrl+Shift+Left/Right is the keyboard way of dragging; focus stays on the moved tab.

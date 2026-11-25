@@ -52,6 +52,18 @@ export const markerGlideOf = (from: MarkerBox | null, to: MarkerBox): Keyframe[]
   ]
 }
 
+/** Below this, two measurements of one box differ by float noise only. */
+const SAME_BOX_TOLERANCE_PX = 0.01
+
+/** Whether two measurements are the same box; no box equals only no box. */
+export const isSameMarkerBox = (a: MarkerBox | null, b: MarkerBox | null): boolean => {
+  if (!a || !b) return a === b
+  return (
+    Math.abs(a.x - b.x) < SAME_BOX_TOLERANCE_PX &&
+    Math.abs(a.width - b.width) < SAME_BOX_TOLERANCE_PX
+  )
+}
+
 /** An element's drawn left edge and its own 2D transform: translation, scale and origin, in px. */
 export interface DrawnLeft {
   drawnLeft: number

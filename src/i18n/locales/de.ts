@@ -635,6 +635,8 @@ export default {
     bar_agent_hint:
       'Claude antwortet, sobald der Subagent fertig ist | Claude antwortet, sobald die Subagents fertig sind',
     bar_more: '+{n} weitere',
+    bar_count: '{n} Aufgabe | {n} Aufgaben',
+    bar_running_for: 'läuft seit',
     tool_count: '{n} Tool | {n} Tools',
     live: 'live',
     needs_you: 'braucht dich',

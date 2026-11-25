@@ -10,22 +10,25 @@ import { backgroundAgentsOf } from '@/utils/chatTab'
 
 // Above the composer once Claude's turn is over but agents or shells it started still run, so a
 // build or a subagent is not mistaken for done (Jonas, 25.11.2026). Each task with how long it
-// runs; it leaves the list when it ends, and for an agent Claude's reply follows.
+// runs; it leaves the list when it ends, and for an agent Claude's reply follows. Same card, wave
+// and shimmer as the thinking bar it follows (Jonas, 25.11.2026), in the working amber and a
+// slower wave: something still runs, but Claude itself waits.
 const { tabId } = defineProps<{ tabId: string }>()
 
 const SHOWN_TASKS = 3
+// The thinking bar's wave, slower: background work is steady, not Claude's busy turn.
+const WAVE_HEIGHTS_PX = [6, 11, 15, 9]
+const WAVE_STEP_MS = 200
+const WAVE_CYCLE_MS = 1600
 
 const { t } = useI18n()
 const formatAge = useAgeFormat()
 const now = useMinuteClock()
 const { runningSubagents, backgroundShells } = useTabInsights(tabId)
 
+// The bar's title says it runs, so each row only says for how long.
 const ageOf = (startedAt: number | null): string =>
-  startedAt === null
-    ? ''
-    : t('activity.shell_running', {
-        age: formatAge.value(Math.max(0, now.value.getTime() - startedAt))
-      })
+  startedAt === null ? '' : formatAge.value(Math.max(0, now.value.getTime() - startedAt))
 
 // Only agents the stream's task list names: after a reload the notices of agents that ended are
 // gone, and the messages alone would show them as running for ever.
@@ -44,14 +47,12 @@ const tasks = computed(() => [
   ...agents.value.map((agent) => ({
     id: agent.id,
     icon: Bot,
-    iconClass: 'text-warning',
     name: `${agent.agentType} · ${agent.title}`,
     age: ageOf(agent.startedAt)
   })),
   ...backgroundShells.value.map((shell) => ({
     id: shell.id,
     icon: SquareTerminal,
-    iconClass: 'text-muted-foreground',
     name: shell.description || shell.command,
     age: ageOf(shell.startedAt)
   }))
@@ -61,39 +62,76 @@ const hiddenCount = computed(() => tasks.value.length - shown.value.length)
 </script>
 
 <template>
-  <section
-    v-if="tasks.length"
-    class="mb-2 rounded-lg border border-border bg-card/60 px-2.5 py-1.5 text-meta"
-    :aria-label="t('activity.bar_title')"
+  <Transition
+    enter-active-class="transition duration-200 ease-out"
+    enter-from-class="translate-y-1 opacity-0"
+    leave-active-class="transition-opacity duration-100 ease-out"
+    leave-to-class="opacity-0"
   >
-    <p class="flex items-center gap-2 text-muted-foreground">
-      <span
-        class="size-1.5 shrink-0 rounded-full bg-warning motion-safe:animate-pulse"
-        aria-hidden="true"
-      />
-      <span class="min-w-0 truncate font-medium text-foreground">
-        {{ t('activity.bar_title') }}
-      </span>
-      <span v-if="agents.length" class="min-w-0 truncate">
-        · {{ t('activity.bar_agent_hint', agents.length) }}
-      </span>
-    </p>
-    <ul class="mt-1 flex flex-col gap-1">
-      <li v-for="task in shown" :key="task.id" class="flex min-w-0 items-center gap-2">
-        <component
-          :is="task.icon"
-          class="size-3.5 shrink-0"
-          :class="task.iconClass"
-          aria-hidden="true"
-        />
-        <span class="min-w-0 flex-1 truncate">{{ task.name }}</span>
-        <span v-if="task.age" class="shrink-0 text-muted-foreground tabular-nums">
-          {{ task.age }}
+    <section
+      v-if="tasks.length"
+      class="mb-2 flex flex-col gap-1 rounded-xl border border-border bg-card py-2 pr-3 pl-4"
+      :aria-label="t('activity.bar_title')"
+    >
+      <p class="flex min-w-0 items-center gap-3 text-small">
+        <span class="flex h-4 shrink-0 items-end gap-0.5" aria-hidden="true">
+          <span
+            v-for="(height, index) in WAVE_HEIGHTS_PX"
+            :key="index"
+            class="w-[3px] wave-bar rounded-full bg-warning"
+            :style="{
+              height: `${height}px`,
+              animationDelay: `${index * WAVE_STEP_MS}ms`,
+              animationDuration: `${WAVE_CYCLE_MS}ms`
+            }"
+          />
         </span>
-      </li>
-      <li v-if="hiddenCount" class="pl-5.5 text-muted-foreground">
-        {{ t('activity.bar_more', { n: hiddenCount }) }}
-      </li>
-    </ul>
-  </section>
+        <span class="flex min-w-0 items-baseline gap-1.5">
+          <span class="min-w-0 text-shimmer truncate font-medium">
+            {{ t('activity.bar_title') }}
+          </span>
+          <span class="shrink-0 text-meta text-muted-foreground tabular-nums">
+            <span aria-hidden="true">·</span>
+            {{ t('activity.bar_count', tasks.length) }}
+          </span>
+          <span
+            v-if="agents.length"
+            class="hidden min-w-0 shrink-[999] truncate text-meta text-muted-foreground sm:inline"
+          >
+            <span aria-hidden="true">·</span>
+            {{ t('activity.bar_agent_hint', agents.length) }}
+          </span>
+        </span>
+      </p>
+      <!-- Rows start under the title, past the wave, as the thinking bar's label does. -->
+      <TransitionGroup
+        tag="ul"
+        class="flex flex-col pl-7.5 text-meta"
+        enter-active-class="motion-stagger"
+        leave-active-class="transition-opacity duration-100 ease-out"
+        leave-to-class="opacity-0"
+      >
+        <li
+          v-for="(task, index) in shown"
+          :key="task.id"
+          class="flex min-w-0 items-center gap-2 py-0.5"
+          :style="{ '--stagger-index': index }"
+        >
+          <component
+            :is="task.icon"
+            class="size-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span class="min-w-0 flex-1 truncate">{{ task.name }}</span>
+          <span v-if="task.age" class="shrink-0 text-muted-foreground tabular-nums">
+            <span class="sr-only">{{ t('activity.bar_running_for') }}</span>
+            {{ task.age }}
+          </span>
+        </li>
+        <li v-if="hiddenCount" key="more" class="py-0.5 pl-5.5 text-muted-foreground">
+          {{ t('activity.bar_more', { n: hiddenCount }) }}
+        </li>
+      </TransitionGroup>
+    </section>
+  </Transition>
 </template>

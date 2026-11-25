@@ -620,6 +620,8 @@ export default {
     bar_agent_hint:
       'Claude replies once the subagent is done | Claude replies once the subagents are done',
     bar_more: '+{n} more',
+    bar_count: '{n} task | {n} tasks',
+    bar_running_for: 'running for',
     tool_count: '{n} tool | {n} tools',
     live: 'live',
     needs_you: 'needs you',

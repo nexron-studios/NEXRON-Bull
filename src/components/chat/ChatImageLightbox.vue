@@ -124,6 +124,12 @@ const handleKeydown = (event: KeyboardEvent) => {
 // from earlier rounds come along to change.
 watch(current, (image) => markup.load(image), { immediate: true })
 
+// The desktop draws without switching, so a window narrowed to phone width keeps its strokes in
+// view (and undoable) by switching for it.
+watch(isPhone, (phone) => {
+  if (phone && markup.strokes.value.length) mode.value = 'mark'
+})
+
 watch(index, () => {
   natural.value = null
   zoom.value = 1

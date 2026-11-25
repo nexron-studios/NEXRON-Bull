@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef, useId, useTemplateRef } from 'vue'
+import { computed, ref, toRef, useId, useTemplateRef } from 'vue'
 import { ArrowUp, CornerDownLeft, DollarSign, LoaderCircle, Paperclip, Square } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
@@ -11,11 +11,11 @@ import ChatComposerMenu from '@/components/chat/ChatComposerMenu.vue'
 import ChatComposerQueue from '@/components/chat/ChatComposerQueue.vue'
 import ChatContextRing from '@/components/chat/ChatContextRing.vue'
 import ChatPasteChip from '@/components/chat/ChatPasteChip.vue'
+import { useComposerMarkup } from '@/composables/useComposerMarkup'
 import { useComposerMenu } from '@/composables/useComposerMenu'
 import { useComposerPaste } from '@/composables/useComposerPaste'
 import { useImageAttachments } from '@/composables/useImageAttachments'
 import { useImageReferences } from '@/composables/useImageReferences'
-import type { MarkupHandoff, MarkupResult } from '@/composables/useMarkupTarget'
 import { usePromptHistory } from '@/composables/usePromptHistory'
 import { useDraftStore } from '@/stores/drafts'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
@@ -102,11 +102,22 @@ const attachFiles = async (files: Iterable<File>): Promise<PendingImage[]> => {
   return added
 }
 
-/** The preview of an attachment; the list may only just have appeared with it. */
-const openImage = async (id: string) => {
-  await nextTick()
-  attachmentList.value?.openAt(images.value.findIndex((image) => image.id === id))
+/** A comment on an image or on lines goes in front of the draft; nothing is sent. */
+const prependComment = (line: string) => {
+  draft.value = prependLine(draft.value, line)
+  focusField()
 }
+
+const { openImage, handOver } = useComposerMarkup({
+  images,
+  references,
+  placeMarkedImages,
+  remove,
+  openAt: (at) => attachmentList.value?.openAt(at),
+  prependComment,
+  focusField,
+  send: (text, outgoing) => emit('send', text, outgoing)
+})
 
 const { handlePaste } = useComposerPaste({
   images,
@@ -217,49 +228,6 @@ const quote = (question: string) => {
   draft.value = `${quoted}${draft.value}`
   setCaret(quoted.length)
 }
-
-/** A comment on an image or on lines goes in front of the draft; nothing is sent. */
-const prependComment = (line: string) => {
-  draft.value = prependLine(draft.value, line)
-  focusField()
-}
-
-/**
- * A marked image from the preview, its comment in front of the draft; nothing is sent. The comment
- * names the image by a reference, so it follows the chips like any other.
- */
-const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
-  if (incoming.length && !placeMarkedImages(sourceId, incoming)) return false
-  const anchorId = incoming[0]?.id ?? sourceId
-  const at = images.value.findIndex((image) => image.id === anchorId)
-  const anchor = images.value[at]
-  if (!comment || !anchor) {
-    focusField()
-    return true
-  }
-  const ref = references.format.value.render(at + 1, anchor.name)
-  prependComment(t('images.comment_line', { ref, comment }))
-  return true
-}
-
-/**
- * "Senden" in the preview: image and comment go out as a message of their own, by the same way as
- * any message (queue, limit). The draft stays for later; only an attachment that just went out
- * leaves it, with its references.
- */
-const sendMarkup = ({ sourceId, images: outgoing, comment }: MarkupResult) => {
-  const [first] = outgoing
-  if (!first) return false
-  const ref = references.format.value.render(1, first.name)
-  const text = comment ? t('images.comment_line', { ref, comment }) : ''
-  emit('send', withPlainImageRefs(text, references.format.value), outgoing)
-  if (sourceId && images.value.some((image) => image.id === sourceId)) remove(sourceId)
-  return true
-}
-
-/** A result from the preview, wherever it was asked to go. */
-const handOver = (result: MarkupResult, handoff: MarkupHandoff) =>
-  handoff === 'send' ? sendMarkup(result) : takeMarkup(result)
 
 /** Line comments from the diff review, by the same path as a marked image's comment. */
 const takeReview = (comments: string) => {

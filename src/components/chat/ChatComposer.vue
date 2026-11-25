@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef, useId, useTemplateRef } from 'vue'
+import { computed, nextTick, ref, toRef, useId, useTemplateRef } from 'vue'
 import { ArrowUp, CornerDownLeft, DollarSign, LoaderCircle, Paperclip, Square } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
@@ -44,6 +44,8 @@ const emit = defineEmits<{ send: [text: string, images: PendingImage[]]; interru
 const picker = ref<HTMLInputElement | null>(null)
 const field = useTemplateRef<InstanceType<typeof ChatComposerField>>('field')
 const menuView = useTemplateRef<InstanceType<typeof ChatComposerMenu>>('menuView')
+const attachmentList =
+  useTemplateRef<InstanceType<typeof ChatComposerAttachments>>('attachmentList')
 const caret = ref(0)
 const isShell = ref(false)
 
@@ -88,18 +90,31 @@ const history = usePromptHistory(() => [...tab.messages, ...tab.pending], draft,
  * Pasted, dropped or picked images: each also gets a reference where the user writes, or at the
  * end when the field never had the caret. A shell command has no room for one.
  */
-const attachFiles = async (files: Iterable<File>) => {
+const attachFiles = async (files: Iterable<File>): Promise<PendingImage[]> => {
   const added = await addFiles(files)
-  if (isShell.value) return
+  if (isShell.value) return added
   const isFocused = field.value?.isFocused() ?? false
   const selection = field.value?.selection() ?? null
   // Only a paste replaces selected text; a picked or dropped file lands after it.
   const at = selection && !isFocused ? { start: selection.end, end: selection.end } : selection
   const caretAfter = references.insert(added, at)
   if (caretAfter !== null && isFocused) setCaret(caretAfter)
+  return added
 }
 
-const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles: attachFiles })
+/** The preview of an attachment; the list may only just have appeared with it. */
+const openImage = async (id: string) => {
+  await nextTick()
+  attachmentList.value?.openAt(images.value.findIndex((image) => image.id === id))
+}
+
+const { handlePaste } = useComposerPaste({
+  images,
+  pastes,
+  isShell,
+  addFiles: attachFiles,
+  onSinglePaste: (image) => void openImage(image.id)
+})
 
 // Images still being read would otherwise miss this message and turn up in the next one.
 const canSend = computed(
@@ -272,6 +287,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup
         >
           <ChatComposerAttachments
             v-if="images.length || isReading"
+            ref="attachmentList"
             :images
             :reading-count="readingCount"
             @update:images="reorder"

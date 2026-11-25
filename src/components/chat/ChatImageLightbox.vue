@@ -13,20 +13,24 @@ import { useProvideMarkup } from '@/composables/useMarkup'
 import { useMarkupTarget } from '@/composables/useMarkupTarget'
 import { useIsPhone } from '@/composables/useViewport'
 import { imageMeta, stepIndex, type LightboxImage } from '@/utils/attachments'
-import type { LightboxMode } from '@/utils/lightbox'
+import { startModeOf, type LightboxMode } from '@/utils/lightbox'
 import type { Size } from '@/utils/markup'
 import { historyStepOf } from '@/utils/shortcuts'
 import { isTextField } from '@/utils/textField'
 
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
 // "M20"): view and page, or draw on it; either way a comment can go with it to the composer.
-const { images } = defineProps<{ images: LightboxImage[] }>()
+// `initialMode`: what an opening starts in. The composer's own images open ready to draw on;
+// sent ones open to look at.
+const { images, initialMode = 'view' } = defineProps<{
+  images: LightboxImage[]
+  initialMode?: LightboxMode
+}>()
 
 const isOpen = defineModel<boolean>('open', { required: true })
 const index = defineModel<number>('index', { required: true })
 
 const stage = ref<InstanceType<typeof ChatLightboxStage> | null>(null)
-const mode = ref<LightboxMode>('view')
 const zoom = ref(1)
 const natural = ref<Size | null>(null)
 
@@ -34,6 +38,7 @@ const { t, locale } = useI18n()
 const isPhone = useIsPhone()
 const markup = useProvideMarkup()
 const target = useMarkupTarget()
+const mode = ref<LightboxMode>(startModeOf(initialMode, !!target))
 
 const current = computed(() => images[index.value] ?? null)
 const hasSeveral = computed(() => images.length > 1)
@@ -112,7 +117,10 @@ watch(index, () => {
 })
 
 watch(isOpen, (open) => {
-  if (open) return
+  if (open) {
+    mode.value = startModeOf(initialMode, !!target)
+    return
+  }
   discard()
   zoom.value = 1
 })

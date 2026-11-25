@@ -85,7 +85,7 @@ export interface QuotaMember {
 /** One Claude account with every profile logged into it, on any machine. */
 export interface LoginQuota extends MachineQuota {
   members: QuotaMember[]
-  /** The members' profile names, each once: `default · mackone` */
+  /** The members' profile names, each once: `default · work` */
   names: string
 }
 

@@ -12,7 +12,7 @@ import {
 
 /**
  * Text selected with the mouse lands on the clipboard when the button is let go, like in herdr
- * and X11 terminals (Jonas, 24.11.2026). Anywhere the app shows text to read; not in fields,
+ * and X11 terminals. Anywhere the app shows text to read; not in fields,
  * where selecting is editing; the terminal copies its own (`terminalSession`). Mounted once.
  */
 export const useCopyOnSelect = () => {

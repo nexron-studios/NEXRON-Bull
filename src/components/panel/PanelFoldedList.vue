@@ -2,8 +2,8 @@
 import PanelFoldButton from '@/components/panel/PanelFoldButton.vue'
 
 // A folded panel list (`useFoldedRows`): its first rows, the rest behind "Mehr anzeigen", shut
-// again with "Weniger anzeigen". Opened, it stops at a fixed height and scrolls inside (Jonas,
-// 24.11.2026): a long list never pushes the panel past the window, and a new row on top does not
+// again with "Weniger anzeigen". Opened, it stops at a fixed height and scrolls inside:
+// a long list never pushes the panel past the window, and a new row on top does not
 // move every section below. `relative` keeps the rows' `sr-only` labels inside the scroll area.
 const { isExpanded, isFoldable, hiddenCount, controls } = defineProps<{
   isExpanded: boolean

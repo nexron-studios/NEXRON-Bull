@@ -88,7 +88,7 @@ const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo } = useChatFo
 useRevealTarget(scroller, glideTo, () => searchBox.value?.coverOf() ?? null)
 const reducedMotion = usePreferredReducedMotion()
 // The session bar (phone: the screen's top bar) casts its edge. The composer deliberately does
-// not (Jonas, 24.11.2026): a band above it read as a footer and blinked off after every message.
+// not: a band above it read as a footer and blinked off after every message.
 const { hasMoreAbove } = useScrollEdges(scroller)
 
 const isWorking = computed(() => tab.status === 'working' || tab.status === 'asking')

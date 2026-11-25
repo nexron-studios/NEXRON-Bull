@@ -141,7 +141,7 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
     hideAll([target]).catch(handleError)
   }
 
-  /** The tab's close button: unlike the menus it always asks, a finished chat too (Jonas, 24.11.2026). */
+  /** The tab's close button: unlike the menus it always asks, a finished chat too. */
   const requestRemove = (target: SessionTarget) =>
     ask(needsStop(target) ? 'stop_and_remove' : 'remove', target)
 

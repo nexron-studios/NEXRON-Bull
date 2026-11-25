@@ -57,16 +57,16 @@ describe('offeredAnswersOf', () => {
 describe('loginQuotasOf', () => {
   it('should show two profiles on one email as one account that names both', () => {
     const logins = loginQuotasOf([
-      { machine: null, accounts: [account('default', 'a@x'), account('mackone', 'a@x')] },
+      { machine: null, accounts: [account('default', 'a@x'), account('work', 'a@x')] },
       { machine: 'server', accounts: [account('default', 'a@x'), account('home', 'b@x')] }
     ])
     expect(logins.map((login) => [login.machine, login.names, login.members])).toEqual([
       [
         null,
-        'default · mackone',
+        'default · work',
         [
           { machine: null, label: 'default' },
-          { machine: null, label: 'mackone' },
+          { machine: null, label: 'work' },
           { machine: 'server', label: 'default' }
         ]
       ],

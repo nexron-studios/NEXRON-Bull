@@ -122,8 +122,8 @@ export const connectorsOf = (event: ClaudeEvent): Connector[] | null => {
 /**
  * The servers of a new report, keeping what was known of each while Claude connects it again.
  * Every Claude start and many turns report a server `pending` until it is up, though it worked a
- * moment ago; showing that each time made the list flicker and jump (Jonas, 24.11.2026: "laden
- * immer neu"). Only a server never seen settled shows `pending`.
+ * moment ago; showing that each time made the list flicker and jump.
+ * Only a server never seen settled shows `pending`.
  */
 export const withKnownConnectors = (
   known: Connector[] | null,

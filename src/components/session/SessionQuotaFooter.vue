@@ -23,7 +23,7 @@ import {
 
 // Bottom of the sidebar (Figma "10 · Fassung 5"): per account a line with its name, below it the
 // 5 hours and the week side by side, each with its reset underneath. Two profiles on one email are
-// one account with one quota: one line naming both ("default · mackone"), not two identical lines.
+// one account with one quota: one line naming both ("default · work"), not two identical lines.
 // Switching happens per chat, so there is no account switch here.
 
 const { t } = useI18n()

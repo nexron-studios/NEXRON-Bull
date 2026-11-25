@@ -174,3 +174,21 @@ export const imageRefAt = <T extends ImageRef>(
       ? ref.start < caret && caret <= ref.end
       : ref.start <= caret && caret < ref.end
   ) ?? null
+
+/** Where a reference chip is drawn, in client pixels, and the image number it names. */
+export interface ImageRefBox {
+  n: number
+  rect: { left: number; right: number; top: number; bottom: number }
+}
+
+/**
+ * The image number of the chip under a point, or `null`. The composer's chips lie behind the
+ * textarea, so a click finds them by position rather than by its target.
+ */
+export const imageRefNumberAt = (
+  boxes: readonly ImageRefBox[],
+  x: number,
+  y: number
+): number | null =>
+  boxes.find(({ rect }) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+    ?.n ?? null

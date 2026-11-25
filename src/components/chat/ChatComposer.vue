@@ -322,6 +322,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, takeMarkup
             @keydown="handleKeydown"
             @paste="handlePaste"
             @caret="caret = $event"
+            @open-image="attachmentList?.openAt($event - 1)"
           />
           <span
             v-if="!draft && !isShell && !isCompact"

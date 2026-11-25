@@ -18,7 +18,7 @@ const { t } = useI18n()
     <span v-if="piece.mark?.kind === 'mention'" class="rounded-sm bg-brand/25">{{
       piece.text
     }}</span>
-    <span v-else-if="piece.mark?.kind === 'image'" class="relative"
+    <span v-else-if="piece.mark?.kind === 'image'" class="relative" :data-image-ref="piece.mark.n"
       ><span class="text-transparent">{{ unbreakable(piece.text) }}</span
       ><span
         aria-hidden="true"

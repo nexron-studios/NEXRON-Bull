@@ -15,7 +15,7 @@ const { toast, ask, send } = vi.hoisted(() => ({
 vi.mock('vue-sonner', () => ({ toast }))
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
-  agentdService: { ask, send, onEvent: () => () => {}, waitFor: vi.fn() }
+  agentdService: { ask, send, onEvent: () => () => {}, onReady: () => () => {}, waitFor: vi.fn() }
 }))
 
 /** The chat works on a subfolder; removing takes the whole worktree. */

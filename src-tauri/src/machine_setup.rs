@@ -1,32 +1,23 @@
 //! Checks whether another machine can run Bull's chats. Every check is an ssh call whose answer
 //! (agentd's `hello`, or ssh's complaint on stderr) is turned into one reason the assistant
-//! explains; `machine_install` copies agentd over with the same calls. Windows targets only, like
-//! the connection itself.
+//! explains; `machine_install` copies agentd over with the same calls. The first call asks which
+//! system the machine runs (`machine_os`), the others are written for it.
 
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::process::Command;
 
 use serde::Serialize;
-use serde_json::Value;
+use tauri::State;
 
 use crate::connections;
-use crate::machines::{self, MachineEntry};
+use crate::machine_os::{self, MachineOs, Platform, UNAME_COMMAND};
+use crate::machines::{self, MachineEntry, MachineStore};
+use crate::remote_call::{Asked, ask, ssh};
 
-/// `stdio` serves one client and ends with its input, so asking `hello` starts nothing that
-/// stays behind (unlike `connect`, which starts the background server).
-const PROBE_COMMAND: &str = r"cmd /d /c .nexron-chat\agentd.exe stdio";
-/// Tells a missing agentd from one Windows refuses to start, without reading localised text.
-const PRESENCE_COMMAND: &str = r"cmd /d /c dir /b .nexron-chat\agentd.exe";
 const HELLO_LINE: &str = r#"{"op":"hello","id":1}"#;
 /// ssh's own exit code for its failures; anything else is the remote command's.
 pub(crate) const SSH_FAILED: i32 = 255;
 const SHELL_COMMAND_MISSING: i32 = 127;
 const DEFAULT_SSH_PORT: &str = "22";
-/// Longer than ssh's 10 s connect timeout, so a slow login is not cut short.
-const ASK_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_DETAIL_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -40,7 +31,8 @@ pub enum ProbeReason {
     HostKeyUnknown,
     NoAgentd,
     AgentdBlocked,
-    NotWindows,
+    /// Neither Windows, macOS nor Linux, or no shell at all (a Git host)
+    UnsupportedSystem,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -53,119 +45,70 @@ pub struct Probe {
     /// How `known_hosts` names the machine, for forgetting a changed key: ssh stores the
     /// resolved host name, not the alias from `~/.ssh/config`
     pub known_host: Option<String>,
+    /// The system it runs, once ssh got that far
+    pub os: Option<MachineOs>,
 }
 
 impl Probe {
-    fn failed(reason: ProbeReason, stderr: &str) -> Self {
-        Self { reason, version: None, detail: detail_of(stderr), known_host: None }
+    /// A probe that got as far as `reason`, explained by the last lines of `stderr`.
+    pub(crate) fn of(reason: ProbeReason, stderr: &str) -> Self {
+        Self { reason, version: None, detail: detail_of(stderr), known_host: None, os: None }
     }
 }
 
-/// What one ssh call gave back.
-pub(crate) struct Asked {
-    /// The first stdout line whose `type` was the wanted one
-    pub(crate) answer: Option<Value>,
-    /// Every other line before it
-    pub(crate) stdout: String,
-    pub(crate) code: Option<i32>,
-    pub(crate) stderr: String,
-}
-
-pub(crate) fn ssh(entry: &MachineEntry, should_accept_new_key: bool, remote: &str) -> Command {
-    let mut command = Command::new(connections::ssh_program());
-    command.args(["-T", "-o", "BatchMode=yes", "-o", connections::SSH_CONNECT_TIMEOUT]);
-    if should_accept_new_key {
-        command.args(["-o", "StrictHostKeyChecking=accept-new"]);
-    }
-    command.args(entry.ssh_args()).arg(remote);
-    command
-}
-
-/// Runs `command`, writes `line` to it and waits for a stdout line of type `wanted`, its end, or
-/// the timeout. An answer ends the call at once: over a PowerShell login shell the end of input
-/// does not always reach the program.
-pub(crate) fn ask(mut command: Command, line: &str, wanted: &str) -> io::Result<Asked> {
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    connections::hide_console(&mut command);
-    let mut child = command.spawn()?;
-    let mut stdin = child.stdin.take();
-    if let Some(input) = stdin.as_mut() {
-        // A remote that already ended has nobody to read it; its exit code tells why.
-        let _ = writeln!(input, "{line}").and_then(|()| input.flush());
-    }
-    let stderr = child.stderr.take().map(|mut pipe| {
-        thread::spawn(move || {
-            let mut text = String::new();
-            // Whatever arrived before a read error still explains the failure.
-            let _ = pipe.read_to_string(&mut text);
-            text
-        })
-    });
-    let (sender, lines) = mpsc::channel();
-    if let Some(stdout) = child.stdout.take() {
-        thread::spawn(move || {
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                if sender.send(line).is_err() {
-                    break;
-                }
-            }
-        });
-    }
-    let (answer, stdout, has_ended) = read_until(&lines, wanted);
-    if !has_ended {
-        // Answered or out of time: it should not run on.
-        let _ = child.kill();
-    }
-    drop(stdin);
-    let code = child.wait()?.code();
-    let stderr = stderr.and_then(|reader| reader.join().ok()).unwrap_or_default();
-    Ok(Asked { answer, stdout, code, stderr })
-}
-
-/// The wanted answer (an empty `wanted` reads to the end), the lines before it, and whether
-/// stdout ended on its own.
-fn read_until(lines: &mpsc::Receiver<String>, wanted: &str) -> (Option<Value>, String, bool) {
-    let deadline = Instant::now() + ASK_TIMEOUT;
-    let mut stdout = String::new();
-    loop {
-        let line = match lines.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(line) => line,
-            Err(mpsc::RecvTimeoutError::Disconnected) => return (None, stdout, true),
-            Err(mpsc::RecvTimeoutError::Timeout) => return (None, stdout, false),
-        };
-        let event = serde_json::from_str::<Value>(&line).ok();
-        if let Some(event) = event.filter(|event| !wanted.is_empty() && event["type"] == wanted) {
-            return (Some(event), stdout, false);
-        }
-        stdout.push_str(&line);
-        stdout.push('\n');
-    }
-}
-
-/// Asks the machine's agentd for `hello`; when it does not answer, a second call finds out why.
+/// Finds the system, then asks the machine's agentd for `hello`; when it does not answer, a
+/// further call finds out why.
 pub fn probe(entry: &MachineEntry, should_accept_new_key: bool) -> Probe {
-    let asked = match ask(ssh(entry, should_accept_new_key, PROBE_COMMAND), HELLO_LINE, "hello") {
+    match platform(entry, should_accept_new_key) {
+        Ok(platform) => probe_agentd(entry, should_accept_new_key, platform.os),
+        Err(failed) => failed,
+    }
+}
+
+/// What `uname` says about the machine. `Err` when ssh got nowhere or the machine runs a system
+/// Bull does not run on.
+pub(crate) fn platform(entry: &MachineEntry, should_accept_new_key: bool) -> Result<Platform, Probe> {
+    let asked = ask(ssh(entry, should_accept_new_key, UNAME_COMMAND), "", "")
+        .map_err(|err| Probe::of(ProbeReason::Offline, &err.to_string()))?;
+    if asked.code == Some(SSH_FAILED) {
+        return Err(ssh_failed(entry, &asked.stderr));
+    }
+    machine_os::platform_of(asked.code, &asked.stdout).ok_or_else(|| Probe::of(ProbeReason::UnsupportedSystem, ""))
+}
+
+/// Asks agentd on a machine whose system is known for `hello`, after an install or as the rest
+/// of a check.
+pub(crate) fn probe_agentd(entry: &MachineEntry, should_accept_new_key: bool, os: MachineOs) -> Probe {
+    Probe { os: Some(os), ..agentd_answer(entry, should_accept_new_key, os) }
+}
+
+fn agentd_answer(entry: &MachineEntry, should_accept_new_key: bool, os: MachineOs) -> Probe {
+    let asked = match ask(ssh(entry, should_accept_new_key, os.probe_command()), HELLO_LINE, "hello") {
         Ok(asked) => asked,
-        Err(err) => return Probe::failed(ProbeReason::Offline, &err.to_string()),
+        Err(err) => return Probe::of(ProbeReason::Offline, &err.to_string()),
     };
     if let Some(hello) = &asked.answer {
         let version = hello["version"].as_str().map(str::to_string);
-        return Probe { reason: ProbeReason::Ok, version, detail: None, known_host: None };
+        return Probe { version, ..Probe::of(ProbeReason::Ok, "") };
     }
     if asked.code == Some(SSH_FAILED) {
-        let reason = ssh_failure(&asked.stderr);
-        let known_host = (reason == ProbeReason::HostKeyChanged).then(|| known_host_of(entry)).flatten();
-        return Probe { known_host, ..Probe::failed(reason, &asked.stderr) };
+        return ssh_failed(entry, &asked.stderr);
     }
-    match ask(ssh(entry, should_accept_new_key, PRESENCE_COMMAND), "", "") {
+    match ask(ssh(entry, should_accept_new_key, os.presence_command()), "", "") {
         Ok(presence) => {
             let reason = presence_reason(&presence);
-            // A blocked agentd is explained by what starting it said, not by `dir`.
+            // A blocked agentd is explained by what starting it said, not by the presence check.
             let stderr = if reason == ProbeReason::AgentdBlocked { &asked.stderr } else { &presence.stderr };
-            Probe::failed(reason, stderr)
+            Probe::of(reason, stderr)
         }
-        Err(err) => Probe::failed(ProbeReason::Offline, &err.to_string()),
+        Err(err) => Probe::of(ProbeReason::Offline, &err.to_string()),
     }
+}
+
+fn ssh_failed(entry: &MachineEntry, stderr: &str) -> Probe {
+    let reason = ssh_failure(stderr);
+    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| known_host_of(entry)).flatten();
+    Probe { known_host, ..Probe::of(reason, stderr) }
 }
 
 /// ssh failed before the remote command ran: refused key, a changed host key, or no way there.
@@ -196,7 +139,7 @@ fn presence_reason(presence: &Asked) -> ProbeReason {
     let text = presence.stderr.to_lowercase();
     let no_cmd = ["command not found", "cmd: not found", "unknown command", "does not provide shell access"];
     if presence.code == Some(SHELL_COMMAND_MISSING) || no_cmd.iter().any(|phrase| text.contains(phrase)) {
-        return ProbeReason::NotWindows;
+        return ProbeReason::UnsupportedSystem;
     }
     ProbeReason::NoAgentd
 }
@@ -231,10 +174,16 @@ fn known_host_in(config: &str) -> Option<String> {
     }
 }
 
-/// Checks a machine the user typed in or picked; it need not be in the list yet.
+/// Checks a machine the user typed in or picked; it need not be in the list yet. A listed one
+/// remembers the system found: its next connection speaks that system's shell.
 #[tauri::command(async)]
-pub fn test_machine(entry: MachineEntry) -> Result<Probe, machines::MachinesError> {
-    Ok(probe(&machines::validated(entry)?, true))
+pub fn test_machine(store: State<'_, MachineStore>, entry: MachineEntry) -> Result<Probe, machines::MachinesError> {
+    let entry = machines::validated(entry)?;
+    let probe = probe(&entry, true);
+    if let Some(os) = probe.os {
+        store.remember_os(&entry, os);
+    }
+    Ok(probe)
 }
 
 #[cfg(test)]
@@ -242,7 +191,7 @@ mod tests {
     use super::*;
 
     fn asked(code: i32, stderr: &str) -> Asked {
-        Asked { answer: None, stdout: String::new(), code: Some(code), stderr: stderr.into() }
+        Asked { answer: None, stdout: String::new(), code: Some(code), stderr: stderr.into(), is_timed_out: false }
     }
 
     #[test]
@@ -265,9 +214,9 @@ mod tests {
         assert_eq!(presence_reason(&asked(0, "")), ProbeReason::AgentdBlocked);
         assert_eq!(presence_reason(&asked(1, "Datei nicht gefunden")), ProbeReason::NoAgentd);
         assert_eq!(presence_reason(&asked(1, "File Not Found")), ProbeReason::NoAgentd);
-        assert_eq!(presence_reason(&asked(127, "bash: line 1: cmd: command not found")), ProbeReason::NotWindows);
+        assert_eq!(presence_reason(&asked(127, "bash: line 1: cmd: command not found")), ProbeReason::UnsupportedSystem);
         let github = "Hi alex! You've successfully authenticated, but GitHub does not provide shell access.";
-        assert_eq!(presence_reason(&asked(1, github)), ProbeReason::NotWindows);
+        assert_eq!(presence_reason(&asked(1, github)), ProbeReason::UnsupportedSystem);
         assert_eq!(presence_reason(&asked(255, "Connection closed by 10.0.0.2 port 22")), ProbeReason::Offline);
     }
 
@@ -283,23 +232,5 @@ mod tests {
     fn keeps_the_last_lines_as_detail() {
         assert_eq!(detail_of("\n a \n\nb\nc\nd\n").as_deref(), Some("b\nc\nd"));
         assert_eq!(detail_of("  \n"), None);
-    }
-
-    /// A stand-in for ssh: a shell that answers like agentd's `stdio`.
-    #[cfg(windows)]
-    #[test]
-    fn reads_the_wanted_answer_and_its_exit_code() {
-        use std::os::windows::process::CommandExt;
-        let mut hello = Command::new("cmd");
-        hello.raw_arg(r#"/d /c "echo noise& echo {"type":"hello","id":1,"version":"0.1.0","os":"windows"}""#);
-        let answered = ask(hello, HELLO_LINE, "hello").unwrap();
-        assert_eq!(answered.answer.unwrap()["version"], "0.1.0");
-
-        let mut missing = Command::new("cmd");
-        missing.args(["/d", "/c", "echo gone 1>&2& exit 3"]);
-        let failed = ask(missing, HELLO_LINE, "hello").unwrap();
-        assert!(failed.answer.is_none());
-        assert_eq!(failed.code, Some(3));
-        assert_eq!(failed.stderr.trim(), "gone");
     }
 }

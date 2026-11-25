@@ -103,7 +103,7 @@ watch(
       >
         <Check aria-hidden="true" />
         {{ t('chat.allow') }}
-        <NchKbd key-label="1" is-on-brand />
+        <NchKbd key-label="1" is-on-fill />
       </Button>
       <!-- The rule can be a whole chained command; the line above shows it in full, so the label
            may shrink to the card and cut off. -->

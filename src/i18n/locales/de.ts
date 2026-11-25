@@ -6,6 +6,19 @@ export default {
     save: 'Speichern',
     undo: 'Rückgängig'
   },
+  bridge: {
+    title: 'Bull mit diesem Gerät verbinden',
+    description:
+      'Bull im Browser erreicht deine Chats über die Brücke auf dem Server. Sie lässt nur Geräte mit eigenem Token herein.',
+    token: 'Geräte-Token',
+    token_hint:
+      'Steht in der Ausgabe von „npm run token“ auf dem Server. Bull merkt es sich in diesem Browser.',
+    token_empty: 'Gib das Token ein.',
+    token_rejected:
+      'Dieses Token kennt die Brücke nicht. Erzeuge auf dem Server ein neues und gib es hier ein.',
+    unreachable: 'Die Brücke antwortet gerade nicht. Bull versucht es weiter.',
+    connect: 'Verbinden'
+  },
   chat_search: {
     open: 'Im Chat suchen ({key})',
     placeholder: 'Im Chat suchen …',
@@ -932,7 +945,7 @@ export default {
         },
         offline: {
           title: '{machine} antwortet nicht',
-          hint: 'Ist der Rechner an und im selben Netz oder Tailnet? Dort muss der Windows-Dienst „OpenSSH SSH Server“ laufen.'
+          hint: 'Ist der Rechner an und im selben Netz oder Tailnet? Dort muss ein SSH-Server laufen: unter Windows der Dienst „OpenSSH SSH Server“, am Mac „Entfernte Anmeldung“ in den Systemeinstellungen, unter Linux sshd.'
         },
         auth_failed: {
           title: '{machine} kennt deinen Schlüssel noch nicht',
@@ -940,7 +953,7 @@ export default {
         },
         host_key_changed: {
           title: '{machine} meldet sich mit einem anderen Schlüssel',
-          hint: 'Das passiert nach einer Neuinstallation von Windows. Hast du nichts geändert, verbinde dich nicht. Sonst vergiss den alten Schlüssel und prüf erneut.'
+          hint: 'Das passiert nach einer Neuinstallation des Systems. Hast du nichts geändert, verbinde dich nicht. Sonst vergiss den alten Schlüssel und prüf erneut.'
         },
         host_key_unknown: {
           title: 'Bull kennt {machine} noch nicht',
@@ -951,12 +964,12 @@ export default {
           hint: 'Die Verbindung steht. Bull kopiert agentd hinüber, in den Ordner .nexron-chat im Benutzerordner dort.'
         },
         agentd_blocked: {
-          title: 'Windows startet agentd auf {machine} nicht',
-          hint: 'Oft blockiert Smart App Control eine neue, unsignierte Datei. Ein frisch kopiertes agentd hilft manchmal, sonst muss es dort erlaubt werden.'
+          title: '{machine} startet agentd nicht',
+          hint: 'Unter Windows blockiert oft Smart App Control eine neue, unsignierte Datei, am Mac und unter Linux passt es manchmal nicht zum Prozessor. Ein frisch aufgespieltes agentd hilft oft, sonst muss es dort erlaubt werden.'
         },
-        not_windows: {
-          title: '{machine} ist kein Windows-Rechner',
-          hint: 'Bull verbindet sich bisher nur mit Windows. Mac und Linux kommen später.'
+        unsupported_system: {
+          title: 'Bull kennt das System von {machine} nicht',
+          hint: 'Bull verbindet sich mit Windows, macOS und Linux. Dieser Rechner läuft mit etwas anderem oder bietet keine Shell an.'
         }
       },
       assistant: {
@@ -964,7 +977,7 @@ export default {
         edit_title: 'Verbindung zu {machine}',
         edit_description: 'Adresse, Benutzer und Port, mit denen Bull sich per SSH anmeldet.',
         description:
-          'Bull meldet sich per SSH bei einem Windows-Rechner an und startet Claude dort.',
+          'Bull meldet sich per SSH bei einem Windows-, Mac- oder Linux-Rechner an und startet Claude dort.',
         suggestions: 'Aus deiner SSH-Konfiguration',
         host: 'Adresse',
         host_hint: 'Name im Netz, IP-Adresse oder ein Host aus ~/.ssh/config.',
@@ -1000,6 +1013,8 @@ export default {
           open_terminal: 'Terminal öffnen',
           paste: 'Füge dort diese Zeile ein und drück Enter:',
           again: 'Schließ das Terminal und prüf die Verbindung erneut.',
+          unix: 'Der Rechner ist ein Mac oder Linux-Rechner',
+          unix_hint: 'Dann legt die Zeile den Schlüssel in ~/.ssh/authorized_keys ab.',
           admin: 'Das Konto dort ist Administrator',
           admin_hint:
             'Für Administratoren liest Windows den Schlüssel nur aus C:\\ProgramData\\ssh\\administrators_authorized_keys. Die Zeile legt ihn dort ab und setzt die Rechte, die Windows verlangt.',
@@ -1023,9 +1038,13 @@ export default {
             'agentd auf {machine} sagt nicht, ob dort noch Chats laufen. Damit keiner abbricht, bleibt es, wie es ist. Versuch es gleich noch einmal.',
           copy_failed:
             'Das Kopieren hat nicht geklappt. Läuft agentd dort noch aus einem anderen Bull?',
+          download_failed:
+            '{machine} konnte agentd nicht laden. Bull lädt es dort aus dem GitHub-Release dieser Bull-Version. Ist der Rechner im Internet, und ist das Release mit agentd schon veröffentlicht? Ein Entwurf liefert noch nichts aus. Adresse: {url}',
+          own_agentd_missing:
+            'Bull findet sein eigenes agentd nicht und kann es deshalb nicht hinüberkopieren. Installier Bull neu.',
           invalid: 'Mit diesen Angaben kann Bull sich nicht verbinden.'
         },
-        old_kept: 'Die vorige Fassung liegt dort als agentd.old.exe daneben.',
+        old_kept: 'Die vorige Fassung liegt dort als {file} daneben.',
         done_title: '{machine} ist verbunden',
         done_hint:
           'agentd {version} antwortet. Bei einer neuen Session wählst du den Rechner jetzt aus. Claude braucht dort ein angemeldetes Konto.',
@@ -1363,6 +1382,7 @@ export default {
     }
   },
   terminal: {
+    desktop_only: 'Das geht nur in der Bull-App am PC: Hier im Browser gibt es kein Terminal.',
     title: 'Terminal',
     tab: 'Terminal',
     new_tab: 'Neuer Tab',
@@ -1429,6 +1449,60 @@ export default {
     retry: 'Erneut versuchen',
     refused: 'Zurückspulen ging nicht: {reason}',
     refused_code_back: 'Die Dateien sind zurück, der Chat aber nicht. Claude sagt: {reason}'
+  },
+  review: {
+    title: 'Änderungen ansehen',
+    description:
+      'Wähle Zeilen und schreib einen Kommentar dazu. Die Kommentare gehen gesammelt ins Eingabefeld.',
+    all: 'Alle Änderungen',
+    open_file: 'Änderungen an {name} ansehen, {added} hinzugefügt, {removed} entfernt',
+    show_in_chat: 'Im Chat zeigen',
+    show_in_chat_of: '{name} im Chat zeigen',
+    files: 'Geänderte Dateien',
+    position: '{n} von {count}',
+    previous: 'Vorherige Datei ({key})',
+    next: 'Nächste Datei ({key})',
+    status: { added: 'neu', deleted: 'gelöscht' },
+    source: {
+      no_repo:
+        'Kein git-Repository. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      no_git:
+        'Auf diesem Rechner fehlt git. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      unchanged:
+        'Die Datei gleicht dem letzten Commit. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      ignored:
+        'git ignoriert diese Datei. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      missing:
+        'Die Datei gibt es nicht mehr. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      too_big:
+        'Die Datei ist zu groß für einen Vergleich. Du siehst die Änderungen, die Claude in diesem Chat gemacht hat.',
+      failed:
+        'Der Rechner hat den Stand der Datei nicht geschickt. Du siehst die Änderungen aus dem Chat.'
+    },
+    truncated: 'Die Datei ist sehr groß. Du siehst nur die Zeilen um die Änderungen.',
+    binary_title: 'Binärdatei',
+    binary_hint: 'Diese Datei hat keine Zeilen, die sich zeigen lassen.',
+    nothing_title: 'Keine Änderungen',
+    nothing_hint: 'Weder git noch dieser Chat haben Zeilen zu dieser Datei.',
+    nothing_hint_unchanged:
+      'Die Datei gleicht dem letzten Commit, und der Chat hat keine Zeilen dazu.',
+    diff_label: 'Änderungen in {path}',
+    diff_hint:
+      'Pfeiltasten wählen eine Zeile, mit Umschalt mehrere. Eingabe schreibt einen Kommentar, Esc hebt die Auswahl auf. J und K wechseln die Datei.',
+    chosen: '{reference} gewählt: {text}',
+    unfold: '1 unveränderte Zeile zeigen | {n} unveränderte Zeilen zeigen',
+    line_added: 'Hinzugefügt, Zeile {line}:',
+    line_removed: 'Entfernt, Zeile {line}:',
+    line_kept: 'Zeile {line}:',
+    old_reference: '{reference} (vorher)',
+    comment_on: 'Kommentieren',
+    comment_label: 'Kommentar zu {reference}',
+    comment_placeholder: 'Was soll Claude hier ändern?',
+    comment_cancel: 'Abbrechen',
+    comment_add: 'Hinzufügen',
+    comment_remove: 'Kommentar zu {reference} entfernen',
+    comment_count: 'Keine Kommentare | 1 Kommentar | {n} Kommentare',
+    insert: 'Ins Eingabefeld'
   },
   context: {
     title: 'Kontext',

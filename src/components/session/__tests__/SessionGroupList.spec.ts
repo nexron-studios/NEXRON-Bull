@@ -9,7 +9,13 @@ import type { SessionRow } from '@/utils/sessionList'
 
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
-  agentdService: { send: vi.fn(), ask: vi.fn(), waitFor: vi.fn(), onEvent: () => () => {} }
+  agentdService: {
+    send: vi.fn(),
+    ask: vi.fn(),
+    waitFor: vi.fn(),
+    onEvent: () => () => {},
+    onReady: () => () => {}
+  }
 }))
 
 // jsdom has no Web Animations; the list's entrance asks every row for its running animations.

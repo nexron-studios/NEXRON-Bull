@@ -15,7 +15,7 @@ const { toast, ask, send } = vi.hoisted(() => ({
 vi.mock('vue-sonner', () => ({ toast: Object.assign(toast, { error: vi.fn(), success: vi.fn() }) }))
 vi.mock('@/api/services/agentd.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/agentd.service')>()),
-  agentdService: { ask, send, onEvent: () => () => {}, waitFor: vi.fn() }
+  agentdService: { ask, send, onEvent: () => () => {}, onReady: () => () => {}, waitFor: vi.fn() }
 }))
 
 const tab = (id: string) =>

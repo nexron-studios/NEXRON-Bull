@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { settingsSectionOf, shownSettingsSectionOf } from '../settings'
+import { offeredSettingsSectionsOf, settingsSectionOf, shownSettingsSectionOf } from '../settings'
 import { terminalShellChoiceOf } from '../terminalPreferences'
 
 describe('settingsSectionOf', () => {
@@ -25,6 +25,36 @@ describe('shownSettingsSectionOf', () => {
   it('should show the list on the bare page of a phone', () => {
     expect(shownSettingsSectionOf(undefined, true)).toBeNull()
     expect(shownSettingsSectionOf('terminal', true)).toBe('terminal')
+  })
+})
+
+describe('offeredSettingsSectionsOf', () => {
+  it('should offer every section in the app window', () => {
+    expect(offeredSettingsSectionsOf(true)).toEqual([
+      'accounts',
+      'limits',
+      'machines',
+      'notifications',
+      'terminal',
+      'worktrees',
+      'appearance'
+    ])
+  })
+
+  it('should leave out machines and terminal in a browser', () => {
+    expect(offeredSettingsSectionsOf(false)).toEqual([
+      'accounts',
+      'limits',
+      'notifications',
+      'worktrees',
+      'appearance'
+    ])
+  })
+
+  it('should open the first offered section for a link to one the browser lacks', () => {
+    const offered = offeredSettingsSectionsOf(false)
+    expect(shownSettingsSectionOf('terminal', false, offered)).toBe('accounts')
+    expect(shownSettingsSectionOf('terminal', true, offered)).toBeNull()
   })
 })
 

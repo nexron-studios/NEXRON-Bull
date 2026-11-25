@@ -1,10 +1,48 @@
 //! The checked-out branch of a working folder, read from the `HEAD` file instead of starting git:
 //! the app asks for every open tab, and a process per question would be slow on a remote machine.
+//! Where git itself has to answer (file lists, diffs), `run_git` starts it the one way agentd does.
 
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
+use crate::claude::hide_console;
 use crate::usage::native_path;
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitError {
+    #[error("git is not installed")]
+    Missing,
+    #[error("git could not start: {0}")]
+    Start(io::Error),
+    #[error("git failed: {0}")]
+    Failed(String),
+}
+
+/// Git in `dir`, its output on success. Paths are taken literally (`pages/[id].vue` is no glob)
+/// and printed unquoted; no optional locks, so a status taken here never makes a git command of
+/// Claude's fail on `index.lock`.
+pub fn run_git(dir: &Path, args: &[&str]) -> Result<Vec<u8>, GitError> {
+    let mut git = Command::new("git");
+    git.args(["--no-optional-locks", "--literal-pathspecs", "-c", "core.quotepath=off"])
+        .args(args)
+        .current_dir(dir)
+        // English messages whatever the user's locale: callers match git's stderr.
+        .env("LC_ALL", "C")
+        .env("LANGUAGE", "C")
+        .stdin(Stdio::null());
+    hide_console(&mut git);
+    let output = git.output().map_err(|err| match err.kind() {
+        io::ErrorKind::NotFound => GitError::Missing,
+        _ => GitError::Start(err),
+    })?;
+    if output.status.success() {
+        return Ok(output.stdout);
+    }
+    let message = String::from_utf8_lossy(&output.stderr);
+    Err(GitError::Failed(message.lines().next().unwrap_or_default().trim().to_string()))
+}
 
 /// Git's own short form of a commit id, shown for a detached `HEAD`.
 const SHORT_SHA_LEN: usize = 7;

@@ -1,5 +1,5 @@
 {
   "files": [],
-  "compilerOptions": { "paths": { "@/*": ["./src/*"] } },
+  "compilerOptions": { "paths": { "@/*": ["./src/*"], "@bridge/*": ["./bridge/src/*"] } },
   "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
 }

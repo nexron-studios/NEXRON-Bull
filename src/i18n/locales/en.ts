@@ -6,6 +6,18 @@ export default {
     save: 'Save',
     undo: 'Undo'
   },
+  bridge: {
+    title: 'Connect Bull on this device',
+    description:
+      'Bull in the browser reaches your chats through the bridge on the server. It only lets in devices with their own token.',
+    token: 'Device token',
+    token_hint: 'Printed by “npm run token” on the server. Bull keeps it in this browser.',
+    token_empty: 'Enter the token.',
+    token_rejected:
+      'The bridge does not know this token. Make a new one on the server and enter it here.',
+    unreachable: 'The bridge does not answer right now. Bull keeps trying.',
+    connect: 'Connect'
+  },
   chat_search: {
     open: 'Search this chat ({key})',
     placeholder: 'Search this chat …',
@@ -915,7 +927,7 @@ export default {
         },
         offline: {
           title: '{machine} does not answer',
-          hint: 'Is the machine on and in the same network or tailnet? The Windows service “OpenSSH SSH Server” has to run there.'
+          hint: 'Is the machine on and in the same network or tailnet? An SSH server has to run there: the service “OpenSSH SSH Server” on Windows, “Remote Login” in the System Settings on a Mac, sshd on Linux.'
         },
         auth_failed: {
           title: '{machine} does not know your key yet',
@@ -923,7 +935,7 @@ export default {
         },
         host_key_changed: {
           title: '{machine} shows a different key',
-          hint: 'This happens after Windows was reinstalled. If you changed nothing, do not connect. Otherwise forget the old key and check again.'
+          hint: 'This happens after the system was reinstalled. If you changed nothing, do not connect. Otherwise forget the old key and check again.'
         },
         host_key_unknown: {
           title: 'Bull does not know {machine} yet',
@@ -934,19 +946,20 @@ export default {
           hint: 'The connection works. Bull copies agentd over, into the .nexron-chat folder in the user folder there.'
         },
         agentd_blocked: {
-          title: 'Windows does not start agentd on {machine}',
-          hint: 'Smart App Control often blocks a new, unsigned file. A freshly copied agentd sometimes helps, otherwise it has to be allowed there.'
+          title: '{machine} does not start agentd',
+          hint: 'On Windows, Smart App Control often blocks a new, unsigned file; on a Mac or Linux it sometimes does not fit the processor. A freshly installed agentd often helps, otherwise it has to be allowed there.'
         },
-        not_windows: {
-          title: '{machine} is not a Windows machine',
-          hint: 'Bull connects to Windows only so far. Mac and Linux come later.'
+        unsupported_system: {
+          title: 'Bull does not know the system of {machine}',
+          hint: 'Bull connects to Windows, macOS and Linux. This machine runs something else or offers no shell.'
         }
       },
       assistant: {
         title: 'Connect another machine',
         edit_title: 'Connection to {machine}',
         edit_description: 'The address, user and port Bull signs in with over SSH.',
-        description: 'Bull logs into a Windows machine over SSH and starts Claude there.',
+        description:
+          'Bull logs into a Windows, Mac or Linux machine over SSH and starts Claude there.',
         suggestions: 'From your SSH config',
         host: 'Address',
         host_hint: 'Network name, IP address or a host from ~/.ssh/config.',
@@ -982,6 +995,8 @@ export default {
           open_terminal: 'Open terminal',
           paste: 'Paste this line there and press Enter:',
           again: 'Close the terminal and check the connection again.',
+          unix: 'The machine is a Mac or runs Linux',
+          unix_hint: 'Then the line puts the key into ~/.ssh/authorized_keys.',
           admin: 'The account there is an administrator',
           admin_hint:
             'For administrators, Windows reads the key only from C:\\ProgramData\\ssh\\administrators_authorized_keys. The line puts it there and sets the rights Windows asks for.',
@@ -1004,9 +1019,13 @@ export default {
           tabs_unknown:
             'agentd on {machine} does not say whether chats still run there. So none of them ends, it stays as it is. Try again in a moment.',
           copy_failed: 'Copying did not work. Does agentd still run there for another Bull?',
+          download_failed:
+            '{machine} could not download agentd. Bull fetches it there from the GitHub release of this Bull version. Is the machine online, and is the release with agentd published yet? A draft serves nothing. Address: {url}',
+          own_agentd_missing:
+            'Bull cannot find its own agentd, so it cannot copy it over. Reinstall Bull.',
           invalid: 'Bull cannot connect with these details.'
         },
-        old_kept: 'The previous version stays there as agentd.old.exe.',
+        old_kept: 'The previous version stays there as {file}.',
         done_title: '{machine} is connected',
         done_hint:
           'agentd {version} answers. A new session now offers this machine. Claude needs an account that is signed in there.',
@@ -1339,6 +1358,7 @@ export default {
     }
   },
   terminal: {
+    desktop_only: 'This only works in the Bull app on a computer: the browser has no terminal.',
     title: 'Terminal',
     tab: 'Terminal',
     new_tab: 'New tab',
@@ -1404,6 +1424,52 @@ export default {
     retry: 'Try again',
     refused: 'Could not rewind: {reason}',
     refused_code_back: 'The files went back, the chat did not. Claude says: {reason}'
+  },
+  review: {
+    title: 'Review changes',
+    description: 'Pick lines and comment on them. The comments go into the message box together.',
+    all: 'All changes',
+    open_file: 'Review changes to {name}, {added} added, {removed} removed',
+    show_in_chat: 'Show in chat',
+    show_in_chat_of: 'Show {name} in the chat',
+    files: 'Changed files',
+    position: '{n} of {count}',
+    previous: 'Previous file ({key})',
+    next: 'Next file ({key})',
+    status: { added: 'new', deleted: 'deleted' },
+    source: {
+      no_repo: 'Not a git repository. These are the changes Claude made in this chat.',
+      no_git: 'git is missing on this machine. These are the changes Claude made in this chat.',
+      unchanged:
+        'The file matches the last commit. These are the changes Claude made in this chat.',
+      ignored: 'git ignores this file. These are the changes Claude made in this chat.',
+      missing: 'The file is gone. These are the changes Claude made in this chat.',
+      too_big: 'The file is too large to compare. These are the changes Claude made in this chat.',
+      failed: "The machine didn't send the file. These are the changes from the chat."
+    },
+    truncated: 'The file is very large. Only the lines around the changes are shown.',
+    binary_title: 'Binary file',
+    binary_hint: 'This file has no lines to show.',
+    nothing_title: 'No changes',
+    nothing_hint: 'Neither git nor this chat has lines for this file.',
+    nothing_hint_unchanged: 'The file matches the last commit, and the chat has no lines for it.',
+    diff_label: 'Changes in {path}',
+    diff_hint:
+      'Arrow keys pick a line, with Shift several. Enter writes a comment, Esc clears the selection. J and K switch the file.',
+    chosen: '{reference} selected: {text}',
+    unfold: 'Show 1 unchanged line | Show {n} unchanged lines',
+    line_added: 'Added, line {line}:',
+    line_removed: 'Removed, line {line}:',
+    line_kept: 'Line {line}:',
+    old_reference: '{reference} (before)',
+    comment_on: 'Comment',
+    comment_label: 'Comment on {reference}',
+    comment_placeholder: 'What should Claude change here?',
+    comment_cancel: 'Cancel',
+    comment_add: 'Add',
+    comment_remove: 'Remove comment on {reference}',
+    comment_count: 'No comments | 1 comment | {n} comments',
+    insert: 'Into message box'
   },
   context: {
     title: 'Context',

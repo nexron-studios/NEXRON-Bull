@@ -11,7 +11,8 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
 
 - `npm run app:dev`: Tauri window, Vite on port **1460** (HMR 1461, `strictPort`).
 - `npm test` (Vitest), `npm run test:rust` (agentd with the fake Claude),
-  `npm run build`, `npm run format:check`.
+  `npm run test:bridge` (phone bridge, after `npm ci` in `bridge/`), `npm run build`,
+  `npm run format:check`.
 - `npm run app:build`: on macOS it then unregisters every Bull copy outside an Applications
   folder from LaunchServices (`scripts/forget-stale-bundles.mjs`). The DMG step leaves its
   temporary mount registered, so macOS could resolve Bull's bundle id to a vanished copy.
@@ -29,6 +30,16 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
   (`src-tauri/src/machine_setup.rs`: `test_machine`, `install_agentd`). `build.rs` builds agentd
   (release) into `src-tauri/binaries/` as the sidecar (`bundle.externalBin`); tauri-build puts it next to the app exe.
 - `src/`: Vue frontend.
+- `bridge/`: the phone bridge (TypeScript on Node 22.6+, `node:test`, own `package.json`). A
+  browser has no Tauri: `src/api/services/agentd.service.ts` picks its transport once
+  (`tauriTransport` or the WebSocket in `bridge.service.ts`, same lines and connection ids;
+  `bridge/src/protocol.ts` is shared as `@bridge/protocol`). What only the app window can do
+  asks `isDesktopApp()` in `src/lib/platform.ts`. The bridge
+  checks `Origin` and a device token (first message), runs one `agentd connect` per device and
+  machine and kills it when the socket goes. The browser asks `tabs` instead of `running` and
+  opens the tabs other apps started (`src/lib/runningTabs.ts`, attaching in
+  `src/stores/chatAttach.ts`). Terminal, login and the machine
+  settings are desktop only (`offeredSettingsSectionsOf`, `terminal.desktop_only`).
 
 ## This machine and other machines
 
@@ -36,7 +47,10 @@ Claude outlives the app on every machine: `agentd serve` runs in the background 
 port 14620, token in `%USERPROFILE%\.nexron-chat\agentd-14620.token`), and the app reattaches
 to running tabs on start and after a dropped connection. `connect` starts the server from its
 own exe; on Windows through WMI, because Windows' OpenSSH ends every process the SSH session
-started. The server exits about 30 s after the last tab there stopped and no app is connected.
+started; on macOS and Linux in its own session (`setsid`). There the server first asks the
+user's login shell for its PATH (`agentd/src/login_path.rs`), since neither `ssh -T` nor an app
+opened from the Finder has it and `claude` would not be found. The server exits about 30 s after
+the last tab there stopped and no app is connected.
 
 On this machine the app copies its sidecar to `%USERPROFILE%\.nexron-chat\agentd.exe`
 (Mac: `~/.nexron-chat/agentd`) when it differs and starts `connect` from there
@@ -51,13 +65,35 @@ it restarts; each start removes older copies no tab runs anymore. Tabs from a co
 `DISABLE_AUTOUPDATER=1`: the install updates from the terminal, never from a copy.
 `AGENTD_CLAUDE` is used as it is, without a copy.
 
+Other machines run Windows, macOS or Linux. The first ssh call of every check is `uname -sm`
+(cmd and PowerShell fail it); `machines.json` keeps the result as `os` (`windows`, `macos`,
+`linux`; missing counts as Windows), and `src-tauri/src/machine_os.rs` holds the line each
+system gets: `cmd /d /c .nexron-chat\agentd.exe connect` on Windows, because the PowerShell
+login shell passes only the first stdin line to a script; `sh -c '"$HOME/.nexron-chat/agentd"
+connect'` elsewhere, whatever the login shell is.
+
 On another machine, after changing `agentd/`, install it again: Settings › Machines › Check ›
-"Install agentd again" copies the app's sidecar over. It refuses while chats run there, stops the
-idle agentd, renames the old exe to `agentd.old.exe` and checks `hello` afterwards.
-`powershell -File scripts/deploy-agentd.ps1 <host>` does the same from a fresh build. It lands in
-`%USERPROFILE%\.nexron-chat\agentd.exe`. Windows targets only for now: the app
-starts it through `cmd /d /c`, because the PowerShell login shell passes only the
-first stdin line to a script.
+"Install agentd again". It refuses while chats run there, stops the idle agentd, keeps the old
+one as `agentd.old.exe` / `agentd.old` and checks `hello` afterwards. A Windows app copies its own
+sidecar to a Windows machine; every other pairing has the machine download `agentd-<target>`
+from the GitHub release of the app's own version (`curl` to a temporary name, then renamed), so
+a Mac or Linux machine needs a released version. `powershell -File scripts/deploy-agentd.ps1
+<host>` does the same from a fresh build (Windows) or from the file given as `-Binary` (macOS,
+Linux; the app installs the release). It lands in `%USERPROFILE%\.nexron-chat\agentd.exe` or `~/.nexron-chat/agentd`.
+
+## Releases
+
+The Windows installer is built here (`npm run app:build`) and uploaded by hand.
+`.github/workflows/release-unix.yml` runs on every pushed tag `v*` (or by hand with a tag): it
+builds the universal macOS `.dmg` (ad-hoc signed, not notarised) and `agentd-<target>` for Linux
+(musl, x86_64 and aarch64), macOS and Windows, and attaches them to that tag's release, drafting
+one if there is none. The tag must equal the version in `tauri.conf.json`. It runs `tauri build`
+itself, not `app:build`: the LaunchServices clean-up is for a Mac that keeps its build, and a
+runner is thrown away afterwards.
+Unix machines download `agentd-<target>` of their app's version, so only tags from after the
+macOS/Linux support build a usable one, and Mac/Linux installs fail until that release exists
+and is **published**: GitHub serves no files of a draft under `releases/download/<tag>/`, so the
+workflow's draft 404s for every machine until it is published.
 
 ## Deviations from the house rules
 
@@ -88,8 +124,9 @@ The wordmark font `src/assets/fonts/climate-crisis-latin-400.woff2` is shared wi
 The viewBox is optically centred: halfway between the bull's bounding box and its centre of mass
 (the heavy head sits low, the thin horn high), so it lines up with the wordmark and in the icons.
 
-The browser tab is installable as a PWA (`public/site.webmanifest`, `public/sw.js`). Chats
-still need the Tauri window: the browser has no way to reach `agentd`.
+The browser tab is installable as a PWA (`public/site.webmanifest`, `public/sw.js`). In a
+browser it reaches `agentd` through the bridge only (README, "Bull on the phone"); Vite proxies
+`/ws` to `BULL_BRIDGE_URL` (default `ws://127.0.0.1:3060`).
 
 ## shadcn-vue CLI
 

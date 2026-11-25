@@ -573,6 +573,11 @@ export const applyEvent = (tab: ChatTabState, event: AgentdEvent): ChatTabState 
     // Not in a worktree then: the next start goes to the folder itself, the notice says so.
     case 'worktree_refused':
       return { ...tab, status: 'ended', isWorktreePlanned: false, notice: event.message }
+    case 'permission_resolved':
+      // Decided in another app (the phone, the desktop): the card here goes, Claude goes on.
+      return tab.permission?.requestId === event.request_id
+        ? { ...tab, permission: null, status: tab.status === 'asking' ? 'working' : tab.status }
+        : tab
     case 'error':
       // While starting, the error is the start's: Claude never ran, the next prompt starts again.
       return {

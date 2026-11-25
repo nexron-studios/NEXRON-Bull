@@ -2,7 +2,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import { reactive, readonly, type Ref } from 'vue'
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { openLink } from '@/lib/links'
 import {
   terminalService,
   type TerminalEvent,
@@ -185,7 +185,7 @@ export const createTerminalSession = (options: TerminalSessionOptions): Terminal
   })
   const fitAddon = new FitAddon()
   term.loadAddon(fitAddon)
-  term.loadAddon(new WebLinksAddon((_event, uri) => void openUrl(uri).catch(handleError)))
+  term.loadAddon(new WebLinksAddon((_event, uri) => void openLink(uri).catch(handleError)))
 
   let shell = options.shell
   let ptyId: number | null = null

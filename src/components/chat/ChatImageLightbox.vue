@@ -16,6 +16,7 @@ import { imageMeta, stepIndex, type LightboxImage } from '@/utils/attachments'
 import type { LightboxMode } from '@/utils/lightbox'
 import type { Size } from '@/utils/markup'
 import { historyStepOf } from '@/utils/shortcuts'
+import { isTextField } from '@/utils/textField'
 
 // The large preview of an image from the composer or the history (Figma "20", "20b", "M19",
 // "M20"): view and page, or draw on it; either way a comment can go with it to the composer.
@@ -88,10 +89,6 @@ const focusStage = (event: Event) => {
   stage.value?.focus()
 }
 
-// The comment field keeps its own keys: text undo, and arrows that move the caret, not the image.
-const isTextField = (target: EventTarget | null) =>
-  target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
-
 const handleMarkKey = (event: KeyboardEvent) => {
   const action = historyStepOf(event)
   if (!action) return
@@ -100,6 +97,7 @@ const handleMarkKey = (event: KeyboardEvent) => {
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
+  // The comment field keeps its own keys: text undo, and arrows that move the caret.
   if (isTextField(event.target)) return
   if (isMarking.value) return handleMarkKey(event)
   const delta = KEY_STEPS[event.key]

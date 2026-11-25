@@ -11,6 +11,7 @@
 <img src="https://img.shields.io/badge/Tauri-2-4d7cff?style=flat-square&labelColor=19191a&logo=tauri&logoColor=f0efec" alt="Tauri 2">
 <img src="https://img.shields.io/badge/Vue-3-4d7cff?style=flat-square&labelColor=19191a&logo=vuedotjs&logoColor=f0efec" alt="Vue 3">
 <img src="https://img.shields.io/badge/Windows-11-4d7cff?style=flat-square&labelColor=19191a" alt="Windows 11">
+<img src="https://img.shields.io/badge/macOS-universal-4d7cff?style=flat-square&labelColor=19191a" alt="macOS, Apple silicon and Intel">
 <img src="https://img.shields.io/badge/Rust-1.90-4d7cff?style=flat-square&labelColor=19191a&logo=rust&logoColor=f0efec" alt="Rust 1.90">
 <img src="https://img.shields.io/badge/Claude_Code-headless-4d7cff?style=flat-square&labelColor=19191a&logo=anthropic&logoColor=f0efec" alt="Drives Claude Code headless">
 
@@ -72,8 +73,8 @@ The screenshots show made-up data. See [Screenshots](#screenshots-1) under Devel
 - **Accounts.** Every `~/.claude` and `~/.claude-<name>` profile can be an account. Switch a chat
   to another account and the session moves with it. When an account hits its limit, Bull moves
   the chat or waits for the reset, as you set it.
-- **Machines.** A setup assistant connects a Windows machine over SSH and installs `agentd`
-  there. Claude keeps running on it when Bull closes or the connection drops.
+- **Machines.** A setup assistant connects a Windows, Mac or Linux machine over SSH and
+  installs `agentd` there. Claude keeps running on it when Bull closes or the connection drops.
 - **Around the chat.** Sidebar grouped by what needs you, notifications, search, a terminal per
   folder, light and dark theme, phone layout.
 
@@ -81,7 +82,7 @@ The screenshots show made-up data. See [Screenshots](#screenshots-1) under Devel
 
 ### Requirements
 
-- Windows 11.
+- Windows 11 or macOS (Apple silicon or Intel).
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed, `claude` on the
   PATH, and logged in once.
 - To build: Node 22 and Rust 1.90 with the MSVC toolchain.
@@ -92,6 +93,10 @@ Download `Bull_<version>_x64-setup.exe` from the
 [latest release](https://github.com/nexron-studios/NEXRON-Bull/releases/latest), run it and start
 Bull from the Start menu. The installer is not signed yet, so Windows SmartScreen asks first:
 **More info › Run anyway**.
+
+On a Mac, download `Bull_<version>_universal.dmg` from the same release and drag Bull into
+Applications. It is not notarised yet, so macOS refuses the first start: right-click Bull ›
+**Open**, or on macOS 15 and later **System Settings › Privacy & Security › Open Anyway**.
 
 To build the installer yourself:
 
@@ -116,8 +121,9 @@ The installers land in `src-tauri/target/release/bundle/` (`nsis/` and `msi/`).
    when an account runs out: move the chat, ask first, or wait.
 5. **Connect another machine.** Settings › Machines › **Connect**. Enter the address or pick a
    host from `~/.ssh/config`. Bull checks the SSH login, tells you what is missing (a key, a host
-   key) and installs `agentd` there. The machine needs Windows, the OpenSSH server and Claude
-   Code logged in.
+   key) and installs `agentd` there. The machine needs Windows, macOS or Linux, an SSH server
+   and Claude Code logged in. A Mac or Linux machine downloads `agentd` from the GitHub release
+   of your Bull version.
 
 ## How it works
 
@@ -128,6 +134,33 @@ runs in the background on every machine (localhost only, token in the user folde
 keeps working when the window closes. Another machine is reached through `agentd connect` over
 `ssh -T`; history, profiles and usage come from the transcripts on that machine.
 
+## Bull on the phone
+
+The same app runs in a phone browser (iPhone and Android, installable as a PWA) and reaches the
+chats of a server through a small bridge (`bridge/`, Node 22.6 or newer). The bridge listens on
+`127.0.0.1:3060` only; a reverse proxy serves the built app and passes `/ws` to it. Each device
+signs in with its own long token, sent as the first WebSocket message, and the bridge accepts
+only the page origin it is told. It runs one `agentd connect` per device and machine and ends it
+when the device goes away; Claude keeps running under `agentd serve`. The phone takes over the
+tabs that run there, shows their questions and sends approvals; the desktop drops a card the
+phone decided. Closing such a tab on the phone only stops watching it; the app that started it
+keeps it running. Terminals, logging in and the machine setup stay in the desktop app.
+
+Set it up on the server (Windows, same user as Bull's `agentd`):
+
+```powershell
+cd bridge
+npm ci --omit=dev
+npm run token -- phone      # prints the token once; only its hash is kept
+powershell -File deploy\register-bridge-task.ps1 -Origin https://<host>
+```
+
+The token hashes live in `%USERPROFILE%\.nexron-chat\bridge-tokens`; deleting a line locks that
+device out. `bridge/deploy/Caddyfile.bull.template` is the proxy block (tailnet only), and
+`npm run build` puts the app into `dist/`. To try it locally, run a bridge on a side port and let
+Vite proxy `/ws` to it: `BULL_BRIDGE_PORT=3066 BULL_BRIDGE_ORIGINS=http://localhost:1476 npm start`
+in `bridge/`, then `BULL_BRIDGE_URL=ws://127.0.0.1:3066 npx vite --port 1476`.
+
 ## Develop
 
 ```bash
@@ -135,6 +168,7 @@ npm ci
 npm run app:dev      # Tauri window, Vite on port 1460
 npm test             # frontend tests (Vitest)
 npm run test:rust    # agentd tests with a fake Claude
+npm run test:bridge  # phone bridge tests (after npm ci in bridge/)
 npm run build        # type check and build
 npm run format:check
 ```

@@ -37,6 +37,7 @@ import ChatSessionBar from '@/components/chat/ChatSessionBar.vue'
 import ChatShellRuns from '@/components/chat/ChatShellRuns.vue'
 import ChatStreamItem from '@/components/chat/ChatStreamItem.vue'
 import ChatThinkingBar from '@/components/chat/ChatThinkingBar.vue'
+import ReviewDialog from '@/components/review/ReviewDialog.vue'
 import { useMachineLabel } from '@/composables/useMachineLabel'
 import { useChatFollow } from '@/composables/useChatFollow'
 import { useChatSearch } from '@/composables/useChatSearch'
@@ -400,5 +401,6 @@ watch(
     <ChatActivitySheet v-if="isCompact" v-model:open="isActivityOpen" :tab />
     <ChatContextDialog v-if="isCompact" :tab-id="tab.id" />
     <ChatRewindDialog :tab-id="tab.id" @rewound="composer?.focus()" />
+    <ReviewDialog :tab @insert="composer?.takeReview($event)" />
   </section>
 </template>

@@ -10,6 +10,8 @@ import {
   fitSize,
   markNumbersOf,
   markupNotesOf,
+  noteTextOf,
+  settledNotesOf,
   redoHistory,
   stepZoom,
   strokeWidthOf,
@@ -198,7 +200,7 @@ describe('numbered marks', () => {
       ['p', 2],
       ['a', 3]
     ])
-    expect(markupNotesOf([pin('p')], { p: 'bluer' }, 1)).toEqual(['② bluer'])
+    expect(markupNotesOf([pin('p')], { p: 'bluer' }, 1)).toEqual([{ number: 2, text: 'bluer' }])
   })
 
   it('should never number a text', () => {
@@ -206,16 +208,34 @@ describe('numbered marks', () => {
   })
 
   it('should forget the note of a mark that is gone', () => {
-    expect(markupNotesOf([mark('a')], { a: 'bleibt', gone: 'weg' })).toEqual(['① bleibt'])
+    expect(markupNotesOf([mark('a')], { a: 'bleibt', gone: 'weg' })).toEqual([
+      { number: 1, text: 'bleibt' }
+    ])
   })
 
   it('should put each note behind its number, on one line each', () => {
     const strokes = [mark('a'), pin('p'), mark('b')]
 
     expect(markupNotesOf(strokes, { a: 'zu weit\nlinks', b: 'Scrollleiste weg' })).toEqual([
-      '① zu weit links',
-      '③ Scrollleiste weg'
+      { number: 1, text: 'zu weit links' },
+      { number: 3, text: 'Scrollleiste weg' }
     ])
+  })
+
+  it('should write a note behind its circled number', () => {
+    expect([
+      noteTextOf({ number: 2, text: 'bluer' }),
+      noteTextOf({ number: 21, text: 'far' })
+    ]).toEqual(['② bluer', '(21) far'])
+  })
+
+  it('should keep edited notes on one line and drop the emptied ones', () => {
+    expect(
+      settledNotesOf([
+        { number: 1, text: ' much\nbigger ' },
+        { number: 2, text: '  ' }
+      ])
+    ).toEqual([{ number: 1, text: 'much bigger' }])
   })
 
   it('should leave a pin without a note out', () => {

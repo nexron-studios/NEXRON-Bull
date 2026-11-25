@@ -6,8 +6,10 @@ import {
   markNumbersOf,
   markupNotesOf,
   redoHistory,
+  settledNotesOf,
   undoHistory,
   withoutMark,
+  type MarkNote,
   type MarkupColor,
   type MarkupNotes,
   type MarkupSize,
@@ -35,16 +37,43 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const isKeepingOriginal = ref(false)
   /** Numbers already burnt into the image (a marked copy marked again); set by the preview */
   const burntIn = ref(0)
+  /** The attachment's notes from earlier rounds as it has them, and as they are being changed */
+  const savedNotes = ref<MarkNote[]>([])
+  const earlierNotes = ref<MarkNote[]>([])
 
   const strokes = computed(() => history.value.present)
   const canUndo = computed(() => history.value.past.length > 0)
   const canRedo = computed(() => history.value.future.length > 0)
-  const isDirty = computed(() => strokes.value.length > 0 || !!comment.value.trim())
+  const hasChangedNotes = computed(
+    () => JSON.stringify(settledNotesOf(earlierNotes.value)) !== JSON.stringify(savedNotes.value)
+  )
+  const isDirty = computed(
+    () => strokes.value.length > 0 || !!comment.value.trim() || hasChangedNotes.value
+  )
   const numbers = computed(() => markNumbersOf(strokes.value, notes.value, burntIn.value))
   /** The highest number in the image once this round is burnt in */
   const markCount = computed(() => burntIn.value + numbers.value.size)
-  /** The written notes behind their numbers, one line each, as they go into the composer */
-  const noteLines = computed(() => markupNotesOf(strokes.value, notes.value, burntIn.value))
+  /** Every note the image has once this round is applied: earlier ones as changed, then new ones */
+  const allNotes = computed(() => [
+    ...settledNotesOf(earlierNotes.value),
+    ...markupNotesOf(strokes.value, notes.value, burntIn.value)
+  ])
+
+  /** The image the preview shows now, and the notes it brings from earlier rounds. */
+  const load = (image: { markCount?: number; notes?: MarkNote[] } | null) => {
+    burntIn.value = image?.markCount ?? 0
+    savedNotes.value = image?.notes ?? []
+    earlierNotes.value = [...savedNotes.value]
+  }
+  /** An earlier note keeps its number, as that is burnt into the image; emptied, it goes on apply. */
+  const setEarlierNote = (number: number, text: string) => {
+    earlierNotes.value = earlierNotes.value.map((note) =>
+      note.number === number ? { number, text } : note
+    )
+  }
+  const removeEarlierNote = (number: number) => {
+    earlierNotes.value = earlierNotes.value.filter((note) => note.number !== number)
+  }
 
   const setNote = (id: string, text: string) => {
     notes.value = { ...notes.value, [id]: text }
@@ -81,6 +110,7 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const reset = () => {
     clearStrokes()
     comment.value = ''
+    earlierNotes.value = [...savedNotes.value]
   }
 
   return {
@@ -93,8 +123,11 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
     isKeepingOriginal,
     strokes,
     numbers,
-    noteLines,
-    burntIn,
+    allNotes,
+    earlierNotes,
+    load,
+    setEarlierNote,
+    removeEarlierNote,
     markCount,
     setNote,
     settleNote,

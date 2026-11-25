@@ -125,14 +125,9 @@ const handleKeydown = (event: KeyboardEvent) => {
   step(delta)
 }
 
-// A marked copy marked again numbers on after what is painted into it already.
-watch(
-  current,
-  (image) => {
-    markup.burntIn.value = image?.markCount ?? 0
-  },
-  { immediate: true }
-)
+// A marked copy marked again numbers on after what is painted into it already, and its notes
+// from earlier rounds come along to change.
+watch(current, (image) => markup.load(image), { immediate: true })
 
 watch(index, () => {
   natural.value = null
@@ -229,7 +224,7 @@ watch(isOpen, (open) => {
             @download="download"
           />
           <ChatMarkupComment
-            v-if="target && (isMarking || !isAttachment)"
+            v-if="target && (isMarking || !isAttachment || !!current.notes?.length)"
             class="w-full max-w-180 shrink-0"
             :is-marking
             :has-comment="!isAttachment"

@@ -75,6 +75,29 @@ describe('useChatStore: a chat in its own worktree', () => {
     )
   })
 
+  it('should name the worktree after the message as it goes out, notes included', () => {
+    const { chat, tab } = openWorktreeChat()
+    const shot = {
+      id: 'a',
+      name: 'shot.png',
+      mediaType: 'image/png' as const,
+      data: 'QUJD',
+      src: 'data:image/png;base64,QUJD',
+      bytes: 3,
+      notes: [{ number: 1, text: 'Knopf größer' }]
+    }
+
+    chat.send(tab.id, '', [shot])
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: 'start',
+        worktree: { hint: 'Zu [Bild 1 (shot.png)]: ① Knopf größer', root: null }
+      }),
+      null
+    )
+  })
+
   it('should work in the worktree agentd started Claude in', () => {
     const { chat, tab } = openWorktreeChat()
     chat.send(tab.id, 'Kalender', [])

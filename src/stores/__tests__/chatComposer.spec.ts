@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentdEvent, AgentdRequest } from '@/types/agentd.type'
+import type { AgentdEvent, AgentdRequest, PromptBlock } from '@/types/agentd.type'
 import { newTab, type ChatTabState } from '@/utils/chatTab'
+import type { MarkNote } from '@/utils/markup'
 import { useChatStore } from '../chat'
 import { useDraftStore } from '../drafts'
 import { useHeldPromptsStore } from '../heldPrompts'
@@ -243,5 +244,62 @@ describe('useChatStore with the composer', () => {
     expect(handler).toHaveBeenCalledWith('t1', 'now')
     release()
     expect(commands.run('t1', 'export', '')).toBe(false)
+  })
+})
+
+describe('useChatStore with the notes of marked images', () => {
+  const note = (number: number, text: string): MarkNote => ({ number, text })
+  const noted = (id: string, name: string, notes: MarkNote[]) => ({
+    id,
+    name,
+    mediaType: 'image/png' as const,
+    data: 'QUJD',
+    src: 'data:image/png;base64,QUJD',
+    bytes: 3,
+    notes
+  })
+  const textOf = (content: PromptBlock[]) =>
+    content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+
+  beforeEach(() => {
+    listeners.length = 0
+    send.mockClear()
+    setActivePinia(createPinia())
+  })
+
+  it("should write each image's notes in front of the text as the message goes out", () => {
+    const chat = openTab('idle')
+    const one = noted('a', 'one.png', [note(1, 'bigger'), note(2, 'bluer')])
+    const two = noted('b', 'two.png', [])
+    const three = noted('c', 'three.png', [note(1, 'smaller')])
+
+    chat.send('t1', 'please crop', [one, two, three])
+
+    expect(sentContents().map(textOf)).toEqual([
+      [
+        'About [Image 1 (one.png)]: ① bigger ② bluer\nAbout [Image 3 (three.png)]: ① smaller\n\nplease crop'
+      ]
+    ])
+  })
+
+  it('should give a held message back with its notes on the images, not in the text', () => {
+    const chat = openTab('working')
+    const one = noted('a', 'one.png', [note(1, 'bigger')])
+
+    chat.send('t1', 'please crop', [one])
+    void chat.interrupt('t1')
+
+    const draft = useDraftStore().draftOf('t1')
+    expect(draft.text).toBe('please crop')
+    expect(draft.images.map((image) => image.notes)).toEqual([[note(1, 'bigger')]])
+  })
+
+  it('should send a prompt from the history as it was, with no notes added again', () => {
+    const chat = openTab('idle')
+    const recalled = 'About [Image 1 (one.png)]: ① bigger\n\nplease crop'
+
+    chat.send('t1', recalled, [])
+
+    expect(sentContents().map(textOf)).toEqual([[recalled]])
   })
 })

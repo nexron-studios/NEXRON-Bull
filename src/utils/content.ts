@@ -1,4 +1,5 @@
 import type { PromptBlock } from '@/types/agentd.type'
+import type { MarkNote } from '@/utils/markup'
 
 /** Image types the Claude API accepts in a message. */
 export const imageTypeList = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
@@ -21,6 +22,11 @@ export interface PendingImage {
   isMarked?: boolean
   /** Numbers burnt into the image by earlier marking, so a next round goes on after them */
   markCount?: number
+  /**
+   * The notes of its marks with their numbers, every round so far. They stay on the attachment and
+   * are written into the text only when the message goes out.
+   */
+  notes?: MarkNote[]
 }
 
 /** One user turn as Anthropic content blocks: images first, then the text. */

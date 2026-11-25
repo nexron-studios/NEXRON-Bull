@@ -303,6 +303,7 @@ export default {
     preview_hint: 'Klick öffnet die Vorschau',
     pasted_name: 'Bild {time}.{ext}',
     open_marked: '{name} ansehen, markiert',
+    note_count: 'keine Notiz | {n} Notiz | {n} Notizen',
     marked: 'markiert',
     mode: 'Modus',
     view: 'Ansehen',
@@ -352,6 +353,7 @@ export default {
     note_placeholder: 'Was soll hier anders sein?',
     remove_mark: 'Markierung {n} entfernen',
     remove_mark_unnumbered: 'Markierung entfernen',
+    remove_note: 'Notiz {n} entfernen',
     text_label: 'Text im Bild',
     text_placeholder: 'Text, Enter setzt ihn',
     comment_hint:

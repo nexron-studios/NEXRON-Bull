@@ -14,7 +14,8 @@ import { SEND_CHORD, isRemoveKey } from '@/utils/shortcuts'
 
 // Under the desktop preview (Figma "20b"), in the same dialog as the image: the marks' notes and
 // the ways out. While marking, each numbered mark has its note here as well as on the image, so
-// the text and the spot it is about stay one thing. A sent image (`hasComment`) also gets a field
+// the text and the spot it is about stay one thing. An attachment's notes from earlier rounds come
+// first and can be changed or taken out here. A sent image (`hasComment`) also gets a field
 // for what Claude should change, ready while viewing too; an image still in the composer gets
 // none, as it is written about next to its chip there. "Ins Eingabefeld" hands it to the
 // composer to write on; "Senden" (Ctrl/Cmd+Enter) sends it as a message of its own.
@@ -51,7 +52,9 @@ const handleNoteKeydown = (event: KeyboardEvent, row: { id: string; isPin: boole
   event.preventDefault()
   markup.removeMark(row.id)
 }
-const hasNotes = computed(() => isMarking && rows.value.length > 0)
+const hasNotes = computed(
+  () => markup.earlierNotes.value.length > 0 || (isMarking && rows.value.length > 0)
+)
 
 const noteList = useTemplateRef('noteList')
 watch(
@@ -76,7 +79,37 @@ watch(
       :aria-label="t('images.notes_title')"
       class="-m-1 flex max-h-82 flex-col gap-1 overflow-y-auto overscroll-contain p-1"
     >
-      <li v-for="row in rows" :key="row.id" class="flex items-start gap-2">
+      <!-- An attachment's notes from earlier rounds: their marks are burnt in, so the number is
+           fixed and only the text changes; the × takes the note, not the mark. -->
+      <li
+        v-for="note in markup.earlierNotes.value"
+        :key="`earlier-${note.number}`"
+        class="flex items-start gap-2"
+      >
+        <span
+          class="mt-1 grid size-5 shrink-0 place-items-center rounded-full bg-secondary text-meta font-bold text-secondary-foreground ring-1 ring-border"
+          aria-hidden="true"
+        >
+          {{ note.number }}
+        </span>
+        <Textarea
+          :model-value="note.text"
+          rows="1"
+          :aria-label="`${t('images.note_label')} ${note.number}`"
+          :placeholder="t('images.note_placeholder')"
+          class="max-h-24 min-h-7 resize-none py-1 text-small"
+          @update:model-value="markup.setEarlierNote(note.number, String($event))"
+        />
+        <NchIconButton
+          :label="t('images.remove_note', { n: note.number })"
+          size="icon-xs"
+          class="mt-1 shrink-0 text-muted-foreground"
+          @click="markup.removeEarlierNote(note.number)"
+        >
+          <X aria-hidden="true" />
+        </NchIconButton>
+      </li>
+      <li v-for="row in isMarking ? rows : []" :key="row.id" class="flex items-start gap-2">
         <span
           class="mt-1 grid size-5 shrink-0 place-items-center rounded-full text-meta font-bold text-stage-foreground ring-1 ring-stage/50 [text-shadow:0_0_2px_rgb(0_0_0/0.6)]"
           :style="{ backgroundColor: row.color }"

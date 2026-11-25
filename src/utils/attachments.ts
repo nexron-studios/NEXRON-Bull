@@ -1,6 +1,6 @@
 import type { Block } from '@/types/agentd.type'
 import { MAX_IMAGE_BYTES, imageTypeList, type ImageType } from '@/utils/content'
-import type { Size } from '@/utils/markup'
+import type { MarkNote, Size } from '@/utils/markup'
 
 /** More images than this make one turn slow and expensive; the API allows more, the chat does not need them. */
 export const MAX_IMAGES_PER_MESSAGE = 10
@@ -90,6 +90,8 @@ export interface LightboxImage {
   isMarked?: boolean
   /** Numbers burnt into the image by earlier marking, so a next round goes on after them */
   markCount?: number
+  /** An attachment's notes from earlier rounds, open to change in the preview */
+  notes?: MarkNote[]
 }
 
 export const toDataUrl = (mediaType: string, data: string) => `data:${mediaType};base64,${data}`

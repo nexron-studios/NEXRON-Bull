@@ -10,7 +10,6 @@ import {
   type RefImage,
   type TextSelection
 } from '@/utils/imageRefs'
-import { noteLinesAfter, withNoteLines } from '@/utils/imageNotes'
 import type { Highlight } from '@/utils/textPieces'
 
 const DELETE_KEYS: Partial<Record<string, DeleteDirection>> = {
@@ -73,25 +72,6 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
     return caret
   }
 
-  const firstRefOf = (id: string) => refs.value.find(({ image }) => image.id === id)
-
-  /** The note lines the draft has under the image `id`'s chip from earlier rounds. */
-  const notesOf = (id: string) => {
-    const ref = firstRefOf(id)
-    return ref ? noteLinesAfter(draft.value, ref.end) : []
-  }
-
-  /**
-   * Note lines under the line with the first reference to the image `id`, after the notes it has
-   * there already, so they stay with the chip they mean; false when the draft names it nowhere.
-   */
-  const addNotes = (id: string, lines: readonly string[]) => {
-    const ref = firstRefOf(id)
-    if (!ref) return false
-    draft.value = withNoteLines(draft.value, ref.end, lines)
-    return true
-  }
-
   /**
    * Backspace or Delete at a reference selects all of it, so the browser removes it as one unit and
    * its own undo brings it back whole.
@@ -104,5 +84,5 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
     if (ref) field.setSelectionRange(ref.start, ref.end)
   }
 
-  return { format, highlights, follow, insert, notesOf, addNotes, selectWhole }
+  return { format, highlights, follow, insert, selectWhole }
 }

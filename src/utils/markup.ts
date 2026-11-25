@@ -244,12 +244,29 @@ export const circledNumberOf = (number: number) =>
     ? String.fromCodePoint(CIRCLED_ONE + number - 1)
     : `(${number})`
 
-/**
- * Each written note behind the number its mark has in the image ("① bigger"). One line per note,
- * so a note's own line breaks become spaces.
- */
-export const markupNotesOf = (strokes: readonly Stroke[], notes: MarkupNotes, burntIn = 0) =>
+/** A written note and the number its mark has in the image. */
+export interface MarkNote {
+  number: number
+  text: string
+}
+
+/** One line, so a note's own line breaks become spaces. */
+const oneLine = (text: string) => text.trim().replace(/\s*\n\s*/g, ' ')
+
+/** Each written note with the number its mark has in the image. */
+export const markupNotesOf = (
+  strokes: readonly Stroke[],
+  notes: MarkupNotes,
+  burntIn = 0
+): MarkNote[] =>
   [...markNumbersOf(strokes, notes, burntIn)].flatMap(([id, number]) => {
-    const note = (notes[id] ?? '').trim().replace(/\s*\n\s*/g, ' ')
-    return note ? [`${circledNumberOf(number)} ${note}`] : []
+    const text = oneLine(notes[id] ?? '')
+    return text ? [{ number, text }] : []
   })
+
+/** A note as Claude and the tooltip read it: "① bigger". */
+export const noteTextOf = ({ number, text }: MarkNote) => `${circledNumberOf(number)} ${text}`
+
+/** Notes as kept: each on one line, the ones emptied while editing gone. */
+export const settledNotesOf = (notes: readonly MarkNote[]): MarkNote[] =>
+  notes.flatMap(({ number, text }) => (oneLine(text) ? [{ number, text: oneLine(text) }] : []))

@@ -52,6 +52,25 @@ const openTab = (status: ChatTabState['status']) => {
 const sentContents = () =>
   send.mock.calls.flatMap(([message]) => (message.op === 'send' ? [message.content] : []))
 
+const textOf = (content: PromptBlock[]) =>
+  content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+
+const heldTexts = () =>
+  useHeldPromptsStore()
+    .heldOf('t1')
+    .map((prompt) => prompt.text)
+
+const turnEnd = (isError = false): AgentdEvent => ({
+  type: 'claude',
+  tab: 't1',
+  event: {
+    type: 'result',
+    subtype: isError ? 'error_during_execution' : 'success',
+    result: '',
+    is_error: isError
+  }
+})
+
 describe('useChatStore with the composer', () => {
   beforeEach(() => {
     listeners.length = 0
@@ -93,19 +112,21 @@ describe('useChatStore with the composer', () => {
     expect([chat.tabs[0].pending, chat.isSteering(pending.uuid)]).toEqual([[], false])
   })
 
-  it('should hold a slash command typed while Claude works until the turn ends', () => {
+  it('should hold a slash command typed while Claude works', () => {
     const chat = openTab('working')
 
     chat.send('t1', '/review', [])
-    expect(sentContents()).toEqual([])
-    expect(
-      useHeldPromptsStore()
-        .heldOf('t1')
-        .map((prompt) => prompt.text)
-    ).toEqual(['/review'])
 
-    emit({ type: 'claude', tab: 't1', event: { type: 'result', subtype: 'success', result: '' } })
-    expect(sentContents()).toEqual([[{ type: 'text', text: '/review' }]])
+    expect([sentContents(), heldTexts()]).toEqual([[], ['/review']])
+  })
+
+  it('should send a held slash command once the turn ends', () => {
+    const chat = openTab('working')
+    chat.send('t1', '/review', [])
+
+    emit(turnEnd())
+
+    expect([sentContents(), heldTexts()]).toEqual([[[{ type: 'text', text: '/review' }]], []])
   })
 
   it('should send a held message into the running turn when asked to', () => {
@@ -123,20 +144,57 @@ describe('useChatStore with the composer', () => {
     ]).toEqual([[[{ type: 'text', text: 'and check light mode' }]], [], 'asking', [true]])
   })
 
-  it('should hold a message typed while Claude waits for an approval and send it once the turn ends', () => {
+  it('should hold a message typed while Claude waits for an approval', () => {
     const chat = openTab('asking')
 
     chat.send('t1', 'and check light mode', [])
-    expect(sentContents()).toEqual([])
-    expect(
-      useHeldPromptsStore()
-        .heldOf('t1')
-        .map((prompt) => prompt.text)
-    ).toEqual(['and check light mode'])
 
-    emit({ type: 'claude', tab: 't1', event: { type: 'result', subtype: 'success', result: '' } })
-    expect(sentContents()).toEqual([[{ type: 'text', text: 'and check light mode' }]])
-    expect(useHeldPromptsStore().heldOf('t1')).toEqual([])
+    expect([sentContents(), heldTexts()]).toEqual([[], ['and check light mode']])
+  })
+
+  it('should send a message held during an approval once the turn ends', () => {
+    const chat = openTab('asking')
+    chat.send('t1', 'and check light mode', [])
+
+    emit(turnEnd())
+
+    expect([sentContents(), heldTexts()]).toEqual([
+      [[{ type: 'text', text: 'and check light mode' }]],
+      []
+    ])
+  })
+
+  it('should send held messages up to a slash command, and the command alone after its turn', () => {
+    const chat = openTab('asking')
+    chat.send('t1', 'one', [])
+    chat.send('t1', 'two', [])
+    chat.send('t1', '/review', [])
+    chat.send('t1', 'three', [])
+
+    emit(turnEnd())
+    const first = sentContents().map(textOf)
+    // Claude takes both into one turn, as one echo.
+    emit({
+      type: 'message',
+      tab: 't1',
+      message: {
+        uuid: 'u1',
+        role: 'user',
+        at: null,
+        blocks: [
+          { type: 'text', text: 'one' },
+          { type: 'text', text: 'two' }
+        ]
+      }
+    })
+    emit(turnEnd())
+    const second = sentContents().map(textOf)
+
+    expect([first, second, heldTexts()]).toEqual([
+      [['one'], ['two']],
+      [['one'], ['two'], ['/review']],
+      ['three']
+    ])
   })
 
   it('should put held messages back into the composer when Claude is stopped', () => {
@@ -321,9 +379,6 @@ describe('useChatStore with the notes of marked images', () => {
     bytes: 3,
     notes
   })
-  const textOf = (content: PromptBlock[]) =>
-    content.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-
   beforeEach(() => {
     listeners.length = 0
     send.mockClear()

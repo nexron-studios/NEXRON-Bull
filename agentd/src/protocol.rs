@@ -31,8 +31,15 @@ pub struct Envelope {
 pub enum Request {
     Hello,
     Start(StartParams),
-    /// `content` is a list of Anthropic content blocks (text, base64 image).
-    Send { tab: String, content: Vec<Value> },
+    /// `content` is a list of Anthropic content blocks (text, base64 image). `uuid` stamps the
+    /// message for Claude, so a message sent into a running turn can be withdrawn while it waits
+    /// (`cancel_async_message`).
+    Send {
+        tab: String,
+        content: Vec<Value>,
+        #[serde(default)]
+        uuid: Option<String>,
+    },
     Interrupt { tab: String },
     /// Answers a `can_use_tool` request; `decision` is `{behavior: allow|deny, ...}`.
     Permission { tab: String, request_id: String, decision: Value },

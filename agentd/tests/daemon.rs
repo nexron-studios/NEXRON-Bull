@@ -805,3 +805,22 @@ fn tells_an_app_that_attaches_which_background_tasks_still_run() {
     assert_eq!(replayed["event"]["tasks"][0]["task_id"], "b1");
     agentd.send(json!({ "op": "stop", "tab": "t70" }));
 }
+
+#[test]
+fn stamps_a_message_with_the_uuid_the_app_gave_it() {
+    let cwd = temp_dir("stamp-cwd");
+    let mut agentd = Agentd::spawn();
+    agentd.send(json!({ "op": "start", "tab": "t80", "cwd": cwd, "profile": null, "resume": null, "model": null, "permission_mode": null }));
+    agentd.expect(|e| e["type"] == "started" && e["tab"] == "t80");
+
+    agentd.send(json!({ "op": "send", "tab": "t80", "uuid": "0b7c1c52-5d6e-4c1a-9f3e-2a1b0c9d8e7f", "content": [{ "type": "text", "text": "stamp" }] }));
+    let stamped = agentd.expect(|e| e["type"] == "message" && e["tab"] == "t80");
+    agentd.send(json!({ "op": "send", "tab": "t80", "content": [{ "type": "text", "text": "stamp" }] }));
+    let plain = agentd.expect(|e| e["type"] == "message" && e["tab"] == "t80");
+
+    assert_eq!(
+        (stamped["message"]["blocks"][0]["text"].as_str(), plain["message"]["blocks"][0]["text"].as_str()),
+        (Some("echo: 0b7c1c52-5d6e-4c1a-9f3e-2a1b0c9d8e7f"), Some("echo: unstamped"))
+    );
+    agentd.send(json!({ "op": "stop", "tab": "t80" }));
+}

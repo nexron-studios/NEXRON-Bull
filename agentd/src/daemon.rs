@@ -197,8 +197,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 Ok(())
             }
             Request::Start(params) => self.start(id, params),
-            Request::Send { tab, content } if self.queue_if_waiting(&tab, &content) => Ok(()),
-            Request::Send { tab, content } => self.send_prompt(&tab, &content).inspect(|()| self.retitle(&tab, &content)),
+            Request::Send { tab, content, .. } if self.queue_if_waiting(&tab, &content) => Ok(()),
+            Request::Send { tab, content, uuid } => {
+                self.send_stamped(&tab, &content, uuid.as_deref()).inspect(|()| self.retitle(&tab, &content))
+            }
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
                 self.forget_ask(&tab, &request_id);
@@ -651,7 +653,15 @@ impl<W: Write + Send + 'static> Daemon<W> {
 
     /// One user message to Claude; the turn runs from here.
     pub(crate) fn send_prompt(&self, tab: &str, content: &[Value]) -> Result<(), DaemonError> {
-        self.write(tab, &json!({ "type": "user", "message": { "role": "user", "content": content } }))?;
+        self.send_stamped(tab, content, None)
+    }
+
+    fn send_stamped(&self, tab: &str, content: &[Value], uuid: Option<&str>) -> Result<(), DaemonError> {
+        let mut message = json!({ "type": "user", "message": { "role": "user", "content": content } });
+        if let Some(uuid) = uuid {
+            message["uuid"] = Value::String(uuid.to_string());
+        }
+        self.write(tab, &message)?;
         self.with_session(tab, |session| session.is_working = true);
         Ok(())
     }

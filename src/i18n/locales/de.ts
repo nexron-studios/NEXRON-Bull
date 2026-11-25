@@ -477,7 +477,7 @@ export default {
     files_truncated: 'Nur die ersten {n} Dateien des Ordners',
     no_files: 'Keine Datei passt zu „{query}“.',
     folder_files: '{n} Datei | {n} Dateien',
-    queue_title: 'Geht raus, sobald Claude fertig ist',
+    queue_title: 'Wartet aufs Ende des Turns',
     queue_send_now: 'Nachricht {n} jetzt einwerfen',
     queue_edit: 'Nachricht {n} bearbeiten',
     queue_remove: 'Nachricht {n} entfernen',

@@ -70,6 +70,10 @@ fn main() {
                 if text == "args" {
                     text = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
                 }
+                // Lets a test see the uuid agentd stamped the message with.
+                if text == "stamp" {
+                    text = message["uuid"].as_str().unwrap_or("unstamped").to_string();
+                }
                 if text == "/clear" {
                     say(json!({ "type": "conversation_reset", "trigger": "clear" }));
                     say(json!({ "type": "system", "subtype": "init", "session_id": "cleared-session" }));

@@ -20,6 +20,7 @@ import type {
   AfterMove,
   AgentdEvent,
   AgentdRequest,
+  ChatMessage,
   PromptBlock,
   ProfileProps,
   SessionSummaryProps
@@ -60,12 +61,20 @@ import { isWaitingTab, withLimit } from '@/utils/limits'
 import { moveItem } from '@/utils/order'
 import {
   draftWithUnsent,
+  heldBatchSizeOf,
   isHeldWhile,
   pendingMessageOf,
   type SentDraft
 } from '@/utils/pendingPrompts'
 import { shellPromptBlocks } from '@/utils/shellBlocks'
 import { parseSlashInput } from '@/utils/slashCommands'
+import {
+  isToolResultEvent,
+  steeringOf,
+  turnEndOf,
+  withReadingPoint,
+  type Steering
+} from '@/utils/steering'
 import { withSubagentEvent } from '@/utils/subagentActions'
 import {
   agentNoticesOf,
@@ -124,6 +133,8 @@ export class ClearRefusedError extends Error {
 interface QueuedPrompt {
   uuid: string
   content: PromptBlock[]
+  /** The uuid Claude gets with the message, for one sent into a running turn */
+  stamp?: string
 }
 
 export const useChatStore = defineStore(
@@ -142,9 +153,9 @@ export const useChatStore = defineStore(
     const unechoed = new Set<string>()
     // The `!` runs each pending prompt took along; they go back to the chat if it never gets out.
     const sentShell = new Map<string, ShellRun[]>()
-    // Pending prompts sent into a running turn: the chat says Claude reads them at its next step.
-    // Reactive, the prompt's line in the chat reads it.
-    const steering = ref(new Set<string>())
+    // Pending prompts sent into a running turn, by their uuid, until Claude read them. Reactive:
+    // the prompt's line in the chat says Claude reads it at its next step.
+    const steering = ref(new Map<string, Steering>())
 
     const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeId.value) ?? null)
     /**
@@ -214,6 +225,13 @@ export const useChatStore = defineStore(
     /** Sent into the running turn and not read by Claude yet. */
     const isSteering = (uuid: string) => steering.value.has(uuid)
 
+    /** The tab's prompts sent into a running turn that Claude has not read yet, oldest first. */
+    const steeringIn = (id: string) =>
+      (tabOf(id)?.pending ?? []).flatMap((prompt) => {
+        const sent = steering.value.get(prompt.uuid)
+        return sent ? [{ prompt, ...sent }] : []
+      })
+
     const forgetShell = (uuid: string) => {
       sentShell.delete(uuid)
       unechoed.delete(uuid)
@@ -225,11 +243,13 @@ export const useChatStore = defineStore(
       for (const prompt of before) if (!waiting.has(prompt.uuid)) forgetDraft(id, prompt.uuid)
     }
 
-    const sendNow = (id: string, { uuid, content }: QueuedPrompt) =>
-      toTab(id, { op: 'send', tab: id, content }).catch((error: unknown) => {
-        handleError(error)
-        giveBack(id, [uuid])
-      })
+    const sendNow = (id: string, { uuid, content, stamp }: QueuedPrompt) =>
+      toTab(id, { op: 'send', tab: id, content, ...(stamp ? { uuid: stamp } : {}) }).catch(
+        (error: unknown) => {
+          handleError(error)
+          giveBack(id, [uuid])
+        }
+      )
 
     /** A planned worktree is named after the prompt that starts Claude: the first one waiting. */
     const worktreePlanOf = (tab: ChatTabState) => {
@@ -281,10 +301,12 @@ export const useChatStore = defineStore(
       Object.assign(draft, draftWithUnsent(draft, held, imageRefFormat()))
     }
 
-    // Claude finished: what was typed meanwhile goes out now, one right after the other; Claude
-    // takes the later ones into the same turn. A turn that ended at the limit queues them there.
+    // Claude finished: what was held goes out now, one right after the other; Claude takes the
+    // later ones into the same turn. A slash command runs only as a turn of its own, so it goes
+    // alone and the rest waits for its end. A turn that ended at the limit queues them there.
     const flushHeld = (id: string) => {
-      for (const prompt of useHeldPromptsStore().takeAll(id))
+      const held = useHeldPromptsStore()
+      for (const prompt of held.take(id, heldBatchSizeOf(held.heldOf(id))))
         if (!queueForLimit(id, prompt.text, prompt.images)) dispatch(id, prompt.text, prompt.images)
     }
 
@@ -292,16 +314,48 @@ export const useChatStore = defineStore(
     const refreshRecent = (machine: Machine) =>
       void queryClient.invalidateQueries({ queryKey: ['agentd', 'recent', machine] })
 
-    /** Claude answers: it took the prompts it does not echo, so they become messages as sent. */
+    /** A pending prompt becomes a message as sent, where Claude read it. */
+    const settle = (id: string, prompt: ChatMessage) => {
+      unechoed.delete(prompt.uuid)
+      update(id, (tab) => applyEvent(tab, { type: 'message', tab: id, message: prompt }))
+    }
+
+    /**
+     * Claude answers: it took the prompts it does not echo, so they become messages as sent. One
+     * sent into the running turn only once Claude came to read it, at a tool result or the turn's
+     * end; an answer before that was still about something else.
+     */
     const settleUnechoed = (id: string, event: AgentdEvent) => {
       const isAnswer =
-        (event.type === 'message' && event.message.role === 'assistant') ||
-        (event.type === 'claude' && event.event.type === 'result')
+        (event.type === 'message' && event.message.role === 'assistant') || !!turnEndOf(event)
       if (!isAnswer) return
       for (const prompt of tabOf(id)?.pending.filter(({ uuid }) => unechoed.has(uuid)) ?? []) {
-        unechoed.delete(prompt.uuid)
-        update(id, (tab) => applyEvent(tab, { type: 'message', tab: id, message: prompt }))
+        const sent = steering.value.get(prompt.uuid)
+        if (!sent || sent.isDue) settle(id, prompt)
       }
+    }
+
+    /**
+     * A turn ended with prompts sent into it still unread: Claude takes them as its next turn, so
+     * the tab keeps running instead of finishing (and the planned account move waits). Only once:
+     * a prompt still unread at the end of that next turn is settled as sent, so no line waits for
+     * an echo forever. An error result (a stop, a failure) ends the turn for real; what Claude
+     * still holds shows up with its own turn.
+     */
+    const carriesTurn = (id: string, event: AgentdEvent): boolean => {
+      const end = turnEndOf(event)
+      if (!end) return false
+      const unread = steeringIn(id)
+      for (const { prompt } of unread.filter((sent) => sent.isCarried)) settle(id, prompt)
+      return !end.isError && unread.some((sent) => !sent.isCarried)
+    }
+
+    /** Claude got to a point where it reads what waits for it. */
+    const markReadingPoint = (id: string, event: AgentdEvent) => {
+      const isTurnEnd = !!turnEndOf(event)
+      if (!isTurnEnd && !isToolResultEvent(event)) return
+      for (const { prompt, ...sent } of steeringIn(id))
+        steering.value.set(prompt.uuid, withReadingPoint(sent, isTurnEnd))
     }
 
     const onEvent = (event: AgentdEvent) => {
@@ -317,7 +371,12 @@ export const useChatStore = defineStore(
       if (event.type === 'exited' || isRefused) giveBack(id)
       if (event.type === 'exited') giveBackHeld(id)
       settleUnechoed(id, event)
-      update(id, (tab) => withTurnClock(applyEvent(tab, stampArrival(event, now)), now))
+      const isCarried = carriesTurn(id, event)
+      update(id, (tab) => {
+        const next = applyEvent(tab, stampArrival(event, now))
+        return withTurnClock(isCarried ? { ...next, status: 'working' } : next, now)
+      })
+      markReadingPoint(id, event)
       if (event.type === 'worktree_refused')
         update(id, (tab) => ({ ...tab, notice: startRefusalNoticeOf(event) }))
       forgetSettled(id, pendingBefore)
@@ -469,19 +528,21 @@ export const useChatStore = defineStore(
       sentDrafts.set(prompt.uuid, { text, images })
       rememberImageNames(id, prompt.uuid)
       update(id, (t) => withPendingPrompt(t, prompt))
-      const entry = { uuid: prompt.uuid, content }
       if (tab.status === 'ended' || tab.status === 'starting') {
+        const entry = { uuid: prompt.uuid, content }
         queued.value.set(id, [...(queued.value.get(id) ?? []), entry])
         if (tab.status === 'ended') start(tab)
         return
       }
-      // Into a running turn: the turn and an open approval stay as they are.
+      // Into a running turn: the turn and an open approval stay as they are, and the message gets
+      // a uuid, so a stop can still withdraw it while it waits.
       const isRunning = tab.status === 'working' || tab.status === 'asking'
-      if (isRunning) steering.value.add(prompt.uuid)
+      const stamp = isRunning ? crypto.randomUUID() : undefined
+      if (stamp) steering.value.set(prompt.uuid, steeringOf(stamp))
       update(id, (t) =>
         withTurnClock(isRunning ? t : { ...t, status: 'working', notice: null }, now)
       )
-      void sendNow(id, entry)
+      void sendNow(id, { uuid: prompt.uuid, content, stamp })
     }
 
     /**
@@ -587,15 +648,43 @@ export const useChatStore = defineStore(
       giveBack(id)
     }
 
-    const interrupt = (id: string) => {
+    const interrupt = async (id: string) => {
       giveBackHeld(id)
       // Claude has not started yet: stopping takes what waits back into the composer. Claude still
       // starts and then idles; only the prompt is withdrawn.
-      if (hasQueued(id)) {
-        giveBackQueued(id)
-        return Promise.resolve()
-      }
+      if (hasQueued(id)) return giveBackQueued(id)
+      // Before the stop: once the turn ends, Claude would start the next one with what waits.
+      await withdrawUnread(id)
       return toTab(id, { op: 'interrupt', tab: id }).catch(handleError)
+    }
+
+    /**
+     * Stop takes back what was sent into the turn and is still waiting: Claude drops it from its
+     * queue (`cancel_async_message`) and it goes back into the composer. One Claude already read
+     * stays; so does one an older Claude Code cannot withdraw, which it then runs after the stop.
+     */
+    const withdrawUnread = async (id: string) => {
+      const outcomes = await Promise.all(
+        steeringIn(id).map(async ({ prompt, stamp }) => ({
+          uuid: prompt.uuid,
+          isWithdrawn: await isWithdrawn(id, stamp)
+        }))
+      )
+      giveBack(
+        id,
+        outcomes.filter((outcome) => outcome.isWithdrawn).map((outcome) => outcome.uuid)
+      )
+    }
+
+    const isWithdrawn = async (id: string, stamp: string): Promise<boolean> => {
+      try {
+        const answer = await askClaude(id, { subtype: 'cancel_async_message', message_uuid: stamp })
+        return (answer as { cancelled?: unknown } | null)?.cancelled === true
+      } catch (error: unknown) {
+        // An older Claude Code without the request: the message stays and runs after the stop.
+        console.warn('chat.withdraw_failed', { message: String(error) })
+        return false
+      }
     }
 
     /** Ctrl+B: the running call goes on in the background, Claude's turn continues. */

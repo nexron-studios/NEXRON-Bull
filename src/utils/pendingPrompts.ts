@@ -15,6 +15,16 @@ const PENDING_PREFIX = 'pending:'
 export const isHeldWhile = (status: TabStatus, text: string): boolean =>
   status === 'asking' || (status === 'working' && parseSlashInput(text) !== null)
 
+/**
+ * How many held messages go out together once Claude is done: all up to the first slash command,
+ * or the slash command alone when it comes first. The rest waits for the end of that turn.
+ */
+export const heldBatchSizeOf = (held: { text: string }[]): number => {
+  const slashAt = held.findIndex((prompt) => parseSlashInput(prompt.text) !== null)
+  if (slashAt < 0) return held.length
+  return slashAt === 0 ? 1 : slashAt
+}
+
 /** What the user typed and attached for one prompt, to put back if it never reaches Claude. */
 export interface SentDraft {
   text: string

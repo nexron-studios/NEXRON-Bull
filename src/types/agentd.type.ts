@@ -409,7 +409,8 @@ export type PromptBlock =
 export type AgentdRequest =
   | { op: 'hello' }
   | ({ op: 'start' } & StartPayload)
-  | { op: 'send'; tab: string; content: PromptBlock[] }
+  /** `uuid`: Claude knows the message by it, to withdraw it while it waits (`cancel_async_message`) */
+  | { op: 'send'; tab: string; content: PromptBlock[]; uuid?: string }
   | { op: 'interrupt'; tab: string }
   | { op: 'permission'; tab: string; request_id: string; decision: Record<string, unknown> }
   | { op: 'stop'; tab: string }

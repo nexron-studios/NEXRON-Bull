@@ -7,6 +7,7 @@ import {
   Eye,
   Info,
   Lightbulb,
+  ListChecks,
   MessageCircleQuestion,
   Reply,
   TriangleAlert,
@@ -33,7 +34,10 @@ const {
   hasActions = false
 } = defineProps<{ callout: CalloutProps; html: string; hasActions?: boolean }>()
 
+// `changes` lists every feature and fix asked for with its state; lila like a tool that changes
+// something, so it reads apart from the grey details below it.
 const LOOKS: Record<CalloutKind, { icon: Component; glow: GlowTone; tone: string }> = {
+  changes: { icon: ListChecks, glow: 'change', tone: 'text-act-change' },
   info: { icon: Info, glow: 'muted', tone: 'text-muted-foreground' },
   warning: { icon: TriangleAlert, glow: 'critical', tone: 'text-critical' },
   preview: { icon: Eye, glow: 'outside', tone: 'text-act-outside' },

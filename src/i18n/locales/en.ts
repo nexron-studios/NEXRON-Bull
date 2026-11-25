@@ -160,6 +160,7 @@ export default {
     sent_now: 'just now',
     sent_ago: '{age} ago',
     callout: {
+      changes: 'Requests',
       info: 'Details',
       warning: 'Heads-up',
       preview: 'Where to see it',

@@ -1,5 +1,13 @@
 /** The callouts Claude writes at the end of an answer, in Obsidian syntax (`> [!question] …`). */
-export const calloutKindList = ['info', 'warning', 'preview', 'todo', 'tip', 'question'] as const
+export const calloutKindList = [
+  'changes',
+  'info',
+  'warning',
+  'preview',
+  'todo',
+  'tip',
+  'question'
+] as const
 export type CalloutKind = (typeof calloutKindList)[number]
 
 export interface CalloutProps {

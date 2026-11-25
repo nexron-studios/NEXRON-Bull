@@ -161,6 +161,7 @@ export default {
     sent_now: 'jetzt',
     sent_ago: 'vor {age}',
     callout: {
+      changes: 'Aufträge',
       info: 'Einzelheiten',
       warning: 'Achtung',
       preview: 'So siehst du es',

@@ -12,6 +12,7 @@
     "app:build": "tauri build && node scripts/forget-stale-bundles.mjs",
     "icons": "node scripts/make-icons.mjs",
     "test": "vitest run",
+    "test:bridge": "npm --prefix bridge test",
     "test:rust": "cargo test --manifest-path agentd/Cargo.toml --features fake-claude",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

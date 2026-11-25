@@ -7,6 +7,7 @@ import { useCopyOnSelect } from '../useCopyOnSelect'
 
 const { writeText } = vi.hoisted(() => ({ writeText: vi.fn(() => Promise.resolve()) }))
 vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({ writeText }))
+vi.mock('@/lib/platform', () => ({ isDesktopApp: () => true }))
 
 const Page = defineComponent({
   setup: () => {

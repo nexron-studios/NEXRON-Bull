@@ -39,13 +39,29 @@ export const SETTINGS_SECTION_ICON: Record<SettingsSection, Component> = {
   appearance: Sun
 }
 
+/**
+ * Sections only the app window can serve: the machine checks run ssh from it, and terminals are
+ * its own processes. A browser reaches agentd through the bridge and has neither.
+ */
+const DESKTOP_ONLY_SECTIONS: readonly SettingsSection[] = ['machines', 'terminal']
+
+/** The sections this window offers, in their order. */
+export const offeredSettingsSectionsOf = (isDesktopApp: boolean): SettingsSection[] =>
+  settingsSectionList.filter((section) => isDesktopApp || !DESKTOP_ONLY_SECTIONS.includes(section))
+
 /** The section in `/settings/:section`; `null` for the bare page or an unknown name. */
-export const settingsSectionOf = (param: unknown): SettingsSection | null =>
-  settingsSectionList.find((section) => section === param) ?? null
+export const settingsSectionOf = (
+  param: unknown,
+  offered: readonly SettingsSection[] = settingsSectionList
+): SettingsSection | null => offered.find((section) => section === param) ?? null
 
 /**
  * The section the page shows for `/settings/:section`. A phone shows the list (`null`) on the bare
  * page; wider up there is room for a section next to the list, so the bare page opens the first.
  */
-export const shownSettingsSectionOf = (param: unknown, isPhone: boolean): SettingsSection | null =>
-  isPhone ? settingsSectionOf(param) : (settingsSectionOf(param) ?? settingsSectionList[0])
+export const shownSettingsSectionOf = (
+  param: unknown,
+  isPhone: boolean,
+  offered: readonly SettingsSection[] = settingsSectionList
+): SettingsSection | null =>
+  isPhone ? settingsSectionOf(param, offered) : (settingsSectionOf(param, offered) ?? offered[0])

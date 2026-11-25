@@ -23,12 +23,16 @@ const emit = defineEmits<{ toggle: [] }>()
     >
       <slot />
     </div>
-    <PanelFoldButton
-      v-if="isFoldable"
-      :is-expanded
-      :hidden-count
-      :controls
-      @toggle="emit('toggle')"
-    />
+    <!-- The list's own actions share the row with the fold. -->
+    <div v-if="isFoldable || $slots.actions" class="flex items-center gap-2">
+      <PanelFoldButton
+        v-if="isFoldable"
+        :is-expanded
+        :hidden-count
+        :controls
+        @toggle="emit('toggle')"
+      />
+      <slot name="actions" />
+    </div>
   </div>
 </template>

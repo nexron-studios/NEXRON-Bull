@@ -1,35 +1,16 @@
-import { invoke } from '@tauri-apps/api/core'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { AgentdDisconnectedError, AgentdTimeoutError, type Machine } from '@/api/agentdErrors'
+import type { AgentdTransport } from '@/api/agentdTransport'
+import { bridgeService } from '@/api/services/bridge.service'
+import { tauriTransport } from '@/api/services/tauriTransport'
+import { isDesktopApp } from '@/lib/platform'
 import type { AgentdEvent, AgentdRequest } from '@/types/agentd.type'
 
-const AGENTD_EVENT = 'agentd'
-
-/** The name of another machine in Bull's list; `null` is this computer. */
-export type Machine = string | null
+export { AgentdDisconnectedError, AgentdTimeoutError, type Machine }
 
 type Listener = (event: AgentdEvent) => void
 
-/** No answer in time; the machine may be offline or run an agentd without this op. */
-export class AgentdTimeoutError extends Error {
-  readonly machine: Machine
-
-  constructor(machine: Machine) {
-    super(`agentd on ${machine ?? 'this computer'} did not answer in time`)
-    this.name = 'AgentdTimeoutError'
-    this.machine = machine
-  }
-}
-
-/** The connection to the machine ended before it answered, e.g. ssh could not reach the host. */
-export class AgentdDisconnectedError extends Error {
-  readonly machine: Machine
-
-  constructor(machine: Machine) {
-    super(`connection to ${machine ?? 'this computer'} ended before agentd answered`)
-    this.name = 'AgentdDisconnectedError'
-    this.machine = machine
-  }
-}
+/** Chosen once: a page never moves between the app window and a browser. */
+const transport: AgentdTransport = isDesktopApp() ? tauriTransport : bridgeService
 
 const listeners = new Set<Listener>()
 interface Waiter {
@@ -47,7 +28,7 @@ const pending = new Map<number, Waiter>()
 // per lost connection, so this stays small.
 const endedConnections = new Set<number>()
 let nextId = 1
-let unlisten: Promise<UnlistenFn> | null = null
+let unlisten: Promise<() => void> | null = null
 
 const fail = (id: number, error: Error) => {
   const waiter = pending.get(id)
@@ -85,14 +66,15 @@ const dispatch = (event: AgentdEvent) => {
   listeners.forEach((listener) => listener(event))
 }
 
-// One window listener for the whole app; components subscribe through `onEvent`.
-// Local and remote agentd share it: tab and request ids are unique app-wide.
-const ensureListening = () =>
-  (unlisten ??= listen<string>(AGENTD_EVENT, ({ payload }) => dispatch(JSON.parse(payload))))
+const dispatchLine = (line: string) => dispatch(JSON.parse(line))
+
+// One listener for the whole app; components subscribe through `onEvent`. Local and remote
+// agentd share it: tab and request ids are unique app-wide.
+const ensureListening = () => (unlisten ??= transport.onLine(dispatchLine))
 
 /** Resolves with the id of the connection the line went out on. */
-const request = (line: string, machine: Machine) =>
-  invoke<number>('agentd_request', { line, machine })
+const request = (line: string, machine: Machine): Promise<number> =>
+  transport.request(line, machine)
 
 export const agentdService = {
   send: async (message: AgentdRequest, machine: Machine = null): Promise<void> => {
@@ -148,5 +130,8 @@ export const agentdService = {
     void ensureListening()
     listeners.add(listener)
     return () => listeners.delete(listener)
-  }
+  },
+
+  /** When the app may attach to its tabs, with the other machines it reaches; see the transport. */
+  onReady: (listener: (machines: Machine[]) => void): (() => void) => transport.onReady(listener)
 }

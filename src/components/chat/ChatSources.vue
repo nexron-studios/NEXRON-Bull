@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Globe } from '@lucide/vue'
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { openLink } from '@/lib/links'
 import { useI18n } from 'vue-i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { handleError } from '@/lib/error'
@@ -13,7 +13,7 @@ defineProps<{ sources: Source[] }>()
 const { t } = useI18n()
 
 // Links would navigate the app window away; they open in the system browser instead.
-const open = (url: string) => openUrl(url).catch(handleError)
+const open = (url: string) => openLink(url).catch(handleError)
 </script>
 
 <template>

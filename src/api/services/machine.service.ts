@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { isDesktopApp } from '@/lib/platform'
+import { bridgeService } from '@/api/services/bridge.service'
 import type {
   InstallError,
   InstallProgress,
@@ -24,8 +26,15 @@ const isInstallError = (value: unknown): value is InstallError =>
   typeof value === 'object' && value !== null && 'kind' in value
 
 export const machineService = {
-  /** Bull's own list; the very first call adopts the ~/.ssh/config hosts that work. */
-  list: (): Promise<MachineEntry[]> => invoke<MachineEntry[]>('list_machines'),
+  /**
+   * Bull's own list; the very first call adopts the ~/.ssh/config hosts that work. In a browser
+   * the bridge's list: the machines it reaches besides its own, by their ssh alias there.
+   */
+  list: async (): Promise<MachineEntry[]> => {
+    if (isDesktopApp()) return invoke<MachineEntry[]>('list_machines')
+    await bridgeService.whenReady()
+    return bridgeService.state.machines.map((name) => ({ name, host: name }))
+  },
 
   /** ~/.ssh/config hosts not in the list yet */
   suggestions: (): Promise<string[]> => invoke<string[]>('machine_suggestions'),

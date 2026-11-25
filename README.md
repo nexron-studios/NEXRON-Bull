@@ -134,6 +134,33 @@ runs in the background on every machine (localhost only, token in the user folde
 keeps working when the window closes. Another machine is reached through `agentd connect` over
 `ssh -T`; history, profiles and usage come from the transcripts on that machine.
 
+## Bull on the phone
+
+The same app runs in a phone browser (iPhone and Android, installable as a PWA) and reaches the
+chats of a server through a small bridge (`bridge/`, Node 22.6 or newer). The bridge listens on
+`127.0.0.1:3060` only; a reverse proxy serves the built app and passes `/ws` to it. Each device
+signs in with its own long token, sent as the first WebSocket message, and the bridge accepts
+only the page origin it is told. It runs one `agentd connect` per device and machine and ends it
+when the device goes away; Claude keeps running under `agentd serve`. The phone takes over the
+tabs that run there, shows their questions and sends approvals; the desktop drops a card the
+phone decided. Closing such a tab on the phone only stops watching it; the app that started it
+keeps it running. Terminals, logging in and the machine setup stay in the desktop app.
+
+Set it up on the server (Windows, same user as Bull's `agentd`):
+
+```powershell
+cd bridge
+npm ci --omit=dev
+npm run token -- phone      # prints the token once; only its hash is kept
+powershell -File deploy\register-bridge-task.ps1 -Origin https://<host>
+```
+
+The token hashes live in `%USERPROFILE%\.nexron-chat\bridge-tokens`; deleting a line locks that
+device out. `bridge/deploy/Caddyfile.bull.template` is the proxy block (tailnet only), and
+`npm run build` puts the app into `dist/`. To try it locally, run a bridge on a side port and let
+Vite proxy `/ws` to it: `BULL_BRIDGE_PORT=3066 BULL_BRIDGE_ORIGINS=http://localhost:1476 npm start`
+in `bridge/`, then `BULL_BRIDGE_URL=ws://127.0.0.1:3066 npx vite --port 1476`.
+
 ## Develop
 
 ```bash
@@ -141,6 +168,7 @@ npm ci
 npm run app:dev      # Tauri window, Vite on port 1460
 npm test             # frontend tests (Vitest)
 npm run test:rust    # agentd tests with a fake Claude
+npm run test:bridge  # phone bridge tests (after npm ci in bridge/)
 npm run build        # type check and build
 npm run format:check
 ```

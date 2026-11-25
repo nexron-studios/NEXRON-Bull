@@ -3,17 +3,19 @@ import { computed } from 'vue'
 import { ChevronRight } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
+import { offeredSettingsSections } from '@/lib/platform'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
 import { useSettingsAccounts } from '@/composables/useSettingsAccounts'
 import { useTerminalPreferences } from '@/composables/useTerminalPreferences'
 import { useThemeChoice } from '@/composables/useThemeToggle'
 import SettingsAboutCard from '@/components/settings/SettingsAboutCard.vue'
 import { useLimitPolicyStore } from '@/stores/limitPolicy'
-import { SETTINGS_SECTION_ICON, settingsSectionList, type SettingsSection } from '@/utils/settings'
+import { SETTINGS_SECTION_ICON, type SettingsSection } from '@/utils/settings'
 
 // The phone's settings (Figma "M22"): one row per section with its current value, each opens
 // the section as its own screen.
 const { t } = useI18n()
+const sections = offeredSettingsSections()
 const { offeredCount, machines } = useSettingsAccounts()
 const { settings: notifications } = useNotificationSetting()
 const { shownShell } = useTerminalPreferences()
@@ -36,7 +38,7 @@ const values = computed<Record<SettingsSection, string>>(() => ({
     <nav :aria-label="t('settings.nav_label')">
       <ul class="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
         <li
-          v-for="section in settingsSectionList"
+          v-for="section in sections"
           :key="section"
           class="border-b border-border last:border-b-0"
         >

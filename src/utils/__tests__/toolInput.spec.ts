@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffCountsOf, diffOf, inputRowsOf, patchRowsOf } from '../toolInput'
+import { diffOf, hunksOfTool } from '../toolInput'
 
 describe('diffOf', () => {
   it('should turn an Edit into removed and added lines', () => {
@@ -34,43 +34,42 @@ describe('diffOf', () => {
   })
 })
 
-describe('patchRowsOf', () => {
-  it('should number removed lines in the old file and the others in the new one', () => {
-    const patch = [
-      {
-        old_start: 41,
-        new_start: 41,
-        lines: [
-          ' <header>',
-          '-  <span>Bull</span>',
-          '+  <BrandBullLogo />',
-          '+  <Divider />',
-          ' </header>'
-        ]
-      },
-      { old_start: 90, new_start: 91, lines: [' a', '-b'] }
-    ]
-    expect(patchRowsOf(patch)).toEqual([
-      { kind: 'line', sign: ' ', number: 41, text: '<header>' },
-      { kind: 'line', sign: '-', number: 42, text: '  <span>Bull</span>' },
-      { kind: 'line', sign: '+', number: 42, text: '  <BrandBullLogo />' },
-      { kind: 'line', sign: '+', number: 43, text: '  <Divider />' },
-      { kind: 'line', sign: ' ', number: 44, text: '</header>' },
-      { kind: 'gap' },
-      { kind: 'line', sign: ' ', number: 91, text: 'a' },
-      { kind: 'line', sign: '-', number: 91, text: 'b' }
+describe('hunksOfTool', () => {
+  it('should number a Write without patch as the whole new file', () => {
+    expect(hunksOfTool('Write', { content: 'a' }, undefined)).toEqual([
+      { old_start: 0, new_start: 1, lines: [{ sign: '+', text: 'a' }] }
     ])
   })
-})
 
-describe('diffCountsOf', () => {
-  it('should count added and removed lines, not context', () => {
-    const rows = inputRowsOf([
-      { sign: '-', text: 'a' },
-      { sign: '+', text: 'b' },
-      { sign: '+', text: 'c' }
+  it('should leave an Edit without patch unnumbered', () => {
+    expect(hunksOfTool('Edit', { old_string: 'a', new_string: 'b' }, undefined)).toEqual([
+      {
+        old_start: null,
+        new_start: null,
+        lines: [
+          { sign: '-', text: 'a' },
+          { sign: '+', text: 'b' }
+        ]
+      }
     ])
-    expect(diffCountsOf(rows)).toEqual({ added: 2, removed: 1 })
-    expect(rows[0]).toEqual({ kind: 'line', sign: '-', number: null, text: 'a' })
+  })
+
+  it('should prefer the patch Claude Code sent', () => {
+    const patch = [{ old_start: 3, new_start: 3, lines: ['-a', '+b'] }]
+
+    expect(hunksOfTool('Edit', { old_string: 'a', new_string: 'b' }, patch)).toEqual([
+      {
+        old_start: 3,
+        new_start: 3,
+        lines: [
+          { sign: '-', text: 'a' },
+          { sign: '+', text: 'b' }
+        ]
+      }
+    ])
+  })
+
+  it('should return null for tools that change no file', () => {
+    expect(hunksOfTool('Bash', { command: 'ls' }, undefined)).toBe(null)
   })
 })

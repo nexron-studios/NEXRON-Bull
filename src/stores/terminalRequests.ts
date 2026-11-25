@@ -1,5 +1,8 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { toast } from 'vue-sonner'
+import { isDesktopApp } from '@/lib/platform'
+import i18n from '@/i18n'
 
 export interface TerminalRequest {
   /** SSH host from `~/.ssh/config`, `null` for this machine */
@@ -24,6 +27,8 @@ export const useTerminalRequestStore = defineStore('terminalRequests', () => {
   const pending = ref<TerminalRequest[]>([])
 
   const request = (terminal: TerminalRequest) => {
+    // Terminals are processes of the app window: a browser (the phone) says where to go instead.
+    if (!isDesktopApp()) return void toast.info(i18n.global.t('terminal.desktop_only'))
     pending.value = [...pending.value, terminal]
   }
 

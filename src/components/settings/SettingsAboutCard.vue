@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowUpRight } from '@lucide/vue'
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { openLink } from '@/lib/links'
 import { useI18n } from 'vue-i18n'
 import BrandBullLogo from '@/components/brand/BrandBullLogo.vue'
 import BrandNexronLogo from '@/components/brand/BrandNexronLogo.vue'
@@ -16,7 +16,7 @@ const { t } = useI18n()
 const version = __APP_VERSION__
 
 // Links would navigate the app window away; they open in the system browser instead.
-const open = (url: string) => openUrl(url).catch(handleError)
+const open = (url: string) => openLink(url).catch(handleError)
 </script>
 
 <template>

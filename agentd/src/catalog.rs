@@ -103,12 +103,21 @@ fn summary(profile: &Profile, path: &Path, modified_ms: u64) -> Option<SessionSu
     let (head, tail) = head_and_tail(path)?;
     let lines = || head.lines().chain(tail.lines()).filter_map(|line| serde_json::from_str::<Value>(line).ok());
     let cwd = lines().find_map(|v| v["cwd"].as_str().map(str::to_string))?;
-    let title = lines()
-        .filter_map(|v| v["aiTitle"].as_str().map(str::to_string))
-        .next_back()
-        .or_else(|| lines().find_map(|v| first_prompt(&v)))
-        .unwrap_or_default();
+    let title = title_in(lines).unwrap_or_default();
     Some(SessionSummary { session_id, profile: profile.dir.clone(), account: profile.label.clone(), cwd, title, modified_ms })
+}
+
+/// Claude's newest title for the session, else its first prompt; as the recent list shows it.
+pub fn title_of(path: &Path) -> Option<String> {
+    let (head, tail) = head_and_tail(path)?;
+    title_in(|| head.lines().chain(tail.lines()).filter_map(|line| serde_json::from_str::<Value>(line).ok()))
+}
+
+fn title_in<I: Iterator<Item = Value>>(lines: impl Fn() -> I) -> Option<String> {
+    lines()
+        .filter_map(|v| v["aiTitle"].as_str().map(str::to_string))
+        .last()
+        .or_else(|| lines().find_map(|v| first_prompt(&v)))
 }
 
 fn first_prompt(line: &Value) -> Option<String> {
@@ -183,5 +192,17 @@ mod tests {
         sessions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
         let rows: Vec<_> = sessions.iter().map(|s| (s.session_id.as_str(), s.title.as_str(), s.cwd.as_str())).collect();
         assert_eq!(rows, vec![("titled", "Login-Bug", "C:\\work"), ("untitled", "Bitte baue den Export", "C:\\work")]);
+    }
+
+    #[test]
+    fn names_a_running_session_like_the_recent_list() {
+        let home = temp_home("title-of");
+        let dir = home.join(".claude");
+        let user = json!({ "type": "user", "uuid": "u1", "cwd": "C:\\work", "message": { "role": "user", "content": "Fix the cart" } });
+        write_session(&dir, "live", &[user.clone()]);
+        write_session(&dir, "named", &[user, json!({ "type": "ai-title", "aiTitle": "Cart total" })]);
+
+        let path = |id: &str| dir.join("projects").join("C--work").join(format!("{id}.jsonl"));
+        assert_eq!((title_of(&path("live")), title_of(&path("named"))), (Some("Fix the cart".into()), Some("Cart total".into())));
     }
 }

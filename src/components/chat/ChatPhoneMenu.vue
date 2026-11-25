@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { isDesktopApp } from '@/lib/platform'
 import {
   AppWindow,
   Bell,
@@ -48,6 +49,8 @@ const contextUsage = useContextUsageStore()
 const preview = usePreviewStore()
 const chatSettings = useChatSettingsStore()
 const { settings, chipLabel } = useSessionSettings(() => tab)
+// Terminals are processes of the app window; the browser has none.
+const hasTerminals = isDesktopApp()
 
 const runLabel = computed(() =>
   t('composer.settings_summary', {
@@ -149,6 +152,7 @@ const act = (action: SessionAction) => {
         {{ item.label }}
       </Button>
       <Button
+        v-if="hasTerminals"
         variant="outline"
         class="h-11 w-full touch-manipulation justify-start"
         @click="openTerminal"

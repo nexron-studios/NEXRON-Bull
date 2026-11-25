@@ -11,7 +11,8 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
 
 - `npm run app:dev`: Tauri window, Vite on port **1460** (HMR 1461, `strictPort`).
 - `npm test` (Vitest), `npm run test:rust` (agentd with the fake Claude),
-  `npm run build`, `npm run format:check`.
+  `npm run test:bridge` (phone bridge, after `npm ci` in `bridge/`), `npm run build`,
+  `npm run format:check`.
 - `npm run app:build`: on macOS it then unregisters every Bull copy outside an Applications
   folder from LaunchServices (`scripts/forget-stale-bundles.mjs`). The DMG step leaves its
   temporary mount registered, so macOS could resolve Bull's bundle id to a vanished copy.
@@ -29,6 +30,16 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
   (`src-tauri/src/machine_setup.rs`: `test_machine`, `install_agentd`). `build.rs` builds agentd
   (release) into `src-tauri/binaries/` as the sidecar (`bundle.externalBin`); tauri-build puts it next to the app exe.
 - `src/`: Vue frontend.
+- `bridge/`: the phone bridge (TypeScript on Node 22.6+, `node:test`, own `package.json`). A
+  browser has no Tauri: `src/api/services/agentd.service.ts` picks its transport once
+  (`tauriTransport` or the WebSocket in `bridge.service.ts`, same lines and connection ids;
+  `bridge/src/protocol.ts` is shared as `@bridge/protocol`). What only the app window can do
+  asks `isDesktopApp()` in `src/lib/platform.ts`. The bridge
+  checks `Origin` and a device token (first message), runs one `agentd connect` per device and
+  machine and kills it when the socket goes. The browser asks `tabs` instead of `running` and
+  opens the tabs other apps started (`src/lib/runningTabs.ts`, attaching in
+  `src/stores/chatAttach.ts`). Terminal, login and the machine
+  settings are desktop only (`offeredSettingsSectionsOf`, `terminal.desktop_only`).
 
 ## This machine and other machines
 
@@ -113,8 +124,9 @@ The wordmark font `src/assets/fonts/climate-crisis-latin-400.woff2` is shared wi
 The viewBox is optically centred: halfway between the bull's bounding box and its centre of mass
 (the heavy head sits low, the thin horn high), so it lines up with the wordmark and in the icons.
 
-The browser tab is installable as a PWA (`public/site.webmanifest`, `public/sw.js`). Chats
-still need the Tauri window: the browser has no way to reach `agentd`.
+The browser tab is installable as a PWA (`public/site.webmanifest`, `public/sw.js`). In a
+browser it reaches `agentd` through the bridge only (README, "Bull on the phone"); Vite proxies
+`/ws` to `BULL_BRIDGE_URL` (default `ws://127.0.0.1:3060`).
 
 ## shadcn-vue CLI
 

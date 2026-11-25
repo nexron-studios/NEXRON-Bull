@@ -17,6 +17,7 @@ use crate::catalog;
 use crate::chat;
 use crate::claude;
 use crate::commands::{self, SlashCommand};
+use crate::file_diff;
 use crate::files;
 use crate::shell;
 use crate::git;
@@ -35,7 +36,7 @@ use crate::subagents;
 use crate::title_flow::TitleRequest;
 use crate::titles::TitleStore;
 use crate::transfer;
-use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams};
+use crate::protocol::{Envelope, Event, HistoryParams, LimitPolicy, LimitState, Request, StartParams, TabInfo};
 
 /// What Claude reads as the answer to the approval `/clear` cut short.
 const CLEAR_DENIAL: &str = "The user cleared the chat instead.";
@@ -202,10 +203,12 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Interrupt { tab } => self.control(&tab, json!({ "subtype": "interrupt" })),
             Request::Permission { tab, request_id, decision } => {
                 self.with_session(&tab, |session| session.asks.retain(|ask| ask["request_id"] != request_id));
-                self.write(&tab, &json!({
+                let answered = self.write(&tab, &json!({
                     "type": "control_response",
-                    "response": { "subtype": "success", "request_id": request_id, "response": decision },
-                }))
+                    "response": { "subtype": "success", "request_id": &request_id, "response": decision },
+                }));
+                // Every app drops its card, also the ones that did not decide.
+                answered.map(|()| self.emit(&Event::PermissionResolved { tab, request_id }))
             }
             Request::Stop { tab } => self.stop(&tab),
             Request::Clear { tab, session_id } => self.clear(id, &tab, &session_id),
@@ -241,6 +244,11 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::Running => {
                 let tabs = self.sessions().keys().cloned().collect();
                 self.emit(&Event::Running { id, tabs });
+                Ok(())
+            }
+            Request::Tabs => {
+                let tabs = self.tab_infos();
+                self.emit(&Event::Tabs { id, tabs });
                 Ok(())
             }
             Request::Quota { force } => self.in_background(move |daemon, profiles| {
@@ -300,6 +308,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 self.control(&tab, request)
             }
             Request::Configure { tab, permission_mode, model, effort } => self.configure(id, &tab, permission_mode, model, effort),
+            Request::FileDiff { cwd, path } => {
+                self.answer_later(move || Event::FileDiff { id, answer: file_diff::file_diff(&cwd, &path) });
+                Ok(())
+            }
             Request::ProfileDefaults { profile } => profile_dir(profile)
                 .map(|dir| self.emit(&Event::ProfileDefaults { id, defaults: profile_defaults::read(&dir) })),
         };
@@ -444,6 +456,28 @@ impl<W: Write + Send + 'static> Daemon<W> {
         self.moving().remove(tab);
     }
 
+    fn tab_infos(&self) -> Vec<TabInfo> {
+        let sessions: Vec<_> = self
+            .sessions()
+            .iter()
+            .map(|(tab, session)| (tab.clone(), session.session_id.clone(), session.params.clone()))
+            .collect();
+        // Outside the lock: naming the account and the session reads files.
+        sessions
+            .into_iter()
+            .map(|(tab, session_id, params)| {
+                // The profile as the app started it (`None` for the default), as `start` takes it again.
+                let (_, account) = Self::account_of(params.profile.clone());
+                // Haiku's title first, as `recent` names the session; else the transcript's.
+                let title = self.titles.get(&session_id).or_else(|| {
+                    find_transcript(params.profile.clone(), &session_id).ok().flatten().and_then(|path| catalog::title_of(&path))
+                });
+                let StartParams { cwd, profile, model, permission_mode, effort, is_fresh, .. } = params;
+                TabInfo { tab, session_id, title, cwd, profile, account, model, permission_mode, effort, is_fresh }
+            })
+            .collect()
+    }
+
     pub(crate) fn moving(&self) -> MutexGuard<'_, HashSet<String>> {
         self.moving.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -540,6 +574,10 @@ impl<W: Write + Send + 'static> Daemon<W> {
                 "response": { "subtype": "success", "request_id": ask["request_id"],
                     "response": { "behavior": "deny", "message": CLEAR_DENIAL, "interrupt": true } },
             }))?;
+            // The other apps still show the card; the one that cleared drops it with the chat.
+            if let Some(request_id) = ask["request_id"].as_str() {
+                self.emit(&Event::PermissionResolved { tab: tab.to_string(), request_id: request_id.to_string() });
+            }
         }
         if is_working {
             self.control(tab, json!({ "subtype": "interrupt" }))?;
@@ -705,11 +743,13 @@ fn tab_of(request: &Request) -> Option<String> {
         | Request::DeleteSession { .. }
         | Request::CreateProfile { .. }
         | Request::Running
+        | Request::Tabs
         | Request::Quota { .. }
         | Request::Usage { .. }
         | Request::Branch { .. }
         | Request::SetLimits { .. }
         | Request::ListFiles { .. }
+        | Request::FileDiff { .. }
         | Request::RunShell { .. }
         | Request::RewindPoints { .. }
         // A refused control request is no failure of the tab, see `control_event`.

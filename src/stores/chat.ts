@@ -207,11 +207,21 @@ export const useChatStore = defineStore(
         giveBack(id, [uuid])
       })
 
+    /** Worktrees on their way, per tab: a second start waits for the first instead of making one. */
+    const creatingWorktrees = new Map<string, Promise<void>>()
+
+    /** A worktree made for a tab that was closed meanwhile: nothing was done in it yet. */
+    const dropWorktree = (path: string, machine: Machine) =>
+      void agentdService
+        .ask<'worktree_removed'>({ op: 'remove_worktree', worktree: path }, machine)
+        .catch(handleError)
+
     /**
      * The chat's worktree is made when Claude first starts, so its branch can be named after the
      * prompt that starts it, and a tab closed before anything was sent leaves no worktree behind.
+     * agentd knows the tab, so a retry after a lost answer gets the same worktree back.
      */
-    const startInWorktree = async (tab: ChatTabState, repo: string) => {
+    const createWorktree = async (tab: ChatTabState, repo: string) => {
       update(tab.id, (t) => ({ ...t, status: 'starting', notice: null }))
       const first = queued.value.get(tab.id)?.[0]
       try {
@@ -220,19 +230,35 @@ export const useChatStore = defineStore(
             op: 'create_worktree',
             cwd: repo,
             hint: (first && sentDrafts.get(first.uuid)?.text) ?? '',
-            root: useWorktreeSettingsStore().rootOrDefault(tab.machine)
+            root: useWorktreeSettingsStore().rootOrDefault(tab.machine),
+            tab: tab.id
           },
           tab.machine
         )
-        update(tab.id, (t) => ({ ...t, cwd: made.path, worktreeFrom: null }))
         const ready = tabOf(tab.id)
-        if (ready) start(ready)
+        if (!ready) return dropWorktree(made.path, tab.machine)
+        update(tab.id, (t) => ({ ...t, cwd: made.path, worktreeFrom: null }))
+        start({ ...ready, cwd: made.path, worktreeFrom: null })
       } catch (error) {
-        // The tab keeps waiting for its worktree: Claude must not quietly run in the main checkout.
-        const notice = error instanceof Error ? error.message : String(error)
-        update(tab.id, (t) => ({ ...t, status: 'ended', notice }))
+        // A lost connection says nothing about the repository: the next message tries again.
+        // Anything else would fail the same way each time, so the next one starts without one,
+        // and the notice says so: Claude must not quietly run in the main checkout.
+        const isLost = error instanceof AgentdDisconnectedError
+        const reason = error instanceof Error ? error.message : String(error)
+        update(tab.id, (t) => ({
+          ...t,
+          status: 'ended',
+          worktreeFrom: isLost ? t.worktreeFrom : null,
+          notice: isLost ? reason : i18n.global.t('worktree.create_failed', { reason })
+        }))
         giveBack(tab.id)
       }
+    }
+
+    const startInWorktree = (tab: ChatTabState, repo: string) => {
+      if (creatingWorktrees.has(tab.id)) return
+      const creation = createWorktree(tab, repo).finally(() => creatingWorktrees.delete(tab.id))
+      creatingWorktrees.set(tab.id, creation)
     }
 
     const start = (tab: ChatTabState) => {
@@ -553,12 +579,17 @@ export const useChatStore = defineStore(
       const tab = tabOf(id)
       if (!tab) throw new Error(`no tab ${id}`)
       if (tab.status !== 'ended' && tab.status !== 'starting') return
-      // Its worktree is named after the first prompt; nothing else may make it before that.
-      if (tab.worktreeFrom) throw new Error(i18n.global.t('worktree.waits_for_prompt'))
+      // Its worktree is named after the first prompt; nothing else may make it before that. One
+      // on its way is waited for: Claude starts in it right after, or the tab ends with a notice.
+      const creation = creatingWorktrees.get(id)
+      if (!creation && tab.worktreeFrom) throw new Error(i18n.global.t('worktree.waits_for_prompt'))
       const answer = agentdService.waitFor(
         (e) => 'tab' in e && e.tab === id && ['started', 'error', 'exited'].includes(e.type)
       )
-      if (tab.status === 'ended') start(tab)
+      if (creation) await creation
+      else if (tab.status === 'ended') start(tab)
+      const after = tabOf(id)
+      if (creation && after?.status === 'ended') throw new Error(after.notice ?? '')
       const event = await answer
       if (event.type === 'error') throw new Error(event.message)
       if (event.type === 'exited') throw new Error(`Claude in tab ${id} exited`)

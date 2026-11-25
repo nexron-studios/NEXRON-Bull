@@ -1,6 +1,7 @@
 import { computed, reactive, toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { AgentdDisconnectedError, agentdService, type Machine } from '@/api/services/agentd.service'
+import { queryClient } from '@/lib/queryClient'
 
 /** Claude may switch branches while it works; agentd only reads a file, so asking is cheap. */
 const BRANCH_POLL_MS = 30 * 1000
@@ -20,6 +21,18 @@ const forgetOnReconnect = () => {
   })
 }
 
+/** `isWorktree` is `null` from an agentd before worktrees: it cannot tell, nor make one. */
+export interface GitBranch {
+  branch: string | null
+  isWorktree: boolean | null
+  /** The linked worktree's top folder; `null` in a main checkout */
+  worktreeRoot: string | null
+}
+
+/** What the last answer said about a folder, without asking again; the session bar keeps it. */
+export const knownGitBranchOf = (cwd: string, machine: Machine) =>
+  queryClient.getQueryData<GitBranch>(['agentd', 'branch', machine, cwd])
+
 /**
  * The git branch checked out in a tab's folder and whether the folder is a linked worktree, from
  * the machine the tab runs on. `isUnknown`: that machine gave no answer, so there is nothing to
@@ -30,7 +43,7 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
   const isUnknown = computed(() => silentMachines.has(toValue(machine)))
   const query = useQuery({
     queryKey: ['agentd', 'branch', machine, cwd],
-    queryFn: async () => {
+    queryFn: async (): Promise<GitBranch> => {
       const on = toValue(machine)
       try {
         const answer = await agentdService.ask<'branch'>(
@@ -38,8 +51,11 @@ export const useGitBranch = (cwd: MaybeRefOrGetter<string>, machine: MaybeRefOrG
           on,
           BRANCH_TIMEOUT_MS
         )
-        // `null`: an agentd from before worktrees cannot tell, and cannot make one either.
-        return { branch: answer.branch, isWorktree: answer.is_worktree ?? null }
+        return {
+          branch: answer.branch,
+          isWorktree: answer.is_worktree ?? null,
+          worktreeRoot: answer.worktree_root ?? null
+        }
       } catch (error) {
         // A lost connection says nothing about the agentd behind the next one, and its
         // `disconnected` event has already gone by: marking it now would stick.

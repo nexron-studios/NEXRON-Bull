@@ -1240,6 +1240,8 @@ export default {
     own_hint:
       'The chat works in a folder and branch of its own, fresh from the integration branch. Name and folder come from your first message.',
     planned_hint: 'With your first message Bull creates the worktree and starts Claude in it.',
+    create_failed:
+      'No worktree of its own: {reason}. Your next message starts Claude in the folder itself.',
     waits_for_prompt:
       'The worktree of this chat is created with the first message. Write something first.',
     pending: 'Own worktree from the first message',

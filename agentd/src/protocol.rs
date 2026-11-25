@@ -99,8 +99,9 @@ pub enum Request {
     /// the one `tool_use_id` started, or every one in the foreground.
     Background { tab: String, tool_use_id: Option<String> },
     /// A new worktree and `feat/…` branch for the repository of `cwd`, named after `hint` (the
-    /// chat's first prompt); `root` replaces the default folder beside the projects.
-    CreateWorktree { cwd: String, hint: String, root: Option<String> },
+    /// chat's first prompt); `root` replaces the default folder beside the projects. Asked again for
+    /// the same `tab` (a retry after a lost answer), it returns the worktree made the first time.
+    CreateWorktree { cwd: String, hint: String, root: Option<String>, tab: Option<String> },
     /// Merges the worktree's branch into `preview` in the main checkout.
     MergeIntoPreview { worktree: String },
     /// Removes the worktree and its branch; refuses while anything in it could be lost.
@@ -266,8 +267,9 @@ pub enum Event {
     Quota { id: Option<u64>, accounts: Vec<AccountQuota> },
     Usage { id: Option<u64>, days: u32, rows: Vec<UsageRow>, tools: Vec<ToolRow>, sessions: Vec<SessionRow> },
     /// `None` outside a repository; a short commit id when `HEAD` is detached.
-    /// `is_worktree`: the folder is in a linked git worktree, not the main checkout.
-    Branch { id: Option<u64>, branch: Option<String>, is_worktree: bool },
+    /// `is_worktree`: the folder is in a linked git worktree, not the main checkout; `worktree_root`
+    /// is that worktree's top folder, the one a removal deletes.
+    Branch { id: Option<u64>, branch: Option<String>, is_worktree: bool, worktree_root: Option<String> },
     WorktreeCreated { id: Option<u64>, path: String, branch: String, base: String },
     PreviewMerged { id: Option<u64>, branch: String, outcome: MergeOutcome, created_preview: bool, has_uncommitted: bool },
     WorktreeRemoved { id: Option<u64>, outcome: RemoveOutcome },

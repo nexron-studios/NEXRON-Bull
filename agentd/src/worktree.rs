@@ -18,8 +18,12 @@ use crate::usage::native_path;
 /// The never-pushed branch in the main checkout that collects every open chat branch.
 pub const PREVIEW: &str = "preview";
 /// Where a chat branch starts, the first one that exists: projects with a `dev` branch merge
-/// there, the others straight into `main`.
-const INTEGRATION_CANDIDATES: [&str; 4] = ["origin/dev", "origin/main", "dev", "main"];
+/// there, the others straight into `main`. Between the remote and the local names comes whatever
+/// `origin/HEAD` points to, for a repository whose default branch has another name.
+const REMOTE_INTEGRATION: [&str; 3] = ["origin/dev", "origin/main", "origin/master"];
+const LOCAL_INTEGRATION: [&str; 3] = ["dev", "main", "master"];
+/// Git config key on a chat branch naming the tab it was made for, so a retry finds it again.
+const TAB_KEY: &str = "bulltab";
 const BRANCH_PREFIX: &str = "feat/";
 /// The folder beside the parent folder of the repository: `dev/projects/x` → `dev/worktrees`.
 const WORKTREES_DIR: &str = "worktrees";
@@ -47,8 +51,10 @@ pub enum WorktreeError {
     NoRepository(String),
     #[error("{0} is the main checkout, not a worktree")]
     NotAWorktree(String),
-    #[error("no integration branch (origin/dev, origin/main, dev or main) in {0}")]
+    #[error("no integration branch (origin/dev, origin/main, origin/master, origin/HEAD, dev, main or master) in {0}")]
     NoIntegration(String),
+    #[error("the worktree folder {0} is not a full path")]
+    RelativeRoot(String),
     #[error("{0} has no branch checked out")]
     Detached(String),
     #[error("no free branch name for {0}")]
@@ -105,28 +111,63 @@ pub enum RemoveOutcome {
 }
 
 /// A new worktree for the repository `cwd` is in, its branch named after `hint` (the chat's first
-/// prompt). `root` replaces the folder the worktrees go into.
-pub fn create(cwd: &str, hint: &str, root: Option<&str>) -> Result<CreatedWorktree, WorktreeError> {
+/// prompt). `root` replaces the folder the worktrees go into. With `tab`, a second call for the same
+/// tab (its answer got lost) returns the worktree the first one made instead of making a `-2`.
+pub fn create(cwd: &str, hint: &str, root: Option<&str>, tab: Option<&str>) -> Result<CreatedWorktree, WorktreeError> {
     let folder = existing_folder(cwd)?;
     let main = main_checkout_of(&folder)?;
     // A chat opened on `app/src` works in `app-x/src`: the same place in its own checkout.
     let prefix = git(&folder, &["rev-parse", "--show-prefix"]).unwrap_or_default();
-    fetch(&main);
-    let base = integration_of(&main)?;
     let root = match root.map(str::trim).filter(|root| !root.is_empty()) {
+        // A relative folder would be looked up from agentd's own folder.
+        Some(root) if !native_path(root).is_absolute() => return Err(WorktreeError::RelativeRoot(root.to_string())),
         Some(root) => native_path(root),
         None => default_root(&main),
     };
+    if let Some((branch, top)) = tab.and_then(|tab| made_for(&main, tab)) {
+        let base = integration_of(&main)?;
+        return Ok(CreatedWorktree { path: chat_folder_of(top, &prefix), branch, base });
+    }
+    fetch(&main);
+    let base = integration_of(&main)?;
     let repo = main.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-    let (branch, path) = free_name(&main, &root, &repo, &slug_of(hint))?;
+    let (branch, top) = free_name(&main, &root, &repo, &slug_of(hint))?;
     fs::create_dir_all(&root)?;
-    let path_text = path.to_string_lossy().into_owned();
+    let top_text = top.to_string_lossy().into_owned();
     // No upstream: a `git push` from the chat must never land on the integration branch.
-    git(&main, &["worktree", "add", "--no-track", "-b", &branch, &path_text, &base])?;
-    let inside = path.join(path_from_git(prefix.trim_end_matches('/')));
-    // A subfolder the integration branch does not have yet leaves the chat at the top.
-    let chat_folder = if prefix.is_empty() || !inside.is_dir() { path } else { inside };
-    Ok(CreatedWorktree { path: chat_folder.to_string_lossy().into_owned(), branch, base })
+    git(&main, &["worktree", "add", "--no-track", "-b", &branch, &top_text, &base])?;
+    if let Some(tab) = tab {
+        git(&main, &["config", &format!("branch.{branch}.{TAB_KEY}"), tab])?;
+    }
+    Ok(CreatedWorktree { path: chat_folder_of(top, &prefix), branch, base })
+}
+
+/// The same subfolder in the worktree; one the integration branch does not have yet leaves the
+/// chat at the top.
+fn chat_folder_of(top: PathBuf, prefix: &str) -> String {
+    let inside = top.join(path_from_git(prefix.trim_end_matches('/')));
+    let folder = if prefix.is_empty() || !inside.is_dir() { top } else { inside };
+    folder.to_string_lossy().into_owned()
+}
+
+/// The branch and top folder of the worktree already made for `tab`, if it still exists.
+fn made_for(main: &Path, tab: &str) -> Option<(String, PathBuf)> {
+    let pattern = format!("^branch\\..*\\.{TAB_KEY}$");
+    let keys = git(main, &["config", "--get-regexp", &pattern]).ok()?;
+    let suffix = format!(".{TAB_KEY} {tab}");
+    let branch = lines(&keys)
+        .into_iter()
+        .find_map(|line| Some(line.strip_prefix("branch.")?.strip_suffix(&suffix)?.to_string()))?;
+    let list = git(main, &["worktree", "list", "--porcelain"]).ok()?;
+    let mut top = None;
+    for line in list.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            top = Some(path_from_git(path));
+        } else if line.strip_prefix("branch refs/heads/") == Some(branch.as_str()) {
+            return top.filter(|top| top.is_dir()).map(|top| (branch, top));
+        }
+    }
+    None
 }
 
 /// Merges the worktree's branch into `preview` in the main checkout, creating `preview` there
@@ -151,13 +192,15 @@ pub fn merge_into_preview(worktree: &str) -> Result<PreviewMerge, WorktreeError>
     let outcome = match git(&main, &["merge", "--no-edit", &branch]) {
         Ok(_) => MergeOutcome::Merged { commits },
         Err(err) => {
-            let files = lines(&git(&main, &["diff", "--name-only", "--diff-filter=U"])?);
-            if files.is_empty() {
+            let conflicted = git(&main, &["diff", "--name-only", "--diff-filter=U"]).map(|text| lines(&text));
+            // Refused before it began (local changes in the way): there is nothing to abort.
+            if matches!(&conflicted, Ok(files) if files.is_empty()) {
                 return Err(err);
             }
-            let branches = clashing_branches(&main, &branch, &files);
+            let branches = conflicted.as_ref().map(|files| clashing_branches(&main, &branch, files)).unwrap_or_default();
+            // Before anything that can fail: `preview` must never be left mid-merge.
             git(&main, &["merge", "--abort"])?;
-            MergeOutcome::Conflict { files, branches }
+            MergeOutcome::Conflict { files: conflicted?, branches }
         }
     };
     Ok(PreviewMerge { branch, outcome, created_preview, has_uncommitted })
@@ -183,12 +226,15 @@ pub fn remove(worktree: &str, is_in_use: impl Fn(&Path) -> bool) -> Result<Remov
         return Ok(RemoveOutcome::Unmerged { commits, integration });
     }
     remove_junctions(&worktree)?;
-    git(&main, &["worktree", "remove", &worktree.to_string_lossy()])?;
-    // A file a process still held stays behind as a bare folder git no longer knows.
+    // Nothing in it can be lost any more. A file a process still holds makes git give up halfway
+    // (Windows); what is left goes by hand, and `prune` forgets the folder.
+    if let Err(err) = git(&main, &["worktree", "remove", &worktree.to_string_lossy()]) {
+        eprintln!("agentd: removing the worktree by hand: {err}");
+    }
     if worktree.exists() {
         fs::remove_dir_all(&worktree)?;
-        git(&main, &["worktree", "prune"])?;
     }
+    git(&main, &["worktree", "prune"])?;
     git(&main, &["branch", "-D", &branch])?;
     Ok(RemoveOutcome::Removed { branch })
 }
@@ -300,10 +346,13 @@ fn fetch(main: &Path) {
 }
 
 fn integration_of(main: &Path) -> Result<String, WorktreeError> {
-    INTEGRATION_CANDIDATES
+    let remote_default = git(main, &["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).ok();
+    REMOTE_INTEGRATION
         .iter()
+        .map(|name| name.to_string())
+        .chain(remote_default)
+        .chain(LOCAL_INTEGRATION.iter().map(|name| name.to_string()))
         .find(|candidate| exists(main, &format!("{candidate}^{{commit}}")))
-        .map(|candidate| candidate.to_string())
         .ok_or_else(|| WorktreeError::NoIntegration(main.to_string_lossy().into_owned()))
 }
 
@@ -392,9 +441,24 @@ fn remove_junctions(_folder: &Path) -> Result<(), WorktreeError> {
     Ok(())
 }
 
+/// `-z` and untrimmed: each entry is `XY path`, and the leading blank of ` M a.ts` belongs to it. A
+/// rename or copy is followed by an entry with its old path.
 fn changed_files(folder: &Path) -> Result<Vec<String>, WorktreeError> {
-    let status = git(folder, &["status", "--porcelain", "--untracked-files=normal"])?;
-    Ok(lines(&status).into_iter().map(|line| line.get(3..).unwrap_or(&line).to_string()).collect())
+    let status = git_untrimmed(folder, &["status", "--porcelain", "-z", "--untracked-files=normal"])?;
+    Ok(paths_of_status(&status))
+}
+
+fn paths_of_status(status: &str) -> Vec<String> {
+    let mut entries = status.split('\0').filter(|entry| !entry.is_empty());
+    let mut files = Vec::new();
+    while let Some(entry) = entries.next() {
+        let code = entry.get(..2).unwrap_or_default();
+        files.push(entry.get(3..).unwrap_or_default().to_string());
+        if code.contains('R') || code.contains('C') {
+            entries.next();
+        }
+    }
+    files
 }
 
 fn count(main: &Path, range: &str) -> Result<u32, WorktreeError> {
@@ -421,6 +485,10 @@ fn path_from_git(text: &str) -> PathBuf {
 
 /// Trimmed stdout. Waits and tries again while another git holds the index lock.
 fn git(dir: &Path, args: &[&str]) -> Result<String, WorktreeError> {
+    git_untrimmed(dir, args).map(|text| text.trim().to_string())
+}
+
+fn git_untrimmed(dir: &Path, args: &[&str]) -> Result<String, WorktreeError> {
     let mut tries = 0;
     loop {
         tries += 1;
@@ -435,7 +503,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, WorktreeError> {
         hide_console(&mut command);
         let output = command.output()?;
         if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
         }
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if stderr.contains("index.lock") && tries < LOCK_TRIES {
@@ -469,6 +537,12 @@ mod tests {
     fn a_prompt_without_words_gets_a_short_id() {
         let slug = slug_of("🙂 ?!");
         assert!(slug.starts_with("chat-") && slug.len() == "chat-".len() + SHORT_ID_CHARS, "{slug}");
+    }
+
+    #[test]
+    fn status_paths_keep_their_first_letter_and_skip_old_rename_paths() {
+        let status = " M src/a.ts\0?? notes.txt\0R  src/new.ts\0src/old.ts\0";
+        assert_eq!(paths_of_status(status), ["src/a.ts", "notes.txt", "src/new.ts"]);
     }
 
     #[test]

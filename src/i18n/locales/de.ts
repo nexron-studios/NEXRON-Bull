@@ -1260,6 +1260,8 @@ export default {
     own_hint:
       'Der Chat arbeitet in einem eigenen Ordner mit eigenem Branch, frisch vom Integrationsbranch. Name und Ordner kommen aus deiner ersten Nachricht.',
     planned_hint: 'Mit deiner ersten Nachricht legt Bull den Worktree an und startet Claude darin.',
+    create_failed:
+      'Kein eigener Worktree: {reason}. Deine nächste Nachricht startet Claude direkt im Ordner.',
     waits_for_prompt:
       'Der Worktree dieses Chats entsteht mit der ersten Nachricht. Schreib zuerst etwas.',
     pending: 'Eigener Worktree ab der ersten Nachricht',

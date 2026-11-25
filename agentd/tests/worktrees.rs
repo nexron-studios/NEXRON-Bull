@@ -240,6 +240,56 @@ fn a_chat_on_a_subfolder_works_in_the_same_subfolder_of_its_worktree() {
     assert!(agentd.child.wait().unwrap().success());
 }
 
+#[test]
+fn a_retry_for_the_same_tab_gets_the_worktree_made_the_first_time() {
+    let (base, app) = repository("retry");
+    let mut agentd = Agentd::spawn();
+    let ask = |hint: &str| json!({ "op": "create_worktree", "cwd": app, "hint": hint, "root": null, "tab": "t1" });
+
+    let first = agentd.ask(1, ask("Login"));
+    let again = agentd.ask(2, ask("Login"));
+    assert_eq!((&again["path"], &again["branch"]), (&first["path"], &json!("feat/login")));
+    assert!(!base.join("worktrees").join("app-login-2").exists());
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
+fn a_default_branch_with_another_name_is_the_integration_branch() {
+    let (base, app) = repository("trunk");
+    git(&app, &["push", "--quiet", "origin", "main:trunk"]);
+    git(&base.join("origin.git"), &["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    git(&app, &["push", "--quiet", "origin", "--delete", "main"]);
+    git(&app, &["remote", "set-head", "origin", "trunk"]);
+    let mut agentd = Agentd::spawn();
+
+    let made = agentd.ask(1, json!({ "op": "create_worktree", "cwd": app, "hint": "Menu", "root": null }));
+    assert_eq!(made["base"], "origin/trunk");
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
+#[test]
+fn a_relative_worktree_folder_is_refused() {
+    let (_base, app) = repository("relative");
+    let mut agentd = Agentd::spawn();
+
+    writeln!(agentd.stdin, "{}", json!({ "id": 1, "op": "create_worktree", "cwd": app, "hint": "x", "root": "trees" })).unwrap();
+    let answer = loop {
+        let event = agentd.events.recv_timeout(WAIT).expect("answer before timeout");
+        if event["id"] == 1 {
+            break event;
+        }
+    };
+    assert_eq!(answer["type"], "error");
+    assert!(answer["message"].as_str().unwrap().contains("not a full path"), "{answer}");
+
+    drop(agentd.stdin);
+    assert!(agentd.child.wait().unwrap().success());
+}
+
 #[cfg(windows)]
 fn link(target: &Path, link: &Path) {
     let status = Command::new("cmd")

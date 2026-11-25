@@ -257,7 +257,14 @@ export type AgentdEvent =
     }
   /** `null` outside a repository; a short commit id when `HEAD` is detached */
   /** `is_worktree`: a linked git worktree; missing from an agentd older than worktrees */
-  | { type: 'branch'; id: number | null; branch: string | null; is_worktree?: boolean }
+  /** `worktree_root`: that worktree's top folder, the one a removal deletes */
+  | {
+      type: 'branch'
+      id: number | null
+      branch: string | null
+      is_worktree?: boolean
+      worktree_root?: string | null
+    }
   | { type: 'worktree_created'; id: number | null; path: string; branch: string; base: string }
   | {
       type: 'preview_merged'
@@ -380,8 +387,11 @@ export type AgentdRequest =
   | { op: 'rewind_points'; profile: string | null; session_id: string }
   /** Ctrl+B: sends the running call `tool_use_id` (or every foreground one) to the background */
   | { op: 'background'; tab: string; tool_use_id: string | null }
-  /** A worktree and `feat/…` branch for the repository of `cwd`, named after `hint` */
-  | { op: 'create_worktree'; cwd: string; hint: string; root: string | null }
+  /**
+   * A worktree and `feat/…` branch for the repository of `cwd`, named after `hint`; asked again for
+   * the same `tab`, the one made the first time
+   */
+  | { op: 'create_worktree'; cwd: string; hint: string; root: string | null; tab: string }
   | { op: 'merge_into_preview'; worktree: string }
   /** Refuses while anything in the worktree could be lost or a chat runs in it */
   | { op: 'remove_worktree'; worktree: string }

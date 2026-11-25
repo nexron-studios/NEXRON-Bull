@@ -260,10 +260,9 @@ impl<W: Write + Send + 'static> Daemon<W> {
             Request::QueueRemove { tab, entry } => self.queue_remove(&tab, entry),
             Request::QueueSend { tab } => self.resume(&tab, false),
             Request::Branch { cwd } => {
-                self.answer_later(move || Event::Branch {
-                    id,
-                    branch: git::branch_of(&cwd),
-                    is_worktree: git::is_linked_worktree(&cwd),
+                self.answer_later(move || {
+                    let worktree_root = git::linked_worktree_of(&cwd).map(|top| top.to_string_lossy().into_owned());
+                    Event::Branch { id, branch: git::branch_of(&cwd), is_worktree: worktree_root.is_some(), worktree_root }
                 });
                 Ok(())
             }
@@ -333,8 +332,8 @@ impl<W: Write + Send + 'static> Daemon<W> {
     fn worktree_request(self: &Arc<Self>, id: Option<u64>, request: Request) {
         let error = move |err: worktree::WorktreeError| Event::Error { id, tab: None, message: err.to_string() };
         match request {
-            Request::CreateWorktree { cwd, hint, root } => self.answer_later(move || {
-                worktree::create(&cwd, &hint, root.as_deref())
+            Request::CreateWorktree { cwd, hint, root, tab } => self.answer_later(move || {
+                worktree::create(&cwd, &hint, root.as_deref(), tab.as_deref())
                     .map_or_else(error, |made| Event::WorktreeCreated { id, path: made.path, branch: made.branch, base: made.base })
             }),
             Request::MergeIntoPreview { worktree } => self.answer_later(move || {

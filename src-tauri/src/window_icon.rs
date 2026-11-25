@@ -31,7 +31,7 @@ impl Serialize for WindowIconError {
 /// The big icon this app created last, freed once the next one replaced it. Kept as the raw
 /// value: `HICON` holds a pointer and is not `Send`. The exe's own icon is never freed here.
 #[derive(Default)]
-pub struct BigWindowIcon(Mutex<Option<isize>>);
+pub struct BigWindowIcon(#[cfg_attr(not(windows), allow(dead_code))] Mutex<Option<isize>>);
 
 /// The PNG is the app tile with the bull in the scheme's accent, drawn by the frontend.
 #[tauri::command]

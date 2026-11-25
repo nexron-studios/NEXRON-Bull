@@ -17,7 +17,7 @@ import SettingsMachineKeyHelp from '@/components/settings/SettingsMachineKeyHelp
 import { Button } from '@/components/ui/button'
 import { useTerminalRequestStore } from '@/stores/terminalRequests'
 import type { MachineEntry, MachineProbe, ProbeReason } from '@/types/machine.type'
-import { forgetHostKeyCommandOf, probeActionOf } from '@/utils/machineAssistant'
+import { forgetHostKeyCommandOf, oldAgentdFileOf, probeActionOf } from '@/utils/machineAssistant'
 
 // The check of one machine: while ssh runs, then what it found in plain words and the one step
 // that moves on (install, fix the key, try again). The raw message waits under "details".
@@ -42,7 +42,7 @@ const REASON_ICON: Record<ProbeReason, LucideIcon> = {
   host_key_unknown: ShieldQuestion,
   no_agentd: Download,
   agentd_blocked: ShieldAlert,
-  not_windows: Unplug
+  unsupported_system: Unplug
 }
 
 const { t } = useI18n()
@@ -50,6 +50,9 @@ const terminals = useTerminalRequestStore()
 
 const action = computed(() => (probe ? probeActionOf(probe.reason) : null))
 const params = computed(() => ({ machine: entry.name, version: probe?.version ?? '' }))
+// A refused login finds no system; an earlier check of the listed machine may have.
+const knownOs = computed(() => probe?.os ?? entry.os ?? null)
+const oldAgentdFile = computed(() => oldAgentdFileOf(knownOs.value))
 
 const forgetKey = () =>
   terminals.request({
@@ -99,12 +102,12 @@ const forgetKey = () =>
       </div>
     </div>
 
-    <SettingsMachineKeyHelp v-if="action === 'fix_key'" :entry />
+    <SettingsMachineKeyHelp v-if="action === 'fix_key'" :entry :os="knownOs" />
     <p
       v-if="isAfterInstall && probe.reason === 'agentd_blocked'"
       class="text-meta text-muted-foreground"
     >
-      {{ t('settings.machines.assistant.old_kept') }}
+      {{ t('settings.machines.assistant.old_kept', { file: oldAgentdFile }) }}
     </p>
     <p v-if="action === 'forget_key'" class="text-meta text-muted-foreground">
       {{ t('settings.machines.assistant.forget_key_hint') }}

@@ -8,6 +8,7 @@ pub mod git;
 pub mod limit_flow;
 pub mod limits;
 pub mod live;
+pub mod login_path;
 pub mod removal;
 pub mod rewind;
 pub mod paths;

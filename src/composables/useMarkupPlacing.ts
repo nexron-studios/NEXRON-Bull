@@ -44,7 +44,9 @@ export const useMarkupPlacing = ({
   const editing = computed(() => {
     const id = markup.editingId.value
     const stroke = id ? markup.strokes.value.find((mark) => mark.id === id) : undefined
-    return stroke ? { id: stroke.id, at: stroke.anchor, color: stroke.color } : null
+    return stroke
+      ? { id: stroke.id, at: stroke.anchor, color: stroke.color, isPin: stroke.tool === 'pin' }
+      : null
   })
 
   const note = computed({

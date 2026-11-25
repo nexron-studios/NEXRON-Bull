@@ -4,6 +4,8 @@ import {
   isInfoPanelShortcut,
   isNewSessionShortcut,
   isNewTerminalShortcut,
+  isRemoveKey,
+  isSendShortcut,
   isSidebarShortcut,
   isTerminalDrawerShortcut,
   moveStepOf,
@@ -16,6 +18,7 @@ const key = (fields: Partial<KeyboardEvent> & { key: string }) => ({
   shiftKey: false,
   altKey: false,
   repeat: false,
+  isComposing: false,
   ...fields
 })
 
@@ -66,6 +69,47 @@ describe('moveStepOf', () => {
       moveStepOf(key({ key: 'ArrowRight', ctrlKey: true })),
       moveStepOf(key({ key: 'ArrowUp', ctrlKey: true, shiftKey: true }))
     ]).toEqual([-1, 1, null, null])
+  })
+})
+
+describe('isSendShortcut', () => {
+  it('should send with Ctrl+Enter or Cmd+Enter', () => {
+    expect([
+      isSendShortcut(key({ key: 'Enter', ctrlKey: true })),
+      isSendShortcut(key({ key: 'Enter', metaKey: true }))
+    ]).toEqual([true, true])
+  })
+
+  it('should leave a plain or Shift+Enter to the field', () => {
+    expect([
+      isSendShortcut(key({ key: 'Enter' })),
+      isSendShortcut(key({ key: 'Enter', ctrlKey: true, shiftKey: true }))
+    ]).toEqual([false, false])
+  })
+
+  it('should leave Enter to an IME that is still composing', () => {
+    expect(isSendShortcut(key({ key: 'Enter', metaKey: true, isComposing: true }))).toBe(false)
+  })
+})
+
+describe('isRemoveKey', () => {
+  it('should accept Backspace and Delete alone', () => {
+    expect([isRemoveKey(key({ key: 'Backspace' })), isRemoveKey(key({ key: 'Delete' }))]).toEqual([
+      true,
+      true
+    ])
+  })
+
+  it('should ignore them with a modifier, and other keys', () => {
+    expect([
+      isRemoveKey(key({ key: 'Backspace', metaKey: true })),
+      isRemoveKey(key({ key: 'Backspace', altKey: true })),
+      isRemoveKey(key({ key: 'x' }))
+    ]).toEqual([false, false, false])
+  })
+
+  it('should ignore the repeats of a held key', () => {
+    expect(isRemoveKey(key({ key: 'Backspace', repeat: true }))).toBe(false)
   })
 })
 

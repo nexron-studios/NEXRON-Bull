@@ -172,14 +172,31 @@ export const eraseStroke = (stroke: Stroke, from: Point, to: Point, radius: numb
   return eraseLine(stroke, distance, radius)
 }
 
-/** The marks after one stretch of an eraser drag; the same array when nothing was touched. */
+/**
+ * The marks after one stretch of an eraser drag; the same array when nothing was touched. A number
+ * badge stands for its whole mark, so touching one (`numbered` says which marks show one) takes
+ * every piece of that mark, as it does a pin; otherwise the line under it would go and the
+ * number stay.
+ */
 export const eraseAlong = (
   strokes: readonly Stroke[],
   from: Point,
   to: Point,
-  radius: number
+  radius: number,
+  numbered: ReadonlyMap<string, number> = new Map()
 ): readonly Stroke[] => {
-  const next = strokes.flatMap((stroke) => eraseStroke(stroke, from, to, radius))
+  const wiped = new Set(
+    strokes
+      .filter(
+        (stroke) =>
+          numbered.has(stroke.id) &&
+          distanceToSegment(stroke.anchor, from, to) <= radius + stroke.badge
+      )
+      .map((stroke) => stroke.id)
+  )
+  const next = strokes.flatMap((stroke) =>
+    wiped.has(stroke.id) ? [] : eraseStroke(stroke, from, to, radius)
+  )
   const isSame =
     next.length === strokes.length && next.every((stroke, at) => stroke === strokes[at])
   return isSame ? strokes : next

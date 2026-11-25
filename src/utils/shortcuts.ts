@@ -92,6 +92,23 @@ export const historyStepOf = (event: KeyInfo): 'undo' | 'redo' | null => {
   return null
 }
 
+/** Ctrl/Cmd+Enter sends where a plain Enter already means something else (a new line, a note). */
+export const SEND_CHORD: KeyChord = { modifier: 'command', keys: ['Enter'] }
+/** An IME still composing owns its Enter: it commits the word, nothing is sent. */
+export const isSendShortcut = (event: KeyInfo & Pick<KeyboardEvent, 'isComposing'>) =>
+  hasCommandKey(event) && !event.shiftKey && !event.isComposing && event.key === 'Enter'
+
+/**
+ * Backspace or Delete alone, as on a field that is empty already: the thing itself should go. Not
+ * a held key's repeats: holding Backspace to clear a note must stop once the note is empty.
+ */
+export const isRemoveKey = (event: KeyInfo) =>
+  (event.key === 'Backspace' || event.key === 'Delete') &&
+  !event.repeat &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  !event.altKey
+
 /** Ctrl/Cmd with +, − and 0 make Bull larger, smaller and back to automatic, as in a browser. */
 export const UI_ZOOM_IN_CHORD: KeyChord = { modifier: 'command', keys: ['+'] }
 export const UI_ZOOM_OUT_CHORD: KeyChord = { modifier: 'command', keys: ['-'] }

@@ -3,6 +3,7 @@ import {
   IMAGE_REF_SLOTS,
   imageRefAt,
   imageRefFormatOf,
+  imageRefNumberAt,
   imageRefsOf,
   insertImageRefs,
   remapImageRefs,
@@ -160,5 +161,24 @@ describe('withPlainImageRefs', () => {
   it('should give references plain spaces and hyphens back and leave other text alone', () => {
     const text = `see ${FORMAT.render(1, shot.name)}\u00a0now`
     expect(withPlainImageRefs(text, FORMAT)).toBe('see [Bild 1 (Bild 15-01-01.png)]\u00a0now')
+  })
+})
+
+describe('imageRefNumberAt', () => {
+  const boxes = [
+    { n: 1, rect: { left: 10, right: 110, top: 0, bottom: 20 } },
+    { n: 2, rect: { left: 40, right: 140, top: 24, bottom: 44 } }
+  ]
+
+  it('should give the number of the chip under the point', () => {
+    expect(imageRefNumberAt(boxes, 60, 30)).toBe(2)
+  })
+
+  it('should count a point on the edge as inside', () => {
+    expect(imageRefNumberAt(boxes, 110, 20)).toBe(1)
+  })
+
+  it('should give null beside every chip', () => {
+    expect(imageRefNumberAt(boxes, 120, 10)).toBeNull()
   })
 })

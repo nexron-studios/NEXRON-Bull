@@ -1,6 +1,6 @@
 [package]
 name = "nexron-chat"
-version = "0.7.19"
+version = "0.7.20"
 description = "Bull - Claude Code sessions as a chat"
 authors = ["NEXRON"]
 edition = "2024"

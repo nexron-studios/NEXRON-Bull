@@ -29,5 +29,10 @@ uuid = { version = "1", features = ["v4"] }
 memchr = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
+# setsid for the background server and getpwuid for the login shell (login_path.rs), already in
+# the tree through uuid and chrono.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 sha2 = "0.10"

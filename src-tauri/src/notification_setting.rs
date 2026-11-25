@@ -8,6 +8,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+// Only Windows answers with more than `Unknown`.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub enum NotificationSetting {
     Enabled,
     Blocked,

@@ -47,6 +47,9 @@ impl Write for Clients {
 pub fn serve() -> io::Result<()> {
     // The port doubles as the lock: a second server on this machine stops here.
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port()))?;
+    // Before the first thread: it changes the environment every Claude inherits.
+    #[cfg(unix)]
+    crate::login_path::adopt();
     let token = uuid::Uuid::new_v4().to_string();
     write_token(&token)?;
     let clients = Clients::default();
@@ -152,18 +155,19 @@ fn start_server() -> io::Result<()> {
     Ok(())
 }
 
-/// shortcut: untested on Mac/Linux targets; check it once the app supports one.
+/// Its own session without a terminal, so the hangup at the end of an SSH login does not reach it,
+/// and reparented to init once this relay ends. A process manager that kills the whole login
+/// (systemd's `KillUserProcesses=yes`) still ends it; that needs `loginctl enable-linger`.
 #[cfg(not(windows))]
 fn start_server() -> io::Result<()> {
     use std::os::unix::process::CommandExt;
-    // Its own process group, so a hangup at the end of the SSH session does not reach it.
-    Command::new(std::env::current_exe()?)
-        .arg("serve")
-        .process_group(0)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
+    let mut command = Command::new(std::env::current_exe()?);
+    command.arg("serve").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // SAFETY: setsid and errno are async-signal-safe and touch no memory of the parent.
+    unsafe {
+        command.pre_exec(|| if libc::setsid() == -1 { Err(io::Error::last_os_error()) } else { Ok(()) });
+    }
+    command.spawn()?;
     Ok(())
 }
 

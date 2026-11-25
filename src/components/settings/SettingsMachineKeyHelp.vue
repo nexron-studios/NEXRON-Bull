@@ -11,14 +11,21 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { copyText } from '@/lib/clipboard'
 import { useTerminalRequestStore } from '@/stores/terminalRequests'
-import type { MachineEntry } from '@/types/machine.type'
-import { authorizedKeysCommandOf, KEYGEN_COMMAND } from '@/utils/machineAssistant'
+import type { MachineEntry, MachineOs } from '@/types/machine.type'
+import {
+  authorizedKeysCommandOf,
+  KEYGEN_COMMAND,
+  unixAuthorizedKeysCommandOf
+} from '@/utils/machineAssistant'
 
 // A machine that refuses this PC's key: log in there once with the password in Bull's terminal and
 // paste one line that adds the key. Without a key, the first step makes one.
-const { entry } = defineProps<{ entry: MachineEntry }>()
+// `os`: what an earlier check found; a refused login itself tells nothing about the system.
+const { entry, os = null } = defineProps<{ entry: MachineEntry; os?: MachineOs | null }>()
 
 const isAdmin = ref(false)
+// Starts from the known system; the switch stays the user's to change.
+const isUnix = ref(os === 'macos' || os === 'linux')
 
 const { t } = useI18n()
 const terminals = useTerminalRequestStore()
@@ -28,9 +35,13 @@ const publicKey = useQuery({
   staleTime: 0
 })
 
-const commandLine = computed(() =>
-  publicKey.data.value ? authorizedKeysCommandOf(publicKey.data.value, isAdmin.value) : ''
-)
+const commandLine = computed(() => {
+  const key = publicKey.data.value
+  if (!key) return ''
+  return isUnix.value
+    ? unixAuthorizedKeysCommandOf(key)
+    : authorizedKeysCommandOf(key, isAdmin.value)
+})
 
 const openRemoteTerminal = () =>
   terminals.request({ machine: entry.name, cwd: '', title: entry.name })
@@ -80,6 +91,12 @@ const makeKey = () =>
             </NchIconButton>
           </div>
           <SettingsSwitchRow
+            v-model="isUnix"
+            :title="t('settings.machines.assistant.key.unix')"
+            :hint="t('settings.machines.assistant.key.unix_hint')"
+          />
+          <SettingsSwitchRow
+            v-if="!isUnix"
             v-model="isAdmin"
             :title="t('settings.machines.assistant.key.admin')"
             :hint="t('settings.machines.assistant.key.admin_hint')"

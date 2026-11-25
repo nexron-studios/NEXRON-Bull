@@ -1,4 +1,5 @@
 import { truncateName } from '@/utils/attachments'
+import { withoutNoteLines } from '@/utils/imageNotes'
 import type { Highlight } from '@/utils/textPieces'
 
 /**
@@ -127,8 +128,8 @@ const cutRange = (text: string, start: number, end: number) => {
 
 /**
  * The text once the attachments went from `before` to `after`: each reference gets its image's new
- * number, or goes when its image went. `successors` points a replaced image at the one that took
- * its place (a marked copy).
+ * number, or goes when its image went, together with the note lines under it. `successors` points
+ * a replaced image at the one that took its place (a marked copy).
  */
 export const remapImageRefs = (
   text: string,
@@ -142,7 +143,7 @@ export const remapImageRefs = (
     const id = successors[ref.image.id] ?? ref.image.id
     const at = after.findIndex((image) => image.id === id)
     const image = after[at]
-    if (!image) return cutRange(result, ref.start, ref.end)
+    if (!image) return cutRange(withoutNoteLines(result, ref.end), ref.start, ref.end)
     return result.slice(0, ref.start) + format.render(at + 1, image.name) + result.slice(ref.end)
   }, text)
 
@@ -158,13 +159,6 @@ export const insertImageRefs = (
   const trail = /^\s/.test(tail) ? '' : ' '
   const inserted = `${lead}${refs.join(' ')}${trail}`
   return { text: head + inserted + tail, caret: head.length + inserted.length }
-}
-
-/** `addition` right after `at`, one space before it and, unless whitespace follows, one after. */
-export const insertAfter = (text: string, at: number, addition: string) => {
-  const tail = text.slice(at)
-  const trail = !tail || /^\s/.test(tail) ? '' : ' '
-  return `${text.slice(0, at)} ${addition}${trail}${tail}`
 }
 
 export const deleteDirectionList = ['backward', 'forward'] as const

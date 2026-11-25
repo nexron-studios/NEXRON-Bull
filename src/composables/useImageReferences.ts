@@ -3,7 +3,6 @@ import { useImageRefFormat } from '@/composables/useImageRefFormat'
 import type { PendingImage } from '@/utils/content'
 import {
   imageRefAt,
-  insertAfter,
   insertImageRefs,
   remapImageRefs,
   validImageRefsOf,
@@ -11,6 +10,7 @@ import {
   type RefImage,
   type TextSelection
 } from '@/utils/imageRefs'
+import { withNoteLines } from '@/utils/imageNotes'
 import type { Highlight } from '@/utils/textPieces'
 
 const DELETE_KEYS: Partial<Record<string, DeleteDirection>> = {
@@ -74,13 +74,13 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
   }
 
   /**
-   * `addition` right behind the first reference to the image `id`, so a note about it stands next
-   * to the chip it means; false when the draft names that image nowhere.
+   * Note lines under the line with the first reference to the image `id`, after the notes it has
+   * there already, so they stay with the chip they mean; false when the draft names it nowhere.
    */
-  const appendAfter = (id: string, addition: string) => {
+  const addNotes = (id: string, lines: readonly string[]) => {
     const ref = refs.value.find(({ image }) => image.id === id)
     if (!ref) return false
-    draft.value = insertAfter(draft.value, ref.end, addition)
+    draft.value = withNoteLines(draft.value, ref.end, lines)
     return true
   }
 
@@ -96,5 +96,5 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
     if (ref) field.setSelectionRange(ref.start, ref.end)
   }
 
-  return { format, highlights, follow, insert, appendAfter, selectWhole }
+  return { format, highlights, follow, insert, addNotes, selectWhole }
 }

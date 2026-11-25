@@ -9,7 +9,7 @@ import {
   eraserRadiusOf,
   fitSize,
   markNumbersOf,
-  markupCommentOf,
+  markupNotesOf,
   redoHistory,
   stepZoom,
   strokeWidthOf,
@@ -198,19 +198,20 @@ describe('numbered marks', () => {
   })
 
   it('should forget the note of a mark that is gone', () => {
-    expect(markupCommentOf('', [mark('a')], { a: 'bleibt', gone: 'weg' })).toBe('① bleibt')
+    expect(markupNotesOf([mark('a')], { a: 'bleibt', gone: 'weg' })).toEqual(['① bleibt'])
   })
 
-  it('should put the general comment first and each note behind its number', () => {
+  it('should put each note behind its number, on one line each', () => {
     const strokes = [mark('a'), pin('p'), mark('b')]
 
-    expect(
-      markupCommentOf('  Bitte prüfen ', strokes, { a: 'zu weit\nlinks', b: 'Scrollleiste weg' })
-    ).toBe('Bitte prüfen ① zu weit links ③ Scrollleiste weg')
+    expect(markupNotesOf(strokes, { a: 'zu weit\nlinks', b: 'Scrollleiste weg' })).toEqual([
+      '① zu weit links',
+      '③ Scrollleiste weg'
+    ])
   })
 
-  it('should leave a pin without a note out of the comment', () => {
-    expect(markupCommentOf('', [pin('p')], {})).toBe('')
+  it('should leave a pin without a note out', () => {
+    expect(markupNotesOf([pin('p')], {})).toEqual([])
   })
 
   it('should anchor a frame at its top-left corner whichever way it was drawn', () => {

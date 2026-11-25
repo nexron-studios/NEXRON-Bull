@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   IMAGE_REF_SLOTS,
   imageRefAt,
-  insertAfter,
   imageRefFormatOf,
   imageRefNumberAt,
   imageRefsOf,
@@ -100,6 +99,11 @@ describe('remapImageRefs', () => {
     expect(remapImageRefs('see [Bild 1 (logo.png)]\nnext', [logo], [], FORMAT)).toBe('see\nnext')
   })
 
+  it('should take the note lines under a removed image along with its reference', () => {
+    const noted = 'see [Bild 1 (logo.png)] please\n① bigger\n② bluer\nthanks'
+    expect(remapImageRefs(noted, [logo], [], FORMAT)).toBe('see please\nthanks')
+  })
+
   it('should point a replaced image at its successor under the new name', () => {
     const marked = { id: 'm', name: 'Bild 15-01-01.png' }
     expect(remapImageRefs(text, [shot, logo], [marked, shot, logo], FORMAT, { a: 'm' })).toBe(
@@ -181,18 +185,5 @@ describe('imageRefNumberAt', () => {
 
   it('should give null beside every chip', () => {
     expect(imageRefNumberAt(boxes, 120, 10)).toBeNull()
-  })
-})
-
-describe('insertAfter', () => {
-  it('should set the addition apart by a space on either side inside a text', () => {
-    expect(insertAfter('see [ref] here', 9, '① bigger')).toBe('see [ref] ① bigger here')
-  })
-
-  it('should add no space at the end or before whitespace', () => {
-    expect([insertAfter('[ref]', 5, '① a'), insertAfter('[ref]\nnext', 5, '① a')]).toEqual([
-      '[ref] ① a',
-      '[ref] ① a\nnext'
-    ])
   })
 })

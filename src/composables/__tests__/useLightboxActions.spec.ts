@@ -56,7 +56,7 @@ describe('useLightboxActions', () => {
     markup.comment.value = '  make the button blue '
     await actions.apply()
     expect(target).toHaveBeenCalledWith(
-      { sourceId: 'a', images: [], comment: 'make the button blue' },
+      { sourceId: 'a', images: [], comment: 'make the button blue', notes: [] },
       'compose'
     )
     expect(flattenImage).not.toHaveBeenCalled()
@@ -81,7 +81,8 @@ describe('useLightboxActions', () => {
             data: 'QUJD'
           }
         ],
-        comment: 'make the button blue'
+        comment: 'make the button blue',
+        notes: []
       },
       'send'
     )

@@ -4,7 +4,7 @@ import {
   commitStrokes,
   emptyHistory,
   markNumbersOf,
-  markupCommentOf,
+  markupNotesOf,
   redoHistory,
   undoHistory,
   withoutMark,
@@ -39,8 +39,8 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const canRedo = computed(() => history.value.future.length > 0)
   const isDirty = computed(() => strokes.value.length > 0 || !!comment.value.trim())
   const numbers = computed(() => markNumbersOf(strokes.value, notes.value))
-  /** General comment and numbered notes, as they go into the composer */
-  const fullComment = computed(() => markupCommentOf(comment.value, strokes.value, notes.value))
+  /** The written notes behind their numbers, one line each, as they go into the composer */
+  const noteLines = computed(() => markupNotesOf(strokes.value, notes.value))
 
   const setNote = (id: string, text: string) => {
     notes.value = { ...notes.value, [id]: text }
@@ -89,7 +89,7 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
     isKeepingOriginal,
     strokes,
     numbers,
-    fullComment,
+    noteLines,
     setNote,
     settleNote,
     canUndo,

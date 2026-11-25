@@ -77,7 +77,9 @@ describe('useComposerMarkup', () => {
     const shot = imageOf('a', 'shot.png')
     const { handOver, sent, draft, images } = setup({ attached: [shot] })
 
-    expect(handOver({ sourceId: 'a', images: [shot], comment: 'blue' }, 'send')).toBe(true)
+    expect(handOver({ sourceId: 'a', images: [shot], comment: 'blue', notes: [] }, 'send')).toBe(
+      true
+    )
 
     expect(sent).toEqual([['About [Image 1 (shot.png)]: blue', ['shot.png']]])
     expect(images.value).toEqual([])
@@ -87,7 +89,9 @@ describe('useComposerMarkup', () => {
   it('should send the comment alone when the image cannot go along', () => {
     const { handOver, sent } = setup()
 
-    expect(handOver({ sourceId: null, images: [], comment: 'what is this?' }, 'send')).toBe(true)
+    expect(
+      handOver({ sourceId: null, images: [], comment: 'what is this?', notes: [] }, 'send')
+    ).toBe(true)
 
     expect(sent).toEqual([['what is this?', []]])
   })
@@ -95,7 +99,7 @@ describe('useComposerMarkup', () => {
   it('should say so when there is nothing to send', () => {
     const { handOver, sent } = setup()
 
-    expect(handOver({ sourceId: null, images: [], comment: '' }, 'send')).toBe(false)
+    expect(handOver({ sourceId: null, images: [], comment: '', notes: [] }, 'send')).toBe(false)
 
     expect(sent).toEqual([])
     expect(toast.error).toHaveBeenCalledWith(
@@ -107,7 +111,7 @@ describe('useComposerMarkup', () => {
     const many = Array.from({ length: 11 }, (_, at) => imageOf(`i${at}`, `${at}.png`))
     const { handOver, sent } = setup()
 
-    expect(handOver({ sourceId: null, images: many, comment: '' }, 'send')).toBe(false)
+    expect(handOver({ sourceId: null, images: many, comment: '', notes: [] }, 'send')).toBe(false)
 
     expect(sent).toEqual([])
     expect(toast.error).toHaveBeenCalledWith(
@@ -123,21 +127,38 @@ describe('useComposerMarkup', () => {
       hasChips: false
     })
 
-    expect(handOver({ sourceId: 'a', images: [], comment: 'blue' }, 'compose')).toBe(true)
+    expect(handOver({ sourceId: 'a', images: [], comment: 'blue', notes: [] }, 'compose')).toBe(
+      true
+    )
 
     expect(isShell.value).toBe(false)
     expect(draft.value).toBe(`About ${chipOf(1, 'shot.png')}: blue`)
   })
 
-  it('should name a pasted image once when its marks come back into the draft', () => {
+  it('should name a pasted image once, its notes on lines of their own under the chip', () => {
     const shot = imageOf('a', 'shot.png')
     const marked = { ...imageOf('m', 'shot.png'), isMarked: true }
     const { handOver, draft, images } = setup({ attached: [shot] })
+    draft.value = `${chipOf(1, 'shot.png')} please crop\nthanks`
 
-    expect(handOver({ sourceId: 'a', images: [marked], comment: '① bigger' }, 'compose')).toBe(true)
+    const result = { sourceId: 'a', images: [marked], comment: '', notes: ['① bigger', '② bluer'] }
+    expect(handOver(result, 'compose')).toBe(true)
 
     expect(images.value.map((image) => image.id)).toEqual(['m'])
     expect(countOf(draft.value, chipOf(1, 'shot.png'))).toBe(1)
-    expect(draft.value).toBe(`${chipOf(1, 'shot.png')} ① bigger `)
+    expect(draft.value).toBe(`${chipOf(1, 'shot.png')} please crop\n① bigger\n② bluer\nthanks`)
+  })
+
+  it('should take the notes along when the marked image is sent from the draft', () => {
+    const shot = imageOf('a', 'shot.png')
+    const marked = { ...imageOf('m', 'shot.png'), isMarked: true }
+    const { handOver, draft, sent } = setup({ attached: [shot] })
+    draft.value = `look ${chipOf(1, 'shot.png')}\nthanks`
+    handOver({ sourceId: 'a', images: [marked], comment: '', notes: ['① bigger'] }, 'compose')
+
+    handOver({ sourceId: 'm', images: [marked], comment: '', notes: [] }, 'send')
+
+    expect(sent).toEqual([['', ['shot.png']]])
+    expect(draft.value).toBe('look\nthanks')
   })
 })

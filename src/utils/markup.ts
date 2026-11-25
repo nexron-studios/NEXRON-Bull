@@ -242,17 +242,11 @@ export const circledNumberOf = (number: number) =>
     : `(${number})`
 
 /**
- * What goes into the composer for one image: the general comment, then each note behind the
- * number it has in the image. One line, so a note's own line breaks become spaces.
+ * Each written note behind the number its mark has in the image ("① bigger"). One line per note,
+ * so a note's own line breaks become spaces.
  */
-export const markupCommentOf = (
-  general: string,
-  strokes: readonly Stroke[],
-  notes: MarkupNotes
-) => {
-  const numbered = [...markNumbersOf(strokes, notes)].flatMap(([id, number]) => {
+export const markupNotesOf = (strokes: readonly Stroke[], notes: MarkupNotes) =>
+  [...markNumbersOf(strokes, notes)].flatMap(([id, number]) => {
     const note = (notes[id] ?? '').trim().replace(/\s*\n\s*/g, ' ')
     return note ? [`${circledNumberOf(number)} ${note}`] : []
   })
-  return [general.trim(), ...numbered].filter(Boolean).join(' ')
-}

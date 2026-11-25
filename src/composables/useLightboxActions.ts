@@ -72,7 +72,8 @@ export const useLightboxActions = ({
       // Discarded while the image was being encoded: the result is no longer wanted.
       if (!markup.isDirty.value) return
       const result = { sourceId: image.id ?? null, images }
-      if (!target({ ...result, comment: markup.fullComment.value }, handoff)) return
+      const text = { comment: markup.comment.value.trim(), notes: markup.noteLines.value }
+      if (!target({ ...result, ...text }, handoff)) return
       markup.reset()
       onApplied()
     } catch (error) {

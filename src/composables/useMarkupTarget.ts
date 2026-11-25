@@ -10,8 +10,10 @@ export interface MarkupResult {
    * an attachment, which then stays as it is.
    */
   images: PendingImage[]
-  /** Trimmed; empty when nothing was written */
+  /** The general comment, trimmed; empty when nothing was written */
   comment: string
+  /** The marks' notes behind their numbers ("① bigger"), one per mark that has one */
+  notes: string[]
 }
 
 /**

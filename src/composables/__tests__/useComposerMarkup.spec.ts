@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'vue-sonner'
 import i18n from '@/i18n'
 import type { PendingImage } from '@/utils/content'
+import { prependLine } from '@/utils/attachments'
 import { useComposerMarkup } from '../useComposerMarkup'
+import { useImageAttachments } from '../useImageAttachments'
 import { useImageReferences } from '../useImageReferences'
 
 vi.mock('vue-sonner', () => ({ toast: { error: vi.fn() } }))
@@ -18,24 +20,39 @@ const imageOf = (id: string, name: string): PendingImage => ({
   bytes: 3
 })
 
-const setup = (attached: PendingImage[] = [], isShellAtStart = false) => {
+const NBSP = '\u00a0'
+/** A reference as the composer writes it: no-break spaces, so its chip never wraps. */
+const chipOf = (n: number, name: string) => `[Image${NBSP}${n}${NBSP}(${name})]`
+
+/**
+ * The composer's real attachments and references; `hasChips`: each attached image already has its
+ * chip in the draft, as after a paste.
+ */
+const setup = ({
+  attached = [] as PendingImage[],
+  isShellAtStart = false,
+  hasChips = true
+} = {}) => {
   const sent: [string, string[]][] = []
-  const removed: string[] = []
-  const images = ref(attached)
+  const images = ref<PendingImage[]>([])
   const draft = ref('')
   const isShell = ref(isShellAtStart)
   let api: ReturnType<typeof useComposerMarkup> | undefined
   mount(
     defineComponent({
       setup: () => {
+        const references = useImageReferences(draft, images)
+        const attachments = useImageAttachments(images, ref(0), references.follow)
+        images.value = attached
+        if (hasChips) references.insert(attached, null)
         api = useComposerMarkup({
           images,
           isShell,
-          references: useImageReferences(draft, images),
-          placeMarkedImages: () => true,
-          remove: (id) => removed.push(id),
+          references,
+          placeMarkedImages: attachments.placeMarkedImages,
+          remove: attachments.remove,
           prependComment: (line) => {
-            draft.value = line
+            draft.value = prependLine(draft.value, line)
           },
           focusField: () => {},
           send: (text, outgoing) => sent.push([text, outgoing.map((image) => image.name)])
@@ -46,8 +63,10 @@ const setup = (attached: PendingImage[] = [], isShellAtStart = false) => {
     { global: { plugins: [i18n] } }
   )
   if (!api) throw new Error('composable did not run')
-  return { ...api, sent, removed, draft, isShell }
+  return { ...api, sent, draft, images, isShell }
 }
+
+const countOf = (text: string, part: string) => text.split(part).length - 1
 
 describe('useComposerMarkup', () => {
   beforeEach(() => {
@@ -56,12 +75,13 @@ describe('useComposerMarkup', () => {
 
   it('should send the image with its comment naming it, and take the sent attachment away', () => {
     const shot = imageOf('a', 'shot.png')
-    const { handOver, sent, removed } = setup([shot])
+    const { handOver, sent, draft, images } = setup({ attached: [shot] })
 
     expect(handOver({ sourceId: 'a', images: [shot], comment: 'blue' }, 'send')).toBe(true)
 
     expect(sent).toEqual([['About [Image 1 (shot.png)]: blue', ['shot.png']]])
-    expect(removed).toEqual(['a'])
+    expect(images.value).toEqual([])
+    expect(draft.value).toBe('')
   })
 
   it('should send the comment alone when the image cannot go along', () => {
@@ -97,12 +117,27 @@ describe('useComposerMarkup', () => {
 
   it('should leave shell mode when a comment goes in front of the draft', () => {
     const shot = imageOf('a', 'shot.png')
-    const { handOver, draft, isShell } = setup([shot], true)
+    const { handOver, draft, isShell } = setup({
+      attached: [shot],
+      isShellAtStart: true,
+      hasChips: false
+    })
 
     expect(handOver({ sourceId: 'a', images: [], comment: 'blue' }, 'compose')).toBe(true)
 
     expect(isShell.value).toBe(false)
-    // In the draft a reference keeps no-break spaces, so its chip never wraps.
-    expect(draft.value).toBe('About [Image\u00a01\u00a0(shot.png)]: blue')
+    expect(draft.value).toBe(`About ${chipOf(1, 'shot.png')}: blue`)
+  })
+
+  it('should name a pasted image once when its marks come back into the draft', () => {
+    const shot = imageOf('a', 'shot.png')
+    const marked = { ...imageOf('m', 'shot.png'), isMarked: true }
+    const { handOver, draft, images } = setup({ attached: [shot] })
+
+    expect(handOver({ sourceId: 'a', images: [marked], comment: '① bigger' }, 'compose')).toBe(true)
+
+    expect(images.value.map((image) => image.id)).toEqual(['m'])
+    expect(countOf(draft.value, chipOf(1, 'shot.png'))).toBe(1)
+    expect(draft.value).toBe(`${chipOf(1, 'shot.png')} ① bigger `)
   })
 })

@@ -3,6 +3,7 @@ import { useImageRefFormat } from '@/composables/useImageRefFormat'
 import type { PendingImage } from '@/utils/content'
 import {
   imageRefAt,
+  insertAfter,
   insertImageRefs,
   remapImageRefs,
   validImageRefsOf,
@@ -73,6 +74,17 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
   }
 
   /**
+   * `addition` right behind the first reference to the image `id`, so a note about it stands next
+   * to the chip it means; false when the draft names that image nowhere.
+   */
+  const appendAfter = (id: string, addition: string) => {
+    const ref = refs.value.find(({ image }) => image.id === id)
+    if (!ref) return false
+    draft.value = insertAfter(draft.value, ref.end, addition)
+    return true
+  }
+
+  /**
    * Backspace or Delete at a reference selects all of it, so the browser removes it as one unit and
    * its own undo brings it back whole.
    */
@@ -84,5 +96,5 @@ export const useImageReferences = (draft: Ref<string>, images: Ref<PendingImage[
     if (ref) field.setSelectionRange(ref.start, ref.end)
   }
 
-  return { format, highlights, follow, insert, selectWhole }
+  return { format, highlights, follow, insert, appendAfter, selectWhole }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   IMAGE_REF_SLOTS,
   imageRefAt,
+  insertAfter,
   imageRefFormatOf,
   imageRefNumberAt,
   imageRefsOf,
@@ -180,5 +181,18 @@ describe('imageRefNumberAt', () => {
 
   it('should give null beside every chip', () => {
     expect(imageRefNumberAt(boxes, 120, 10)).toBeNull()
+  })
+})
+
+describe('insertAfter', () => {
+  it('should set the addition apart by a space on either side inside a text', () => {
+    expect(insertAfter('see [ref] here', 9, '① bigger')).toBe('see [ref] ① bigger here')
+  })
+
+  it('should add no space at the end or before whitespace', () => {
+    expect([insertAfter('[ref]', 5, '① a'), insertAfter('[ref]\nnext', 5, '① a')]).toEqual([
+      '[ref] ① a',
+      '[ref] ① a\nnext'
+    ])
   })
 })

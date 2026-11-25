@@ -38,8 +38,10 @@ export const useComposerMarkup = ({
   const { t } = useI18n()
 
   /**
-   * A marked image from the preview, its comment in front of the draft; nothing is sent. The
-   * comment names the image by a reference, so it follows the chips like any other.
+   * A marked image from the preview and its notes into the draft; nothing is sent. The image is
+   * named once: when its chip is in the draft already (it came with the paste, and the marked copy
+   * took it over), the notes go right behind it. Otherwise they go in front of the draft behind a
+   * new reference, which follows the chips like any other.
    */
   const takeMarkup = ({ sourceId, images: incoming, comment }: MarkupResult) => {
     if (incoming.length && !placeMarkedImages(sourceId, incoming)) return false
@@ -48,7 +50,7 @@ export const useComposerMarkup = ({
     const anchorId = incoming[0]?.id ?? sourceId
     const at = images.value.findIndex((image) => image.id === anchorId)
     const anchor = images.value[at]
-    if (!comment || !anchor) {
+    if (!comment || !anchor || references.appendAfter(anchor.id, comment)) {
       focusField()
       return true
     }

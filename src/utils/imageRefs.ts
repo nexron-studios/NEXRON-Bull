@@ -160,6 +160,13 @@ export const insertImageRefs = (
   return { text: head + inserted + tail, caret: head.length + inserted.length }
 }
 
+/** `addition` right after `at`, one space before it and, unless whitespace follows, one after. */
+export const insertAfter = (text: string, at: number, addition: string) => {
+  const tail = text.slice(at)
+  const trail = !tail || /^\s/.test(tail) ? '' : ' '
+  return `${text.slice(0, at)} ${addition}${trail}${tail}`
+}
+
 export const deleteDirectionList = ['backward', 'forward'] as const
 export type DeleteDirection = (typeof deleteDirectionList)[number]
 

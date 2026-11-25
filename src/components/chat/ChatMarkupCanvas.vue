@@ -95,7 +95,13 @@ const trackHover = (event: PointerEvent) => {
 
 const eraseTo = (point: Point) => {
   if (!remaining.value) return
-  remaining.value = eraseAlong(remaining.value, eraserFrom.value ?? point, point, eraserRadius())
+  remaining.value = eraseAlong(
+    remaining.value,
+    eraserFrom.value ?? point,
+    point,
+    eraserRadius(),
+    markup.numbers.value
+  )
   eraserFrom.value = point
 }
 
@@ -220,9 +226,12 @@ watch(canvas, redraw)
     :is-focused="isNoteFocused"
     :label="t('images.note_label')"
     :placeholder="t('images.note_placeholder')"
+    :remove-label="t('images.remove_mark', { n: markup.numbers.value.get(editing.id) ?? '' })"
+    :can-remove-when-empty="editing.isPin"
     @done="placing.closeNote"
     @cancel="placing.closeNote"
     @history="markup[$event]()"
+    @remove="markup.removeMark"
   />
   <ChatMarkupNoteField
     v-if="textDraft"

@@ -7,6 +7,7 @@ import {
   markupCommentOf,
   redoHistory,
   undoHistory,
+  withoutMark,
   type MarkupColor,
   type MarkupNotes,
   type MarkupSize,
@@ -54,6 +55,11 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
   const commit = (next: Stroke[]) => {
     history.value = commitStrokes(history.value, next)
   }
+  /** One undo step; its note stays beside the history, so undo brings both back. */
+  const removeMark = (id: string) => {
+    if (editingId.value === id) editingId.value = null
+    commit(withoutMark(strokes.value, id))
+  }
   const undo = () => {
     history.value = undoHistory(history.value)
   }
@@ -90,6 +96,7 @@ const [useProvideMarkup, useInjectedMarkup] = createInjectionState(() => {
     canRedo,
     isDirty,
     commit,
+    removeMark,
     undo,
     redo,
     clearStrokes,

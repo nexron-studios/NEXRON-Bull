@@ -4,6 +4,7 @@ import {
   isInfoPanelShortcut,
   isNewSessionShortcut,
   isNewTerminalShortcut,
+  isRemoveKey,
   isSidebarShortcut,
   isTerminalDrawerShortcut,
   moveStepOf,
@@ -66,6 +67,23 @@ describe('moveStepOf', () => {
       moveStepOf(key({ key: 'ArrowRight', ctrlKey: true })),
       moveStepOf(key({ key: 'ArrowUp', ctrlKey: true, shiftKey: true }))
     ]).toEqual([-1, 1, null, null])
+  })
+})
+
+describe('isRemoveKey', () => {
+  it('should accept Backspace and Delete alone', () => {
+    expect([isRemoveKey(key({ key: 'Backspace' })), isRemoveKey(key({ key: 'Delete' }))]).toEqual([
+      true,
+      true
+    ])
+  })
+
+  it('should ignore them with a modifier, and other keys', () => {
+    expect([
+      isRemoveKey(key({ key: 'Backspace', metaKey: true })),
+      isRemoveKey(key({ key: 'Backspace', altKey: true })),
+      isRemoveKey(key({ key: 'x' }))
+    ]).toEqual([false, false, false])
   })
 })
 

@@ -228,6 +228,10 @@ export const markNumbersOf = (strokes: readonly Stroke[], notes: MarkupNotes) =>
   return numbers
 }
 
+/** The marks without one of them, all its pieces at once. */
+export const withoutMark = (strokes: readonly Stroke[], id: string): Stroke[] =>
+  strokes.filter((stroke) => stroke.id !== id)
+
 const CIRCLED_ONE = 0x2460
 const MAX_CIRCLED = 20
 

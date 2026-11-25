@@ -92,6 +92,13 @@ export const historyStepOf = (event: KeyInfo): 'undo' | 'redo' | null => {
   return null
 }
 
+/** Backspace or Delete alone, as on a field that is empty already: the thing itself should go. */
+export const isRemoveKey = (event: KeyInfo) =>
+  (event.key === 'Backspace' || event.key === 'Delete') &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  !event.altKey
+
 /** Ctrl/Cmd with +, − and 0 make Bull larger, smaller and back to automatic, as in a browser. */
 export const UI_ZOOM_IN_CHORD: KeyChord = { modifier: 'command', keys: ['+'] }
 export const UI_ZOOM_OUT_CHORD: KeyChord = { modifier: 'command', keys: ['-'] }

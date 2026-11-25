@@ -1,31 +1,45 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowDown } from '@lucide/vue'
+import { ArrowDown, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMarkup } from '@/composables/useMarkup'
+import { isRemoveKey } from '@/utils/shortcuts'
 
 // Under the desktop preview (Figma "20b"): what Claude should change, and the way into the
 // composer, in the same dialog as the image. Ready while viewing too; marking only adds the tools.
 // While marking, each numbered mark has its note here as well as on the image, so the text and
 // the spot it is about stay one thing; the field below is then for anything else. Nothing is sent
-// from here. A long note wraps and grows up to a few lines, then scrolls.
+// from here. A long note wraps and grows up to a few lines, then scrolls. The × removes the mark
+// with its note; Backspace in a pin's empty note does too, as a pin is nothing without it.
 const { isMarking, isApplying } = defineProps<{ isMarking: boolean; isApplying: boolean }>()
 const emit = defineEmits<{ discard: []; apply: [] }>()
 
 const { t } = useI18n()
 const markup = useMarkup()
 
+const rowLookOf = (id: string) => {
+  const stroke = markup.strokes.value.find((mark) => mark.id === id)
+  return { color: stroke?.color ?? 'transparent', isPin: stroke?.tool === 'pin' }
+}
+
 const rows = computed(() =>
   [...markup.numbers.value].map(([id, number]) => ({
     id,
     number,
-    color: markup.strokes.value.find((stroke) => stroke.id === id)?.color ?? 'transparent'
+    ...rowLookOf(id)
   }))
 )
+
+const handleNoteKeydown = (event: KeyboardEvent, row: { id: string; isPin: boolean }) => {
+  if (!row.isPin || markup.notes.value[row.id] || !isRemoveKey(event)) return
+  event.preventDefault()
+  markup.removeMark(row.id)
+}
 const hasNotes = computed(() => isMarking && rows.value.length > 0)
 </script>
 
@@ -54,7 +68,18 @@ const hasNotes = computed(() => isMarking && rows.value.length > 0)
           class="max-h-24 min-h-7 resize-none py-1 text-small"
           @update:model-value="markup.setNote(row.id, String($event))"
           @blur="markup.settleNote(row.id)"
+          @keydown="handleNoteKeydown($event, row)"
         />
+        <!-- mousedown would blur the note first, and an empty one gives its row up on blur. -->
+        <NchIconButton
+          :label="t('images.remove_mark', { n: row.number })"
+          size="icon-xs"
+          class="mt-1 shrink-0 text-muted-foreground"
+          @mousedown.prevent
+          @click="markup.removeMark(row.id)"
+        >
+          <X aria-hidden="true" />
+        </NchIconButton>
       </li>
     </ol>
     <Textarea

@@ -223,6 +223,19 @@ const joinsRun = (message: ChatMessage): boolean =>
 /** A prompt the user sent that starts a turn of its own. */
 const opensTurn = (message: ChatMessage): boolean => message.role === 'user' && !message.is_mid_turn
 
+/**
+ * Where the first turn of the stream starts, -1 without one. Older messages loaded above can only
+ * join, regroup and rekey what comes before it; from here on every item keeps its key.
+ */
+export const firstTurnIndexOf = (items: StreamItem[]): number =>
+  items.findIndex(
+    (item) =>
+      item.kind === 'message' &&
+      item.key === item.message.uuid &&
+      opensTurn(item.message) &&
+      !joinsRun(item.message)
+  )
+
 /** Puts a turn's stats on its last answer. */
 const withStats = (items: StreamItem[], from: number, stats: TurnStats | null): void => {
   if (!stats) return

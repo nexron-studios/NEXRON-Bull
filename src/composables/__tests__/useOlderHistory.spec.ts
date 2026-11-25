@@ -1,9 +1,11 @@
 import { defineComponent, h, nextTick, reactive, useTemplateRef, type Ref } from 'vue'
+import { createEventHook } from '@vueuse/core'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   anchorCorrectionOf,
-  isOlderPageLanding,
+  landingOf,
+  SCROLL_ANCHOR_ATTRIBUTE,
   shouldLoadOlder,
   useOlderHistory,
   type OlderHistoryState
@@ -17,21 +19,39 @@ enableAutoUnmount(afterEach)
 const keysOf = (from: number, to: number) =>
   Array.from({ length: to - from }, (_, index) => `m${from + index}`)
 
+interface HistoryFixture extends OlderHistoryState {
+  keys: string[]
+  /** Items from this index on keep their key when a page lands: the first turn */
+  anchorsFrom: number
+}
+
 /** A transcript of `keys`, the oldest first, as the chat renders it into its scroller. */
-const mountHistory = async (initial: OlderHistoryState & { keys: string[] }) => {
-  const state = reactive({ ...initial })
+const mountHistory = async (initial: Partial<HistoryFixture> = {}) => {
+  const state = reactive<HistoryFixture>({
+    ...loaded,
+    keys: keysOf(40, 80),
+    anchorsFrom: 0,
+    ...initial
+  })
   const load = vi.fn()
   const glide = { isGliding: false }
+  const glideEnd = createEventHook<void>()
   let area: Ref<HTMLElement | null> | undefined
   const host = defineComponent({
     setup: () => {
       area = useTemplateRef<HTMLElement>('area')
-      useOlderHistory(area, () => state, { load, isGliding: () => glide.isGliding })
+      useOlderHistory(area, () => state, {
+        load,
+        isGliding: () => glide.isGliding,
+        onGlideEnd: glideEnd.on
+      })
       return () =>
         h(
           'div',
           { ref: 'area' },
-          state.keys.map((key) => h('div', { key, 'data-search-key': key }))
+          state.keys.map((key, index) =>
+            h('div', { key, [SCROLL_ANCHOR_ATTRIBUTE]: index >= state.anchorsFrom ? key : null })
+          )
         )
     }
   })
@@ -41,7 +61,7 @@ const mountHistory = async (initial: OlderHistoryState & { keys: string[] }) => 
   const scroller = area?.value
   if (!scroller) throw new Error('no scroller')
   layOut(scroller, () => state.keys.length)
-  return { state, load, glide, scroller }
+  return { state, load, glide, glideEnd, scroller }
 }
 
 /**
@@ -71,10 +91,31 @@ const settle = async () => {
   await nextTick()
 }
 
+// The check after a first page runs a frame later; frames run in the order they were asked for.
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+/** jsdom has no ResizeObserver: this one reports a resize when the test says so. */
+const resizes: (() => void)[] = []
+class FakeResizeObserver {
+  constructor(callback: () => void) {
+    resizes.push(callback)
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+const resize = () => resizes.at(-1)?.()
+
 const loaded = { history: 'loaded', hasMore: true, count: PAGE } as const
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  resizes.length = 0
+  vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe('shouldLoadOlder', () => {
@@ -91,15 +132,15 @@ describe('shouldLoadOlder', () => {
   })
 })
 
-describe('isOlderPageLanding', () => {
-  it('should count a finished load above messages already shown', () => {
-    expect(isOlderPageLanding({ history: 'loading', count: 40 }, { history: 'loaded' })).toBe(true)
-    expect(isOlderPageLanding({ history: 'loading', count: 40 }, { history: 'failed' })).toBe(true)
+describe('landingOf', () => {
+  it('should tell an older page above shown messages from the first page', () => {
+    expect(landingOf({ history: 'loading', count: 40 }, { history: 'loaded' })).toBe('older')
+    expect(landingOf({ history: 'loading', count: 40 }, { history: 'failed' })).toBe('older')
+    expect(landingOf({ history: 'loading', count: 0 }, { history: 'loaded' })).toBe('first')
   })
 
-  it('should not count the first page or a load still running', () => {
-    expect(isOlderPageLanding({ history: 'loading', count: 0 }, { history: 'loaded' })).toBe(false)
-    expect(isOlderPageLanding({ history: 'loaded', count: 40 }, { history: 'loading' })).toBe(false)
+  it('should not count a load that starts', () => {
+    expect(landingOf({ history: 'loaded', count: 40 }, { history: 'loading' })).toBe('none')
   })
 })
 
@@ -115,7 +156,7 @@ describe('anchorCorrectionOf', () => {
 
 describe('useOlderHistory', () => {
   it('should ask once when the reader scrolls near the top, not further down', async () => {
-    const { load, scroller } = await mountHistory({ ...loaded, keys: keysOf(40, 80) })
+    const { load, scroller } = await mountHistory()
 
     scrollTo(scroller, 700)
     scrollTo(scroller, 500)
@@ -123,21 +164,29 @@ describe('useOlderHistory', () => {
     expect(load).toHaveBeenCalledTimes(1)
   })
 
-  it('should not ask while the list glides past the top on its way down', async () => {
-    const { load, glide, scroller } = await mountHistory({ ...loaded, keys: keysOf(40, 80) })
+  it('should wait for a glide past the top to come to rest, then check where it ended', async () => {
+    const { load, glide, glideEnd, scroller } = await mountHistory()
 
     glide.isGliding = true
     scrollTo(scroller, 0)
+    glide.isGliding = false
+    await glideEnd.trigger()
 
-    expect(load).toHaveBeenCalledTimes(0)
+    expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('should ask for the second page when the first one does not fill the view', async () => {
+    const { state, load } = await mountHistory({ history: 'loading', count: 0, keys: [] })
+
+    Object.assign(state, { history: 'loaded', count: 3, keys: keysOf(77, 80) })
+    await nextTick()
+    await nextFrame()
+
+    expect(load).toHaveBeenCalledTimes(1)
   })
 
   it('should keep the message in view where it was when the page lands above it', async () => {
-    const { state, load, scroller } = await mountHistory({
-      ...loaded,
-      history: 'loading',
-      keys: keysOf(40, 80)
-    })
+    const { state, load, scroller } = await mountHistory({ history: 'loading' })
     scroller.scrollTop = 300
 
     Object.assign(state, { history: 'loaded', count: 80, keys: keysOf(0, 80) })
@@ -148,12 +197,26 @@ describe('useOlderHistory', () => {
     expect(load).toHaveBeenCalledTimes(0)
   })
 
-  it('should hold on to the last item above while the view lies inside it', async () => {
-    const { state, scroller } = await mountHistory({
-      ...loaded,
-      history: 'loading',
-      keys: keysOf(40, 80)
+  it('should anchor on the first turn, past items the page folds away, while a reply grows', async () => {
+    // m40–m49 are the run before the first turn; the view starts inside it.
+    const { state, scroller } = await mountHistory({ history: 'loading', anchorsFrom: 10 })
+    scroller.scrollTop = 100
+
+    // The new page joins that run and folds it into one line, and a reply arrives below.
+    Object.assign(state, {
+      history: 'loaded',
+      count: 85,
+      keys: [...keysOf(0, 30), 'reads:m30', ...keysOf(50, 85)],
+      anchorsFrom: 5
     })
+    await settle()
+
+    // m50 sat 400 px below the top, now 1450: the grown height (1300) would be wrong.
+    expect(scroller.scrollTop).toBe(1150)
+  })
+
+  it('should hold on to the last item above while the view lies inside it', async () => {
+    const { state, scroller } = await mountHistory({ history: 'loading' })
     scroller.scrollTop = 3960
 
     Object.assign(state, { history: 'loaded', count: 80, keys: keysOf(0, 80) })
@@ -162,12 +225,26 @@ describe('useOlderHistory', () => {
     expect(scroller.scrollTop).toBe(5960)
   })
 
+  it('should take out growth above until the reader scrolls', async () => {
+    const { state, scroller } = await mountHistory({ history: 'loading' })
+    scroller.scrollTop = 300
+    Object.assign(state, { history: 'loaded', count: 80, keys: keysOf(0, 80) })
+    await settle()
+
+    // An image in the new page finished loading: one row more above the anchor.
+    state.keys = ['image', ...state.keys]
+    await nextTick()
+    resize()
+    scroller.dispatchEvent(new Event('wheel'))
+    state.keys = ['image2', ...state.keys]
+    await nextTick()
+    resize()
+
+    expect(scroller.scrollTop).toBe(2350)
+  })
+
   it('should ask for the next page when a short one leaves the top close', async () => {
-    const { state, load, scroller } = await mountHistory({
-      ...loaded,
-      history: 'loading',
-      keys: keysOf(40, 80)
-    })
+    const { state, load, scroller } = await mountHistory({ history: 'loading' })
     scroller.scrollTop = 100
 
     Object.assign(state, { history: 'loaded', count: 42, keys: keysOf(38, 80) })
@@ -178,11 +255,7 @@ describe('useOlderHistory', () => {
   })
 
   it('should not ask again after a page failed', async () => {
-    const { state, load, scroller } = await mountHistory({
-      ...loaded,
-      history: 'loading',
-      keys: keysOf(40, 80)
-    })
+    const { state, load, scroller } = await mountHistory({ history: 'loading' })
 
     state.history = 'failed'
     await settle()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildStream, thinkingSeconds } from '../chatStream'
+import { buildStream, firstTurnIndexOf, thinkingSeconds } from '../chatStream'
 import { resultsByToolId } from '../toolPairs'
 import type { Block, ChatMessage } from '@/types/agentd.type'
 
@@ -253,5 +253,15 @@ describe('buildStream', () => {
       key: 'sources:a6:0',
       sources: [{ url: 'https://www.prompt-kit.com/docs', domain: 'prompt-kit.com' }]
     })
+  })
+})
+
+describe('firstTurnIndexOf', () => {
+  it('should point at the first prompt that opens a turn, past the run before it', () => {
+    expect(firstTurnIndexOf(stream([read, readResult, intro, prompt, answer]))).toBe(2)
+  })
+
+  it('should give -1 for a page inside one run', () => {
+    expect(firstTurnIndexOf(stream([thinking, read, readResult, answer]))).toBe(-1)
   })
 })

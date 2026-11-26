@@ -12,7 +12,7 @@ const { text, isActive = true } = defineProps<{ text: string; isActive?: boolean
       class="pointer-events-none absolute inset-0 shimmer-window overflow-hidden"
       aria-hidden="true"
     >
-      <span class="block shimmer-copy truncate text-foreground">{{ text }}</span>
+      <span class="block shimmer-copy truncate text-foreground select-none">{{ text }}</span>
     </span>
   </span>
 </template>

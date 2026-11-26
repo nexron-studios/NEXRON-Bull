@@ -186,7 +186,8 @@ export const useChatStore = defineStore(
     // Writes only the fields that changed into the tab, instead of a new tab in a new list. Every
     // streamed token changes a tab; a new list made the sidebar, the notifications and the open
     // chat compute and render everything again for each one. Now only readers of the changed
-    // fields (the live text, the token count) run.
+    // fields (the live text, the token count) run. So `tabOf` hands out the live tab: an action
+    // that awaits copies what it needs afterwards first.
     const update = (id: string, change: (tab: ChatTabState) => ChatTabState) => {
       const tab = tabOf(id)
       if (!tab) return
@@ -435,7 +436,18 @@ export const useChatStore = defineStore(
 
     // Every running chat streams many tokens per second. They wait for the next frame and are
     // applied together, so a chat renders once per frame instead of once per token.
-    const tokens = createFrameQueue<AgentdEvent>((events) => events.forEach(handleEvent))
+    // One token that fails to apply must not take the rest of its frame along, nor the event that
+    // made the queue drain.
+    const handleEach = (events: AgentdEvent[]) => {
+      for (const event of events) {
+        try {
+          handleEvent(event)
+        } catch (error) {
+          handleError(error)
+        }
+      }
+    }
+    const tokens = createFrameQueue<AgentdEvent>(handleEach)
     const onEvent = (event: AgentdEvent) => {
       if (isSubagentStream(event)) return
       if (isTokenEvent(event)) return tokens.push(event)
@@ -788,6 +800,7 @@ export const useChatStore = defineStore(
     const switchAccount = async (id: string, profile: ProfileProps) => {
       const tab = tabOf(id)
       if (!tab?.sessionId || tab.profile === profile.dir || tab.statusBeforeMove) return
+      const { profile: from, sessionId, machine } = tab
       const wasBusy = isBusyStatus(tab.status)
       // Until Claude runs in the other account, lists show the chat as it will be (`listedTabOf`):
       // the stop interrupts a turn or an approval, so a busy chat is finished from here on.
@@ -797,12 +810,12 @@ export const useChatStore = defineStore(
         await agentdService.ask<'moved'>(
           {
             op: 'move_session',
-            from: tab.profile,
+            from,
             to: profile.dir,
-            session_id: tab.sessionId,
+            session_id: sessionId,
             is_fresh: tabOf(id)?.isFresh ?? false
           },
-          tab.machine
+          machine
         )
       } catch (error) {
         handleError(error)
@@ -852,26 +865,24 @@ export const useChatStore = defineStore(
     const clearChat = async (id: string, sessionId: string) => {
       const tab = tabOf(id)
       if (!tab || tab.sessionId !== sessionId) throw new ClearRefusedError('session_changed')
+      const { machine } = tab
       if (tab.status !== 'ended') {
-        await agentdService.ask<'cleared'>(
-          { op: 'clear', tab: id, session_id: sessionId },
-          tab.machine
-        )
-        return refreshRecent(tab.machine)
+        await agentdService.ask<'cleared'>({ op: 'clear', tab: id, session_id: sessionId }, machine)
+        return refreshRecent(machine)
       }
       // A lost connection ends the tab here too, but Claude goes on there and comes back with the
       // old session on reattach. Only a Claude that is really gone may be replaced locally.
-      if (tab.machine && tab.notice === disconnectedNoticeOf(tab.machine))
+      if (machine && tab.notice === disconnectedNoticeOf(machine))
         throw new ClearRefusedError('disconnected')
       const { tabs: running } = await agentdService.ask<'running'>(
         { op: 'running' },
-        tab.machine,
+        machine,
         RUNNING_TIMEOUT_MS
       )
       if (running.includes(id)) throw new ClearRefusedError('still_running')
       if (tabOf(id)?.sessionId !== sessionId) throw new ClearRefusedError('session_changed')
       update(id, (t) => withNewSession(t, crypto.randomUUID()))
-      refreshRecent(tab.machine)
+      refreshRecent(machine)
     }
 
     /** Puts closed tabs back where they were, e.g. when a removal is undone. */

@@ -106,6 +106,7 @@ const background = computed(() => (isEmpty.value ? [] : backgroundWorkOf(row.tab
             :is-failed="row.tab.notice !== null"
             :is-waiting="row.tab.limit.kind === 'waiting'"
             :has-question="openQuestionOf(row.tab) !== null"
+            :is-still="!!activity"
           />
         </span>
         <span v-if="isWide" class="flex min-w-0 flex-1 items-center gap-4 text-small">

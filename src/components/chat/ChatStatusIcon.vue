@@ -22,6 +22,8 @@ import type { TabStatus } from '@/utils/chatTab'
 // `isWaiting`: the account is full and the chat waits for its reset; that outranks the rest.
 // `hasQuestion`: the last answer ends on a question (`> [!question]`); it outranks the finish number.
 // `isEmpty`: nobody wrote in the chat yet; Clawd waits instead of a spinner while Claude starts.
+// `isStill`: a busy chat shows its icon without turning, where a line beside it already says what
+// Claude does (a sidebar row): one turning spinner per running chat cost every frame a repaint.
 const {
   status,
   rank = null,
@@ -30,7 +32,8 @@ const {
   isFailed = false,
   isWaiting = false,
   hasQuestion = false,
-  isEmpty = false
+  isEmpty = false,
+  isStill = false
 } = defineProps<{
   status: TabStatus
   rank?: number | null
@@ -40,22 +43,28 @@ const {
   isWaiting?: boolean
   hasQuestion?: boolean
   isEmpty?: boolean
+  isStill?: boolean
 }>()
 
 const { t } = useI18n()
 
 // Colour follows the token hierarchy: critical only for an approval, warning for work, good for ready.
-const LOOK: Record<TabStatus, { icon: Component; class: string }> = {
-  starting: { icon: CircleDashed, class: 'text-muted-foreground animate-spin' },
+interface Look {
+  icon: Component
+  class: string
+  isSpinning?: boolean
+}
+const LOOK: Record<TabStatus, Look> = {
+  starting: { icon: CircleDashed, class: 'text-muted-foreground', isSpinning: true },
   idle: { icon: CircleCheck, class: 'text-good' },
-  working: { icon: LoaderCircle, class: 'text-warning animate-spin' },
+  working: { icon: LoaderCircle, class: 'text-warning', isSpinning: true },
   asking: { icon: CircleAlert, class: 'text-critical' },
   ended: { icon: CirclePause, class: 'text-muted-foreground' }
 }
 
-const FAILED_LOOK = { icon: TriangleAlert, class: 'text-warning' }
-const WAITING_LOOK = { icon: Timer, class: 'text-act-read' }
-const QUESTION_LOOK = { icon: MessageCircleQuestion, class: 'text-warning' }
+const FAILED_LOOK: Look = { icon: TriangleAlert, class: 'text-warning' }
+const WAITING_LOOK: Look = { icon: Timer, class: 'text-act-read' }
+const QUESTION_LOOK: Look = { icon: MessageCircleQuestion, class: 'text-warning' }
 
 const isFailedIdle = computed(() => isFailed && status === 'idle')
 const look = computed(() => {
@@ -63,6 +72,7 @@ const look = computed(() => {
   if (hasQuestion) return QUESTION_LOOK
   return isFailedIdle.value ? FAILED_LOOK : LOOK[status]
 })
+const isSpinning = computed(() => !!look.value.isSpinning && !isStill)
 const label = computed(() => {
   if (isWaiting) return t('chat.status.waiting')
   if (hasQuestion) return t('chat.status.question')
@@ -83,7 +93,12 @@ const label = computed(() => {
     :is-newest-unseen
   />
   <template v-else>
-    <component :is="look.icon" class="size-4 shrink-0" :class="look.class" aria-hidden="true" />
+    <component
+      :is="look.icon"
+      class="size-4 shrink-0"
+      :class="[look.class, { 'animate-spin': isSpinning }]"
+      aria-hidden="true"
+    />
     <span class="sr-only">{{ label }}</span>
   </template>
 </template>

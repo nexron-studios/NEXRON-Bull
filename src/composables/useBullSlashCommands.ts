@@ -1,5 +1,5 @@
 import { tryOnScopeDispose } from '@vueuse/core'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import { copyText } from '@/lib/clipboard'
 import { useChatStore } from '@/stores/chat'

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { History, LoaderCircle, RotateCcw, TriangleAlert } from '@lucide/vue'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import NchEmpty from '@/components/common/NchEmpty.vue'
 import NchKbd from '@/components/common/NchKbd.vue'

@@ -1,10 +1,9 @@
-import { computed, markRaw, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { tryOnScopeDispose, useStorage } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { agentdService } from '@/api/services/agentd.service'
-import BrandAppIcon from '@/components/brand/BrandAppIcon.vue'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
 import { useQuota } from '@/composables/useQuota'
 import { handleError } from '@/lib/error'
@@ -128,8 +127,7 @@ export const useTabNotifications = () => {
     // shortcut: in-window toasts play no sound; add one if the user misses it there.
     toast(title, {
       description: body,
-      // The system notification carries the app icon; its stand-in in the window does too.
-      icon: markRaw(BrandAppIcon),
+      // The system notification shows the app icon this large; its stand-in in the window too.
       classes: { icon: APP_ICON_CLASS },
       // Shown while the user is away: it waits until dismissed instead of expiring unseen.
       duration: isFocused ? IN_WINDOW_TOAST_MS : Number.POSITIVE_INFINITY,

@@ -220,6 +220,21 @@ html.dark {
   animation: ghost-sweep 1.6s var(--ease-out-soft) infinite both;
 }
 
+/* Bull installing its update (Figma "42c"): no share is known, so a segment travels the bar. A
+   third of the bar wide, it leaves at 300 % of its own width. With less motion it stays put. */
+@keyframes update-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@utility animate-update-indeterminate {
+  animation: update-indeterminate 1.4s var(--ease-in-out-quart, cubic-bezier(0.77, 0, 0.175, 1))
+    infinite;
+}
+
 /* The thinking bar's wave (Figma "37" A). It rests at full height, so with less motion the bars
    keep their shape instead of collapsing. */
 @keyframes wave-bar {

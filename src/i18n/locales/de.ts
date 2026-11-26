@@ -862,6 +862,27 @@ export default {
       summary_default: 'Neben dem Projekt',
       summary_own: 'Eigener Ordner'
     },
+    updates: {
+      description: 'Neue Versionen kommen von GitHub. Deine Chats laufen beim Neustart weiter.',
+      version: 'Bull {version}',
+      status_current: 'Aktuell · zuletzt geprüft vor {age}',
+      status_current_now: 'Aktuell · gerade geprüft',
+      status_never: 'Noch nicht geprüft',
+      status_checking: 'Sucht nach einer neuen Version …',
+      status_available: 'Bull {version} ist da',
+      status_downloading: 'Bull {version} wird geladen',
+      status_ready: 'Bull {version} wartet auf den Neustart',
+      status_installing: 'Bull {version} wird installiert',
+      status_failed: 'Die letzte Suche hat nicht geklappt',
+      check: 'Jetzt prüfen',
+      show: 'Ansehen',
+      automatic: 'Automatisch aktualisieren',
+      automatic_hint:
+        'Neue Versionen sofort laden und den Fortschritt zeigen. Neu gestartet wird erst, wenn du es sagst.',
+      releases: 'Alle Versionen auf GitHub',
+      summary_on: 'Automatisch',
+      summary_off: 'Von Hand'
+    },
     sections: {
       accounts: 'Konten',
       limits: 'Limits',
@@ -869,7 +890,8 @@ export default {
       notifications: 'Benachrichtigungen',
       terminal: 'Terminal',
       worktrees: 'Worktrees',
-      appearance: 'Darstellung'
+      appearance: 'Darstellung',
+      updates: 'Updates'
     },
     summary: {
       accounts: 'keins aktiv | {count} aktiv | {count} aktiv',
@@ -1630,6 +1652,54 @@ export default {
     hint_left: 'Noch {percent} bis Claude den Verlauf von selbst zusammenfasst.',
     hint_action: 'Jetzt zusammenfassen',
     open: 'Kontext ansehen'
+  },
+  update: {
+    found_title: 'Bull {version} ist da',
+    ready_title: 'Bull {version} ist bereit',
+    installing_title: 'Bull wird aktualisiert',
+    failed_title: 'Update hat nicht geklappt',
+    check_failed_title: 'Suche nach Updates hat nicht geklappt',
+    sub_found_automatic: 'Du hast {current} · wird automatisch geladen',
+    sub_found: 'Du hast {current}',
+    sub_ready: 'Geladen und geprüft',
+    sub_installing: '{current} → {version}',
+    sub_failed_download: 'Bull {version} · beim Laden abgebrochen',
+    sub_failed_install: 'Bull {version} · beim Installieren abgebrochen',
+    sub_failed_check: 'Du hast {current}',
+    notes_title: 'Neu in dieser Version',
+    downloading: 'Wird geladen …',
+    downloaded: 'Fertig geladen',
+    installing: 'Wird installiert …',
+    bytes: '{done} von {total}',
+    hint_chats: 'Deine Chats laufen weiter, auch während Bull neu startet.',
+    hint_manual: 'Das Laden dauert etwa eine Minute. Deine Chats laufen weiter.',
+    hint_installing: 'Bull schließt sich gleich und öffnet sich von selbst wieder.',
+    hint_failed:
+      'Du bleibst auf {current}, nichts geht verloren. Bull versucht es später von selbst.',
+    error_check: 'Bull konnte nicht nach einer neuen Version schauen.',
+    error_download: 'Die neue Version ließ sich nicht laden.',
+    error_install: 'Die neue Version ließ sich nicht installieren.',
+    later: 'Später',
+    background: 'Im Hintergrund laden',
+    restart: 'Jetzt neu starten',
+    update_now: 'Jetzt aktualisieren',
+    retry: 'Nochmal versuchen',
+    open_github: 'Auf GitHub öffnen',
+    card: {
+      label: 'Update',
+      downloading_title: 'Update wird geladen',
+      downloading_sub: 'Bull {version} · {percent}',
+      downloading_sub_unknown: 'Bull {version}',
+      available_title: 'Bull {version} ist da',
+      available_sub: 'Neue Version',
+      ready_title: 'Bull {version} ist bereit',
+      ready_sub: 'Chats laufen weiter',
+      failed_title: 'Update hat nicht geklappt',
+      failed_sub: 'Bull {version}',
+      show: 'Ansehen',
+      restart: 'Neu starten',
+      details: 'Details'
+    }
   },
   errors: {
     unexpected: 'Etwas ist schiefgelaufen: {message}',

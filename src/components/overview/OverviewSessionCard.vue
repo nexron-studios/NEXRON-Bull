@@ -8,6 +8,7 @@ import OverviewSessionCardFooter from '@/components/overview/OverviewSessionCard
 import OverviewSessionCardHeader from '@/components/overview/OverviewSessionCardHeader.vue'
 import OverviewSessionCardMeta from '@/components/overview/OverviewSessionCardMeta.vue'
 import OverviewSessionCardStep from '@/components/overview/OverviewSessionCardStep.vue'
+import { useChatTitle } from '@/composables/useChatTitle'
 import type { ChatTabState } from '@/utils/chatTab'
 import { cardPromptsOf, cardStatusOf, startPromptOf } from '@/utils/sessionCard'
 
@@ -28,6 +29,7 @@ const history = computed(() => tab.history)
 const hasMore = computed(() => tab.hasMore)
 
 const status = computed(() => cardStatusOf(tab))
+const { plainOf: plainTitleOf } = useChatTitle()
 const title = computed(() => tab.title || t('chat.new_chat'))
 const prompts = computed(() =>
   cardPromptsOf({
@@ -87,6 +89,6 @@ const openCard = (event: MouseEvent) => {
       <OverviewSessionCardStep :tab />
     </div>
 
-    <OverviewSessionCardFooter :tab :title @open="emit('open')" />
+    <OverviewSessionCardFooter :tab :title="plainTitleOf(title)" @open="emit('open')" />
   </article>
 </template>

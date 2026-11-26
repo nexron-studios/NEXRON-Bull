@@ -10,6 +10,7 @@ import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
 import SessionRowBackground from '@/components/session/SessionRowBackground.vue'
 import { useAgeFormat } from '@/composables/useAgeFormat'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useMachineLabel } from '@/composables/useMachineLabel'
 import { useChatStore } from '@/stores/chat'
 import { backgroundWorkOf } from '@/utils/chatTab'
@@ -32,6 +33,7 @@ const emit = defineEmits<{ resume: [] }>()
 const { t } = useI18n()
 const { labelOf: machineLabelOf } = useMachineLabel()
 const formatAge = useAgeFormat()
+const { plainOf: plainTitleOf } = useChatTitle()
 const { tabs } = storeToRefs(useChatStore())
 
 const title = computed(() => entry.title || t('chat.new_chat'))
@@ -125,7 +127,7 @@ const openRow = (event: MouseEvent) => {
           variant="outline"
           size="sm"
           class="motion-press shrink-0 touch-manipulation"
-          :aria-label="t('overview.resume_label', { title })"
+          :aria-label="t('overview.resume_label', { title: plainTitleOf(title) })"
           @click="emit('resume')"
         >
           <Play class="size-3.5" aria-hidden="true" />

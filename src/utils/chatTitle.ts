@@ -9,7 +9,8 @@ export type TitlePiece = { kind: 'text'; text: string } | { kind: 'image'; n: nu
 /** A reference cut off at the end of the title, as the first prompt shortened leaves it. */
 const cutRefOf = (text: string, format: ImageRefFormat) => {
   const match = format.cutAtEnd?.exec(text)
-  return match ? { start: match.index, n: Number(match.groups?.n) } : null
+  const n = Number(match?.groups?.n)
+  return match && n >= 1 ? { start: match.index, n } : null
 }
 
 /**

@@ -17,7 +17,8 @@ export interface ImageRefFormat {
   pattern: RegExp
   /**
    * A reference cut off at the end of a text, with the group `n`: a chat title is the first prompt
-   * shortened to a fixed length. `null` when the template starts with the number, since a bare
+   * shortened to a fixed length. Something must follow the number, so a title that merely ends in
+   * `[Bild 3` stays text. `null` when the template starts with the number, since a bare
    * trailing number is no reference.
    */
   cutAtEnd: RegExp | null
@@ -77,7 +78,7 @@ export const imageRefFormatOf = (template: string): ImageRefFormat => {
         .replaceAll(IMAGE_REF_SLOTS.n, () => String(n))
         .replaceAll(IMAGE_REF_SLOTS.name, () => nameLabelOf(name)),
     pattern: new RegExp(source, 'g'),
-    cutAtEnd: head ? new RegExp(`${head}${NUMBER_GROUP}[^\\]\\n]*$`) : null
+    cutAtEnd: head ? new RegExp(`${head}${NUMBER_GROUP}[^\\[\\]\\n]+$`) : null
   }
 }
 

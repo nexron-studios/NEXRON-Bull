@@ -9,6 +9,7 @@ mod machine_install;
 mod machine_os;
 mod machine_setup;
 mod machines;
+mod notification_quiet;
 mod notification_setting;
 mod remote_call;
 mod ssh_config;
@@ -56,6 +57,7 @@ pub fn run() {
             machine_setup::test_machine,
             ssh_config::machine_host_name,
             machine_install::install_agentd,
+            notification_quiet::notification_quiet,
             notification_setting::notification_setting,
             terminal::terminal_shells,
             terminal::terminal_spawn,

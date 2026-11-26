@@ -37,6 +37,21 @@ const readSystemSetting = async (): Promise<OsNotificationSetting> => {
   }
 }
 
+/**
+ * Whether the system wants quiet: "Do not disturb", a full-screen game, a presentation (Windows
+ * only; elsewhere never). Bull's own sound keeps still then, as the system's did. Asked before
+ * every sound, the same way as the setting above: a failed ask counts as not quiet.
+ */
+export const isSystemQuiet = async (): Promise<boolean> => {
+  if (!isTauri()) return false
+  try {
+    return await invoke<boolean>('notification_quiet')
+  } catch (error) {
+    console.warn('notifications.quiet_failed', { error })
+    return false
+  }
+}
+
 /** Whether the system shows Bull's notifications; asks Windows itself, not only the plugin. */
 export const readOsPermission = async (): Promise<OsPermission> => {
   if (!hasOsNotifications()) return 'unavailable'

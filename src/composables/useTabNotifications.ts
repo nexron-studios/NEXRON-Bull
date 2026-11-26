@@ -11,6 +11,7 @@ import { handleError } from '@/lib/error'
 import {
   canShowOsNotification,
   focusWindow,
+  isSystemQuiet,
   isWindowFocused,
   onOsNotificationClick,
   registerOpenAction,
@@ -124,12 +125,14 @@ export const useTabNotifications = () => {
       background
     })
     if (!delivery) return false
-    const isPlayed = hasSound ? playSound(sounds[sound]) : Promise.resolve(false)
+    // Under "Do not disturb" no sound at all, not even the system's fallback below.
+    const isSounding = hasSound && !(await isSystemQuiet())
+    const isPlayed = isSounding ? playSound(sounds[sound]) : Promise.resolve(false)
     if (delivery === 'os') {
       const id = nextNotificationId++
       if (tabId) tabOfNotification.set(id, tabId)
       // A background webview whose audio is held back still gets a sound, the system's.
-      const hasSystemSound = hasSound && !(await isPlayed)
+      const hasSystemSound = isSounding && !(await isPlayed)
       showOsNotification({ id, title, body, hasSystemSound, hasOpenAction: tabId !== null })
       return true
     }

@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/lib/toast'
 import { agentdService } from '@/api/services/agentd.service'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
 import { useQuota } from '@/composables/useQuota'
 import { handleError } from '@/lib/error'
@@ -72,6 +73,7 @@ export const useTabNotifications = () => {
   const { tabs, activeId } = storeToRefs(chat)
   const { settings } = useNotificationSetting()
   const { t, locale } = useI18n()
+  const { plainOf: plainTitleOf } = useChatTitle()
   const isQuotaWanted = computed(() => isEventWanted(settings.value, 'quota_low', false))
   // Polls only while the switch is on; the sidebar footer may poll the same query anyway.
   const { accounts } = useQuota(isQuotaWanted)
@@ -104,7 +106,7 @@ export const useTabNotifications = () => {
   })
 
   const titleOf = (id: string) =>
-    tabs.value.find((tab) => tab.id === id)?.title || t('chat.new_chat')
+    plainTitleOf(tabs.value.find((tab) => tab.id === id)?.title ?? '') || t('chat.new_chat')
 
   const openTab = (id: string) => {
     if (tabs.value.some((tab) => tab.id === id)) activeId.value = id

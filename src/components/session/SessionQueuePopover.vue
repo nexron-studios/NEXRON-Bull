@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Monitor, Send, Server, Timer } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useChatNavigation } from '@/composables/useChatNavigation'
@@ -71,7 +72,7 @@ const messageCount = computed(() =>
             @click="openChat(entry.tab.id)"
           >
             <span class="truncate text-small font-semibold">
-              {{ entry.tab.title || t('chat.new_chat') }}
+              <ChatTitleText :title="entry.tab.title || t('chat.new_chat')" />
             </span>
             <span class="shrink-0 text-meta text-muted-foreground">
               {{ folderNameOf(entry.tab.cwd) }}

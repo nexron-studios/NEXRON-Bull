@@ -73,6 +73,29 @@ export const withSettingDefaults = (
   }
 }
 
+/** What `notification_quiet` reports: Windows' "Do not disturb", or a full-screen app. */
+export const systemQuietList = ['none', 'do_not_disturb', 'busy'] as const
+export type SystemQuiet = (typeof systemQuietList)[number]
+
+/**
+ * Whether Bull's sound keeps still. A full-screen app that is in front while Bull's own window has
+ * the focus is Bull itself, and the user is looking at it; "Do not disturb" always means quiet.
+ */
+export const isQuietFor = (quiet: SystemQuiet, isFocused: boolean): boolean => {
+  switch (quiet) {
+    case 'none':
+      return false
+    case 'do_not_disturb':
+      return true
+    case 'busy':
+      return !isFocused
+    default: {
+      const unhandled: never = quiet
+      throw new Error(`Unhandled system quiet: ${unhandled}`)
+    }
+  }
+}
+
 /** The user wants to hear about this event, and not from a chat they muted. */
 export const isEventWanted = (
   settings: NotificationSettings,

@@ -11,7 +11,7 @@ import { handleError } from '@/lib/error'
 import {
   canShowOsNotification,
   focusWindow,
-  isSystemQuiet,
+  readSystemQuiet,
   isWindowFocused,
   onOsNotificationClick,
   registerOpenAction,
@@ -26,6 +26,7 @@ import {
   deliveryOf,
   isEventWanted,
   isRepeat,
+  isQuietFor,
   isSameSnapshots,
   notifyKeyOf,
   quotaAlertsOf,
@@ -114,8 +115,11 @@ export const useTabNotifications = () => {
   }
 
   const deliver = async ({ tabId, title, body, sound }: Message): Promise<boolean> => {
-    const canUseOs = await canShowOsNotification()
-    const isFocused = await isWindowFocused()
+    const [canUseOs, isFocused, quiet] = await Promise.all([
+      canShowOsNotification(),
+      isWindowFocused(),
+      readSystemQuiet()
+    ])
     const { background, hasSound, sounds } = settings.value
     const delivery = deliveryOf({
       tabId,
@@ -126,7 +130,7 @@ export const useTabNotifications = () => {
     })
     if (!delivery) return false
     // Under "Do not disturb" no sound at all, not even the system's fallback below.
-    const isSounding = hasSound && !(await isSystemQuiet())
+    const isSounding = hasSound && !isQuietFor(quiet, isFocused)
     const isPlayed = isSounding ? playSound(sounds[sound]) : Promise.resolve(false)
     if (delivery === 'os') {
       const id = nextNotificationId++

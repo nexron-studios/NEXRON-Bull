@@ -32,7 +32,8 @@ vt100 = "0.18"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# Already in the tree through the notification plugin and tao; asked for the real toast setting and
-# to set the big window icon (taskbar), which Tauri's set_icon leaves alone.
+# Already in the tree through the notification plugin and tao; asked for the real toast setting,
+# whether Windows wants quiet (notification_quiet.rs), and to set the big window icon (taskbar),
+# which Tauri's set_icon leaves alone.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["UI_Notifications", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_Console", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }

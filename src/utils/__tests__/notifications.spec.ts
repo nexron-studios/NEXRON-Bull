@@ -5,6 +5,7 @@ import {
   deliveryOf,
   isAllOff,
   isEventWanted,
+  isQuietFor,
   isRepeat,
   isSameSnapshots,
   notifyKeyOf,
@@ -436,5 +437,23 @@ describe('quotaAlertsOf', () => {
 
   it('should skip a window without a reset time', () => {
     expect(quotaAlertsOf([account(90, null)], {}, NOW)).toEqual([])
+  })
+})
+
+describe('isQuietFor', () => {
+  it('should keep still under do not disturb, also with Bull in front', () => {
+    expect(isQuietFor('do_not_disturb', true)).toBe(true)
+  })
+
+  it('should keep still while another full-screen app is in front', () => {
+    expect(isQuietFor('busy', false)).toBe(true)
+  })
+
+  it('should sound while the full-screen app is Bull itself', () => {
+    expect(isQuietFor('busy', true)).toBe(false)
+  })
+
+  it('should sound when the system wants no quiet', () => {
+    expect(isQuietFor('none', false)).toBe(false)
   })
 })

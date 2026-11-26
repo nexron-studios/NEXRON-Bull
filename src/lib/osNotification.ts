@@ -8,6 +8,7 @@ import {
   sendNotification
 } from '@tauri-apps/plugin-notification'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import type { SystemQuiet } from '@/utils/notifications'
 import { permissionOf, type OsNotificationSetting, type OsPermission } from '@/utils/osPermission'
 
 /** The page "System › Notifications"; allowed in `capabilities/default.json` and nothing else. */
@@ -38,17 +39,16 @@ const readSystemSetting = async (): Promise<OsNotificationSetting> => {
 }
 
 /**
- * Whether the system wants quiet: "Do not disturb", a full-screen game, a presentation (Windows
- * only; elsewhere never). Bull's own sound keeps still then, as the system's did. Asked before
- * every sound, the same way as the setting above: a failed ask counts as not quiet.
+ * Whether the system wants quiet (Windows only; elsewhere never). Asked before every sound, the
+ * same way as the setting above: a failed ask counts as not quiet.
  */
-export const isSystemQuiet = async (): Promise<boolean> => {
-  if (!isTauri()) return false
+export const readSystemQuiet = async (): Promise<SystemQuiet> => {
+  if (!isTauri()) return 'none'
   try {
-    return await invoke<boolean>('notification_quiet')
+    return await invoke<SystemQuiet>('notification_quiet')
   } catch (error) {
     console.warn('notifications.quiet_failed', { error })
-    return false
+    return 'none'
   }
 }
 

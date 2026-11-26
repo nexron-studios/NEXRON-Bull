@@ -1,6 +1,10 @@
-/** What a highlighted run of text stands for: a mentioned file or an attached image. */
+/**
+ * What a highlighted run of text stands for: a mentioned file, an attached image, or dictated
+ * words Claude is still recognising.
+ */
 export type HighlightMark =
   | { kind: 'mention' }
+  | { kind: 'interim' }
   | {
       kind: 'image'
       /** The image's number in the reference, from 1 */

@@ -4,11 +4,13 @@ import { CircleCheck, Folder, Monitor, Play } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import ChatFinishBadge from '@/components/chat/ChatFinishBadge.vue'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import { Button } from '@/components/ui/button'
 import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
 import SessionRowBackground from '@/components/session/SessionRowBackground.vue'
 import { useAgeFormat } from '@/composables/useAgeFormat'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useMachineLabel } from '@/composables/useMachineLabel'
 import { useChatStore } from '@/stores/chat'
 import { backgroundWorkOf } from '@/utils/chatTab'
@@ -31,6 +33,7 @@ const emit = defineEmits<{ resume: [] }>()
 const { t } = useI18n()
 const { labelOf: machineLabelOf } = useMachineLabel()
 const formatAge = useAgeFormat()
+const { plainOf: plainTitleOf } = useChatTitle()
 const { tabs } = storeToRefs(useChatStore())
 
 const title = computed(() => entry.title || t('chat.new_chat'))
@@ -83,7 +86,9 @@ const openRow = (event: MouseEvent) => {
         >
           <!-- The title keeps its room; folder and machine give way first in a narrow window. -->
           <span class="flex min-w-0 flex-col @2xl:min-w-40 @2xl:flex-1">
-            <span class="truncate text-small font-medium">{{ title }}</span>
+            <span class="truncate text-small font-medium"
+              ><ChatTitleText :title :tab="openTab"
+            /></span>
             <span v-if="summary" class="truncate text-meta text-muted-foreground @max-2xl:hidden">
               {{ summary }}
             </span>
@@ -124,7 +129,7 @@ const openRow = (event: MouseEvent) => {
           variant="outline"
           size="sm"
           class="motion-press shrink-0 touch-manipulation"
-          :aria-label="t('overview.resume_label', { title })"
+          :aria-label="t('overview.resume_label', { title: plainTitleOf(title) })"
           @click="emit('resume')"
         >
           <Play class="size-3.5" aria-hidden="true" />

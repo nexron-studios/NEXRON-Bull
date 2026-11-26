@@ -8,6 +8,7 @@ import NchIconButton from '@/components/common/NchIconButton.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
 import NavRailLinks from '@/components/nav/NavRailLinks.vue'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useChatNavigation } from '@/composables/useChatNavigation'
 import { useSessionOrder } from '@/composables/useSessionOrder'
 import { useSidebarMachine } from '@/composables/useSidebarMachine'
@@ -22,6 +23,7 @@ import { groupRows, isEmptyChat, sessionRowsOf, withManualOrder } from '@/utils/
 const emit = defineEmits<{ new: []; search: []; expand: [] }>()
 
 const { t } = useI18n()
+const { plainOf: plainTitleOf } = useChatTitle()
 const { shownChatId, openChat } = useChatNavigation()
 const { machine, tabsByMachine } = useSidebarMachine()
 const order = useSessionOrder(machine)
@@ -92,7 +94,7 @@ const statusLabelOf = (tab: ChatTabState) => {
               :class="{ 'bg-muted': tab.id === shownChatId }"
               :aria-label="
                 t('sidebar.rail_item', {
-                  title: tab.title || t('chat.new_chat'),
+                  title: plainTitleOf(tab.title) || t('chat.new_chat'),
                   status: statusLabelOf(tab)
                 })
               "
@@ -109,7 +111,9 @@ const statusLabelOf = (tab: ChatTabState) => {
               />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right">{{ tab.title || t('chat.new_chat') }}</TooltipContent>
+          <TooltipContent side="right">{{
+            plainTitleOf(tab.title) || t('chat.new_chat')
+          }}</TooltipContent>
         </Tooltip>
       </li>
     </ul>

@@ -539,6 +539,22 @@ export default {
     background: 'In the background',
     delivery: { os: 'System', toast: 'In the window' },
     sound: 'Sound',
+    sound_group: { done: 'Done', attention: 'Needs you' },
+    sound_play: 'Play {sound}',
+    sound_name: {
+      drop: 'Drop',
+      glass: 'Glass',
+      marimba: 'Wood',
+      harp: 'Harp',
+      bell: 'Bell',
+      breath: 'Breath',
+      knock: 'Knock',
+      ask: 'Question',
+      ping: 'Double ping',
+      nudge: 'Nudge',
+      crystal: 'Crystal',
+      duet: 'Duet'
+    },
     footnote:
       'The chat you are looking at never notifies. To mute a single chat, right-click its tab.',
     footnote_phone: 'The open chat never notifies. For a single chat, press and hold its session.',

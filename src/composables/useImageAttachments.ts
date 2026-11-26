@@ -1,5 +1,5 @@
 import { computed, ref, type Ref } from 'vue'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import type { PendingImage } from '@/utils/content'
 import {

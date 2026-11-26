@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { isDesktopApp } from '@/lib/platform'
 import i18n from '@/i18n'
 

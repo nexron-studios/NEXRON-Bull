@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { agentdService } from '@/api/services/agentd.service'
 import { reportAgentdFailure } from '@/lib/error'
 import { queryClient } from '@/lib/queryClient'

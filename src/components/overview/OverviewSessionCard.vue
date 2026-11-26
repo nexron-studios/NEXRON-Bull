@@ -2,11 +2,13 @@
 import { computed } from 'vue'
 import { MessageSquareText } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import OverviewSessionCardContext from '@/components/overview/OverviewSessionCardContext.vue'
 import OverviewSessionCardFooter from '@/components/overview/OverviewSessionCardFooter.vue'
 import OverviewSessionCardHeader from '@/components/overview/OverviewSessionCardHeader.vue'
 import OverviewSessionCardMeta from '@/components/overview/OverviewSessionCardMeta.vue'
 import OverviewSessionCardStep from '@/components/overview/OverviewSessionCardStep.vue'
+import { useChatTitle } from '@/composables/useChatTitle'
 import type { ChatTabState } from '@/utils/chatTab'
 import { cardPromptsOf, cardStatusOf, startPromptOf } from '@/utils/sessionCard'
 
@@ -27,6 +29,7 @@ const history = computed(() => tab.history)
 const hasMore = computed(() => tab.hasMore)
 
 const status = computed(() => cardStatusOf(tab))
+const { plainOf: plainTitleOf } = useChatTitle()
 const title = computed(() => tab.title || t('chat.new_chat'))
 const prompts = computed(() =>
   cardPromptsOf({
@@ -59,7 +62,9 @@ const openCard = (event: MouseEvent) => {
   >
     <OverviewSessionCardHeader :tab :status />
 
-    <h3 class="mt-4 truncate text-title font-semibold tracking-tight">{{ title }}</h3>
+    <h3 class="mt-4 truncate text-title font-semibold tracking-tight">
+      <ChatTitleText :title :tab />
+    </h3>
     <OverviewSessionCardMeta class="mt-1" :tab :now :prompt-count="prompts.count" />
     <OverviewSessionCardContext :tab-id="tab.id" :model="tab.model" />
     <p class="mt-1 h-5 truncate text-small text-muted-foreground">
@@ -84,6 +89,6 @@ const openCard = (event: MouseEvent) => {
       <OverviewSessionCardStep :tab />
     </div>
 
-    <OverviewSessionCardFooter :tab :title @open="emit('open')" />
+    <OverviewSessionCardFooter :tab :title="plainTitleOf(title)" @open="emit('open')" />
   </article>
 </template>

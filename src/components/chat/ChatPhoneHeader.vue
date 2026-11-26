@@ -3,6 +3,7 @@ import { ChevronLeft, Ellipsis, Monitor } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import type { ChatTabState } from '@/utils/chatTab'
 import { shownStatusOf } from '@/utils/shownStatus'
@@ -33,7 +34,9 @@ const { labelOf: machineLabelOf } = useMachineLabel()
             :is-waiting="tab.limit.kind === 'waiting'"
             :has-question="openQuestionOf(tab) !== null"
           />
-          <span class="truncate">{{ tab.title || t('chat.new_chat') }}</span>
+          <span class="truncate"
+            ><ChatTitleText :title="tab.title || t('chat.new_chat')" :tab
+          /></span>
         </h1>
         <p class="flex max-w-full min-w-0 items-center gap-1.5 text-meta text-muted-foreground">
           <template v-if="machineLabelOf(tab.machine)">

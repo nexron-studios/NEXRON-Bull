@@ -11,10 +11,13 @@ const EARLIEST_REAL_DATE_MS = 0
 
 export const versionOfTag = (tag) => tag.replace(/^v/, '')
 
-export const windowsInstallerName = (version) => `Bull_${version}_x64-setup.exe`
+// Tauri names the artifacts after `productName` in tauri.conf.json.
+const ARTIFACT_PREFIX = 'NEXRON-Bull'
+
+export const windowsInstallerName = (version) => `${ARTIFACT_PREFIX}_${version}_x64-setup.exe`
 
 // One universal tarball serves both Mac processors.
-export const macUpdaterName = (version) => `Bull_${version}_universal.app.tar.gz`
+export const macUpdaterName = (version) => `${ARTIFACT_PREFIX}_${version}_universal.app.tar.gz`
 
 const PLATFORM_ARTIFACTS = [
   { platform: 'windows-x86_64', artifactNameOf: windowsInstallerName },

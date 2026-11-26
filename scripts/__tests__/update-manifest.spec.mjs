@@ -21,14 +21,14 @@ describe('notesOf', () => {
 describe('signedArtifactsOf', () => {
   it('lists only artifacts whose signature is on the release', () => {
     const assetNames = [
-      'Bull_1.2.3_x64-setup.exe',
-      'Bull_1.2.3_x64-setup.exe.sig',
-      'Bull_1.2.3_universal.app.tar.gz',
-      'Bull_1.2.3_universal.dmg',
+      'NEXRON-Bull_1.2.3_x64-setup.exe',
+      'NEXRON-Bull_1.2.3_x64-setup.exe.sig',
+      'NEXRON-Bull_1.2.3_universal.app.tar.gz',
+      'NEXRON-Bull_1.2.3_universal.dmg',
       'agentd-x86_64-unknown-linux-musl'
     ]
 
-    expect(signedArtifactsOf(TAG, assetNames)).toEqual(['Bull_1.2.3_x64-setup.exe'])
+    expect(signedArtifactsOf(TAG, assetNames)).toEqual(['NEXRON-Bull_1.2.3_x64-setup.exe'])
   })
 })
 
@@ -39,8 +39,8 @@ describe('buildUpdateManifest', () => {
       body: BODY,
       publishedAt: PUBLISHED_AT,
       signatures: {
-        'Bull_1.2.3_x64-setup.exe': WINDOWS_SIGNATURE,
-        'Bull_1.2.3_universal.app.tar.gz': MAC_SIGNATURE
+        'NEXRON-Bull_1.2.3_x64-setup.exe': WINDOWS_SIGNATURE,
+        'NEXRON-Bull_1.2.3_universal.app.tar.gz': MAC_SIGNATURE
       }
     })
 
@@ -51,15 +51,15 @@ describe('buildUpdateManifest', () => {
       platforms: {
         'windows-x86_64': {
           signature: 'd2luZG93cy1zaWc=',
-          url: `${DOWNLOADS}/Bull_1.2.3_x64-setup.exe`
+          url: `${DOWNLOADS}/NEXRON-Bull_1.2.3_x64-setup.exe`
         },
         'darwin-aarch64': {
           signature: 'bWFjLXNpZw==',
-          url: `${DOWNLOADS}/Bull_1.2.3_universal.app.tar.gz`
+          url: `${DOWNLOADS}/NEXRON-Bull_1.2.3_universal.app.tar.gz`
         },
         'darwin-x86_64': {
           signature: 'bWFjLXNpZw==',
-          url: `${DOWNLOADS}/Bull_1.2.3_universal.app.tar.gz`
+          url: `${DOWNLOADS}/NEXRON-Bull_1.2.3_universal.app.tar.gz`
         }
       }
     })
@@ -70,7 +70,7 @@ describe('buildUpdateManifest', () => {
       tag: TAG,
       body: '',
       publishedAt: '0001-01-01T00:00:00Z',
-      signatures: { 'Bull_1.2.3_x64-setup.exe': WINDOWS_SIGNATURE }
+      signatures: { 'NEXRON-Bull_1.2.3_x64-setup.exe': WINDOWS_SIGNATURE }
     })
 
     expect(manifest).toEqual({
@@ -79,7 +79,7 @@ describe('buildUpdateManifest', () => {
       platforms: {
         'windows-x86_64': {
           signature: 'd2luZG93cy1zaWc=',
-          url: `${DOWNLOADS}/Bull_1.2.3_x64-setup.exe`
+          url: `${DOWNLOADS}/NEXRON-Bull_1.2.3_x64-setup.exe`
         }
       }
     })

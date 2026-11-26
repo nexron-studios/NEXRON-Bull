@@ -89,13 +89,13 @@ The screenshots show made-up data. See [Screenshots](#screenshots-1) under Devel
 
 ### Install
 
-Download `Bull_<version>_x64-setup.exe` from the
+Download `NEXRON-Bull_<version>_x64-setup.exe` from the
 [latest release](https://github.com/nexron-studios/NEXRON-Bull/releases/latest), run it and start
-Bull from the Start menu. The installer is not signed yet, so Windows SmartScreen asks first:
+NEXRON-Bull from the Start menu. The installer is not signed yet, so Windows SmartScreen asks first:
 **More info › Run anyway**.
 
-On a Mac, download `Bull_<version>_universal.dmg` from the same release and drag Bull into
-Applications. It is not notarised yet, so macOS refuses the first start: right-click Bull ›
+On a Mac, download `NEXRON-Bull_<version>_universal.dmg` from the same release and drag NEXRON-Bull
+into Applications. It is not notarised yet, so macOS refuses the first start: right-click NEXRON-Bull ›
 **Open**, or on macOS 15 and later **System Settings › Privacy & Security › Open Anyway**.
 
 To build the installer yourself:

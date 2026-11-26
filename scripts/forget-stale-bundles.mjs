@@ -11,7 +11,7 @@ const LSREGISTER =
 // /Applications or ~/Applications, where an installed Bull lives.
 const APPLICATIONS_SEGMENT = '/Applications/'
 const RECORD_SEPARATOR = /^-{80}$/m
-// The dump lists 'key:   value', a path followed by its record id, e.g. '/x/Bull.app (0x3134)'.
+// The dump lists 'key:   value', a path followed by its record id, e.g. '/x/NEXRON-Bull.app (0x3134)'.
 const FIELD_VALUE = (key) => new RegExp(`^${key}:\\s+(.+?)(?:\\s+\\(0x[0-9a-f]+\\))?$`, 'm')
 // A full dump of a busy machine runs past Node's default 1 MB buffer.
 const DUMP_BUFFER_BYTES = 256 * 1024 * 1024

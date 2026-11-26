@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Bull",
+  "productName": "NEXRON-Bull",
   "version": "0.7.30",
   "identifier": "com.nexron.chat",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Bull",
+        "title": "NEXRON-Bull",
         "width": 1280,
         "height": 820,
         "minWidth": 720,

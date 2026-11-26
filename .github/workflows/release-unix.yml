@@ -107,17 +107,18 @@ jobs:
           # Signs the updater tarball; installed copies refuse an update without a valid signature.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
-        # `app` makes Bull.app.tar.gz, what an installed copy downloads to update itself.
+        # `app` makes NEXRON-Bull.app.tar.gz (named after `productName`), what an installed copy
+        # downloads to update itself.
         run: npx tauri build --target universal-apple-darwin --bundles app,dmg
-      # The tarball is always Bull.app.tar.gz; the version in its name keeps releases apart and is
+      # The tarball is always NEXRON-Bull.app.tar.gz; the version in its name keeps releases apart and is
       # what write-update-manifest.mjs looks for.
       - name: Name the updater tarball
         run: |
           bundle=src-tauri/target/universal-apple-darwin/release/bundle
-          name="Bull_${TAG#v}_universal.app.tar.gz"
+          name="NEXRON-Bull_${TAG#v}_universal.app.tar.gz"
           mkdir -p out
-          cp "$bundle/macos/Bull.app.tar.gz" "out/$name"
-          cp "$bundle/macos/Bull.app.tar.gz.sig" "out/$name.sig"
+          cp "$bundle/macos/NEXRON-Bull.app.tar.gz" "out/$name"
+          cp "$bundle/macos/NEXRON-Bull.app.tar.gz.sig" "out/$name.sig"
           cp "$bundle"/dmg/*.dmg out/
       - uses: actions/upload-artifact@v4
         with:
@@ -157,10 +158,10 @@ jobs:
           <!-- macos-install -->
           ## macOS
 
-          Download `Bull_*_universal.dmg` below (Apple silicon and Intel) and drag Bull into Applications. The app is not notarised yet, so macOS refuses it the first time: right-click Bull › **Open** › **Open**. On macOS 15 and later use **System Settings › Privacy & Security › Open Anyway** instead. Or, in the Terminal:
+          Download `NEXRON-Bull_*_universal.dmg` below (Apple silicon and Intel) and drag NEXRON-Bull into Applications. The app is not notarised yet, so macOS refuses it the first time: right-click NEXRON-Bull › **Open** › **Open**. On macOS 15 and later use **System Settings › Privacy & Security › Open Anyway** instead. Or, in the Terminal:
 
           ```sh
-          xattr -dr com.apple.quarantine /Applications/Bull.app
+          xattr -dr com.apple.quarantine /Applications/NEXRON-Bull.app
           ```
 
           The `agentd-<target>` files are what Bull installs on a Mac or Linux machine it connects to; you do not need to download them. Bull fetches them from this release, which works only once it is published: GitHub serves no files of a draft.

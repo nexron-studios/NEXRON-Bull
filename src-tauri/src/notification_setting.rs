@@ -97,13 +97,13 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn release_build_in_target_uses_the_powershell_app_id() {
-        let exe_dir = Path::new(r"C:\dev\nexron-chat\src-tauri\target\release");
+        let exe_dir = Path::new(r"C:\dev\nexron-bull\src-tauri\target\release");
         assert_eq!(toast_app_id(exe_dir, IDENTIFIER), POWERSHELL_APP_ID);
     }
 
     #[test]
     fn installed_app_uses_its_identifier() {
-        let exe_dir = Path::new(r"C:\Users\me\AppData\Local\Bull");
+        let exe_dir = Path::new(r"C:\Users\me\AppData\Local\NEXRON-Bull");
         assert_eq!(toast_app_id(exe_dir, IDENTIFIER), "com.nexron.chat");
     }
 

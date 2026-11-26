@@ -1,4 +1,4 @@
-# Bull (repo nexron-chat)
+# Bull (repo NEXRON-Bull, folder nexron-bull)
 
 Desktop app (Tauri 2 + Vue 3) that shows Claude Code sessions as a chat in tabs,
 on this machine and later on other machines over SSH. Claude runs headless
@@ -84,11 +84,11 @@ Linux; the app installs the release). It lands in `%USERPROFILE%\.nexron-chat\ag
 ## Releases
 
 The Windows installer is built here: `npm run release:windows` (`-- --dry-run` only lists) builds it
-signed and attaches `Bull_<v>_x64-setup.exe` and its `.sig` to the release of `v<version>` (the
+signed and attaches `NEXRON-Bull_<v>_x64-setup.exe` and its `.sig` to the release of `v<version>` (the
 tag must be pushed). `npm run app:build` alone builds without uploading.
 `.github/workflows/release-unix.yml` runs on every pushed tag `v*` (or by hand with a tag): it
 builds the universal macOS `.dmg` (ad-hoc signed, not notarised), the signed updater tarball
-`Bull_<v>_universal.app.tar.gz` and `agentd-<target>` for Linux
+`NEXRON-Bull_<v>_universal.app.tar.gz` and `agentd-<target>` for Linux
 (musl, x86_64 and aarch64), macOS and Windows, and attaches them to that tag's release, drafting
 one if there is none. The tag must equal the version in `tauri.conf.json`. It runs `tauri build`
 itself, not `app:build`: the LaunchServices clean-up is for a Mac that keeps its build, and a
@@ -124,6 +124,13 @@ in `tauri.conf.json`.
   protocols) stay blocked.
 
 ## Brand
+
+Outside the app the product is called **NEXRON-Bull** (`productName`, window title, Start menu,
+taskbar, installer and macOS app name, PWA `name`; Jonas, 27.11.2026, like NEXRON-Manta). Inside it,
+the wordmark and headings keep the animal, **Bull**. The bundle id stays `com.nexron.chat` and the data
+folder `~/.nexron-chat`: changing either would orphan settings, tokens and the updater. Releases up to
+0.7.30 installed as `Bull` (`%LOCALAPPDATA%\Bull`, `/Applications/Bull.app`); the first NEXRON-Bull
+version installs beside it, and the old copy is removed by hand once.
 
 `public/favicon.svg` is the one source of the bull: favicon, header mark (`BrandBullLogo`),
 README banner (`docs/brand/banner.json` points at it), Tauri icons and PWA icons (on a dark

@@ -45,6 +45,10 @@ const CLEAR_DENIAL: &str = "The user cleared the chat instead.";
 /// Claude answers the control requests the app sends (context usage, rewinding) within a second;
 /// past this it is stuck, and the app must hear so instead of waiting forever.
 const CONTROL_WAIT: Duration = Duration::from_secs(60);
+/// Lines read ahead of the pump. A few hundred absorb a burst of tokens while the pump emits; when
+/// an app reads slowly (a stalled ssh client blocks `emit`) the reader stops too, the pipe fills
+/// and Claude waits, instead of agentd queueing its output without end.
+const QUEUED_LINES: usize = 256;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DaemonError {
@@ -730,7 +734,7 @@ impl<W: Write + Send + 'static> Daemon<W> {
 /// Claude's stdout parsed line by line on its own thread, so the pump can wait for a line and for
 /// the merge window at once. The channel closes with stdout.
 fn read_lines(stdout: impl io::Read + Send + 'static) -> mpsc::Receiver<Value> {
-    let (sender, lines) = mpsc::channel();
+    let (sender, lines) = mpsc::sync_channel(QUEUED_LINES);
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let event = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));

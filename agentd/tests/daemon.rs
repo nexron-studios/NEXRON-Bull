@@ -842,8 +842,9 @@ fn streams_the_reply_in_order_without_a_subagents_pieces() {
     // How many events the pieces arrive in depends on timing; their text and order do not.
     let text: String = streamed.iter().filter_map(|e| e["event"]["delta"]["text"].as_str()).collect();
     assert_eq!(text, "Hallo Welt");
-    let last_delta = events.iter().rposition(|e| claude_event(e, "stream_event").is_some_and(|s| s["event"]["type"] == "content_block_delta"));
-    let message = events.iter().position(|e| e["type"] == "message");
+    let is_delta = |e: &Value| claude_event(e, "stream_event").is_some_and(|s| s["event"]["type"] == "content_block_delta");
+    let last_delta = events.iter().rposition(is_delta).expect("a delta");
+    let message = events.iter().position(|e| e["type"] == "message").expect("the finished message");
     assert!(last_delta < message, "deltas before the finished message");
 
     agentd.send(json!({ "op": "stop", "tab": "t1" }));

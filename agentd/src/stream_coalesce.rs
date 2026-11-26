@@ -76,21 +76,23 @@ impl Coalescer {
     }
 
     fn take(&mut self, event: Value, now: Instant) -> [Option<Value>; 2] {
+        // Whatever comes next: a steady stream of lines must not hold the reply past its window.
+        let overdue = if self.due().is_some_and(|due| now >= due) { self.flush() } else { None };
         // Never sent, so it cannot reorder anything; a subagent streaming beside the reply must
         // not cut the reply's merge short.
         if is_subagent_stream(&event) {
-            return [None, Some(event)];
+            return [overdue, Some(event)];
         }
         let Some(key) = merge_key(&event) else {
-            return [self.flush(), Some(event)];
+            return [overdue.or_else(|| self.flush()), Some(event)];
         };
-        if let Some((pending, due)) = &mut self.pending {
-            if now < *due && merge_key(pending) == Some(key) {
+        if let Some((pending, _)) = &mut self.pending {
+            if merge_key(pending) == Some(key) {
                 append_piece(pending, &event, key.1);
                 return [None, None];
             }
         }
-        let flushed = self.flush();
+        let flushed = overdue.or_else(|| self.flush());
         self.pending = Some((event, now + MERGE_WINDOW));
         [flushed, None]
     }
@@ -176,6 +178,23 @@ mod tests {
         let sent: Vec<Value> = coalescer.push(text(0, "Welt"), start + MERGE_WINDOW).collect();
         assert_eq!(sent, vec![text(0, "Hallo ")]);
         assert_eq!(coalescer.flush(), Some(text(0, "Welt")));
+        assert_eq!(coalescer.due(), None);
+    }
+
+    #[test]
+    fn sends_an_overdue_delta_before_a_subagent_piece() {
+        let subagent = stream(
+            json!("toolu_1"),
+            json!({ "type": "content_block_delta", "index": 0,
+            "delta": { "type": "text_delta", "text": "intern" } }),
+        );
+        let mut coalescer = Coalescer::default();
+        let start = Instant::now();
+        assert_eq!(coalescer.push(text(0, "Hal"), start).count(), 0);
+        let early: Vec<Value> = coalescer.push(subagent.clone(), start + MERGE_WINDOW / 2).collect();
+        assert_eq!(early, vec![subagent.clone()]);
+        let late: Vec<Value> = coalescer.push(subagent.clone(), start + MERGE_WINDOW).collect();
+        assert_eq!(late, vec![text(0, "Hal"), subagent]);
         assert_eq!(coalescer.due(), None);
     }
 

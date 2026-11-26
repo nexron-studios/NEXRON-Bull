@@ -285,7 +285,7 @@ describe('settingsOfLegacy', () => {
       },
       background: 'os',
       hasSound: false,
-      sounds: { done: 'marimba', attention: 'ask' }
+      sounds: { done: 'harp', attention: 'ping' }
     })
   })
 
@@ -313,7 +313,7 @@ describe('withSettingDefaults', () => {
       },
       background: 'toast',
       hasSound: false,
-      sounds: { done: 'marimba', attention: 'ask' }
+      sounds: { done: 'harp', attention: 'ping' }
     })
   })
 
@@ -327,7 +327,7 @@ describe('withSettingDefaults', () => {
     const stored = { sounds: { done: 'bell', attention: 'drop' } } as never
     expect(withSettingDefaults(stored, DEFAULT_NOTIFICATION_SETTINGS).sounds).toEqual({
       done: 'bell',
-      attention: 'ask'
+      attention: 'ping'
     })
   })
 

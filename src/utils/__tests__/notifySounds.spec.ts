@@ -70,10 +70,10 @@ describe('soundOfGroup', () => {
   })
 
   it('should fall back to the default for a sound of the other group', () => {
-    expect(soundOfGroup('done', 'knock')).toBe('marimba')
+    expect(soundOfGroup('done', 'knock')).toBe('harp')
   })
 
   it('should fall back to the default for an unknown value', () => {
-    expect(soundOfGroup('attention', 42)).toBe('ask')
+    expect(soundOfGroup('attention', 42)).toBe('ping')
   })
 })

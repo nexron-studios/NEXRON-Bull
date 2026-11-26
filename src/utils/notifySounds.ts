@@ -140,8 +140,8 @@ export const SOUND_RECIPES: Record<NotifySoundId, readonly SoundTone[]> = {
 }
 
 export const DEFAULT_SOUNDS: Record<SoundGroup, NotifySoundId> = {
-  done: 'marimba',
-  attention: 'ask'
+  done: 'harp',
+  attention: 'ping'
 }
 
 /** Seconds from the first tone's start until the last one is silent. */

@@ -1,7 +1,8 @@
-import type { SessionSummaryProps } from '@/types/agentd.type'
-import { activityOfTab } from '@/utils/activity'
+import type { LiveBlockKind, SessionSummaryProps } from '@/types/agentd.type'
+import { activityOf } from '@/utils/activity'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import { isBusyStatus, turnMessagesOf, type ChatTabState, type TabStatus } from '@/utils/chatTab'
+import { liveActivityOf } from '@/utils/liveStream'
 import { askReasonOf } from '@/utils/notifications'
 import { listedTabOf, runningSinceOf } from '@/utils/shownStatus'
 import { applyManualOrder } from '@/utils/order'
@@ -201,6 +202,25 @@ export const sessionRowsOf = (
   return tabs.map((tab) => rowOfTab(tab, modified, today))
 }
 
+const isSameRow = (a: SessionRow, b: SessionRow): boolean =>
+  (Object.keys(a) as (keyof SessionRow)[]).every((key) => Object.is(a[key], b[key]))
+
+/**
+ * `next`, keeping each row of `previous` that did not change and the whole list when none did.
+ * Streamed tokens change a tab but none of its row's fields, so the sidebar renders nothing then.
+ */
+export const withStableRows = (previous: SessionRow[] | undefined, next: SessionRow[]) => {
+  if (!previous) return next
+  const before = new Map(previous.map((row) => [row.key, row]))
+  const rows = next.map((row) => {
+    const old = before.get(row.key)
+    return old && isSameRow(old, row) ? old : row
+  })
+  return rows.length === previous.length && rows.every((row, at) => row === previous[at])
+    ? previous
+    : rows
+}
+
 // Waiting and running rows: longest first. Finished rows: newest first. Unknown times go last in
 // every group, so a tab restored without a finish time never pushes fresh ones down.
 const compareRows = (group: SessionGroup) => (a: SessionRow, b: SessionRow) => {
@@ -261,8 +281,14 @@ export const machineStateOf = (tabs: ChatTabState[], now: number): MachineActivi
 export const mostPressingOf = (states: (MachineActivity | null)[]): MachineActivity | null =>
   machineActivityList.find((activity) => states.includes(activity)) ?? null
 
-/** What a waiting or running tab is doing right now; `null` once it is done. */
-export const rowActivityOf = (tab: ChatTabState): RowActivity | null => {
+/**
+ * What a waiting or running tab is doing right now; `null` once it is done. `live`: the kind of
+ * the block Claude streams, see `activityOf`.
+ */
+export const rowActivityOf = (
+  tab: ChatTabState,
+  live: LiveBlockKind | null = liveActivityOf(tab.live)
+): RowActivity | null => {
   if (tab.permission) {
     const reason = askReasonOf(tab.permission.toolName)
     if (reason === 'question' || reason === 'plan') return { kind: 'ask', reason }
@@ -272,7 +298,7 @@ export const rowActivityOf = (tab: ChatTabState): RowActivity | null => {
   if (openQuestionOf(tab)) return { kind: 'ask', reason: 'question' }
   if (tab.status !== 'working') return null
   // Only the running turn can hold the call in progress, so only its results are needed.
-  const activity = activityOfTab(tab, resultsByToolId(turnMessagesOf(tab)))
+  const activity = activityOf(tab, live, resultsByToolId(turnMessagesOf(tab)))
   switch (activity.kind) {
     case 'tool':
       return { kind: 'tool', tool: activity.tool, target: activity.target }

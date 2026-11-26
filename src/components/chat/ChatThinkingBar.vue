@@ -4,12 +4,14 @@ import { ArrowDown, Square } from '@lucide/vue'
 import { useEventListener, useIntervalFn, useNow } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import ChatEffortBadge from '@/components/chat/ChatEffortBadge.vue'
+import NchShimmerText from '@/components/common/NchShimmerText.vue'
 import { Button } from '@/components/ui/button'
 import { useQuip } from '@/composables/useQuip'
 import { useSessionSettings } from '@/composables/useSessionSettings'
-import { activityOfTab } from '@/utils/activity'
+import { activityOf } from '@/utils/activity'
 import { turnMessagesOf, type ChatTabState } from '@/utils/chatTab'
 import { formatElapsed } from '@/utils/elapsed'
+import { liveActivityOf } from '@/utils/liveStream'
 import { shouldStopOnEscape } from '@/utils/escape'
 import { LONG_TURN_MS, quipMoodOf } from '@/utils/quips'
 import type { ToolResultBlock } from '@/utils/toolPairs'
@@ -43,7 +45,9 @@ const { settings } = useSessionSettings(() => tab)
 // A stopwatch needs one tick per second, not one per frame.
 const now = useNow({ scheduler: (tick) => useIntervalFn(tick, TICK_MS) })
 
-const activity = computed(() => activityOfTab(tab, results))
+// Its own computed: the live block changes with every token, its kind only now and then.
+const liveKind = computed(() => liveActivityOf(tab.live))
+const activity = computed(() => activityOf(tab, liveKind.value, results))
 const runningMs = computed(() => (tab.turn ? now.value.getTime() - tab.turn.startedAt : 0))
 const { quip } = useQuip(
   // Starting reads as thinking, with the same guards: no joke over a retry or a limit wait.
@@ -69,8 +73,10 @@ const opensSheet = computed(() => hasDetails && !isStarting)
 const elapsed = computed(() => (tab.turn ? formatElapsed(runningMs.value) : ''))
 const formatTokens = computed(() => tokenCountFormatterOf(locale.value))
 // What the turn has written so far, like the terminal's "↓ 4.2k tokens".
+// Apart from the count: a token changes the count, never the turn's messages.
+const turnMessages = computed(() => turnMessagesOf(tab))
 const tokens = computed(() => {
-  const count = liveTurnTokensOf(turnMessagesOf(tab), tab.outputs, tab.streamUsage.chars)
+  const count = liveTurnTokensOf(turnMessages.value, tab.outputs, tab.streamUsage.chars)
   return count ? formatTokens.value(count) : ''
 })
 
@@ -103,7 +109,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       @click="opensSheet && emit('details')"
     >
       <span v-if="!opensSheet" class="sr-only" aria-live="polite">{{ label }}</span>
-      <span class="min-w-0 text-shimmer truncate font-medium" aria-hidden="true">{{ label }}</span>
+      <NchShimmerText :text="label" class="min-w-0 font-medium" aria-hidden="true" />
       <!-- Flavour only: small, muted, and the first to give way when space runs out. Screen readers
            never get it, it changes every few seconds. -->
       <span

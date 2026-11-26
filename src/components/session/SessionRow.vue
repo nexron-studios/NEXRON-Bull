@@ -17,6 +17,7 @@ import { useChatStore } from '@/stores/chat'
 import { openQuestionOf } from '@/utils/answerCallouts'
 import { backgroundWorkOf, isBusyStatus } from '@/utils/chatTab'
 import { targetOfTab } from '@/utils/sessionActions'
+import { liveActivityOf } from '@/utils/liveStream'
 import { rowActivityOf, type SessionRow } from '@/utils/sessionList'
 
 // `wide` is the full-width overview: one line per session, the step in its own column.
@@ -54,8 +55,10 @@ const age = computed(() =>
 const ageLabel = computed(() =>
   t(isBusyStatus(row.status) ? 'sidebar.age_running' : 'sidebar.age_finished', { age: age.value })
 )
+// Its own computed: the live block changes with every token, its kind only now and then.
+const liveKind = computed(() => liveActivityOf(row.tab.live))
 const activity = computed(() => {
-  const current = isBusy.value ? rowActivityOf(row.tab) : null
+  const current = isBusy.value ? rowActivityOf(row.tab, liveKind.value) : null
   return current ? activityLabel(current) : ''
 })
 // Shells or agents Claude still runs get the line a busy row's activity has: under "done" a shell

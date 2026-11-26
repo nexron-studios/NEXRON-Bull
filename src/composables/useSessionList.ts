@@ -13,6 +13,7 @@ import {
   searchableOf,
   sessionRowsOf,
   withManualOrder,
+  withStableRows,
   type SearchableRow,
   type SessionGroupEntry,
   type SessionRow
@@ -42,11 +43,14 @@ export const useSessionList = (
 
   const search = computed(() => toValue(query).trim())
   const isRanked = computed(() => search.value !== '')
-  const rows = computed<SessionRow[]>(() =>
-    sessionRowsOf(
-      tabs.value.filter((tab) => tab.machine === toValue(machine)),
-      recent.sessions.value,
-      now.value.getTime()
+  const rows = computed<SessionRow[]>((previous) =>
+    withStableRows(
+      previous,
+      sessionRowsOf(
+        tabs.value.filter((tab) => tab.machine === toValue(machine)),
+        recent.sessions.value,
+        now.value.getTime()
+      )
     )
   )
   const rowByKey = computed(() => new Map(rows.value.map((row) => [row.key, row])))

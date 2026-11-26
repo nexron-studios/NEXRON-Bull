@@ -1,7 +1,8 @@
-# Builds what this Windows PC cannot: Bull for macOS (universal .dmg) and a standalone agentd for
-# every system Bull connects to. Both land on the GitHub release of the tag, next to the Windows
-# installer uploaded by hand; that one is never touched. The app installs agentd on a Mac or Linux
-# machine from `agentd-<target>` of its own version, so these names must stay as they are.
+# Builds what this Windows PC cannot: Bull for macOS (universal .dmg plus the signed updater
+# tarball) and a standalone agentd for every system Bull connects to. Both land on the GitHub
+# release of the tag, next to the Windows installer uploaded by hand; that one is never touched.
+# The app installs agentd on a Mac or Linux machine from `agentd-<target>` of its own version, so
+# these names must stay as they are.
 name: Release macOS and agentd
 
 on:
@@ -103,11 +104,25 @@ jobs:
         env:
           # Ad-hoc signature: no Apple Developer ID yet. Apple silicon runs nothing unsigned.
           APPLE_SIGNING_IDENTITY: '-'
-        run: npx tauri build --target universal-apple-darwin --bundles dmg
+          # Signs the updater tarball; installed copies refuse an update without a valid signature.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        # `app` makes Bull.app.tar.gz, what an installed copy downloads to update itself.
+        run: npx tauri build --target universal-apple-darwin --bundles app,dmg
+      # The tarball is always Bull.app.tar.gz; the version in its name keeps releases apart and is
+      # what write-update-manifest.mjs looks for.
+      - name: Name the updater tarball
+        run: |
+          bundle=src-tauri/target/universal-apple-darwin/release/bundle
+          name="Bull_${TAG#v}_universal.app.tar.gz"
+          mkdir -p out
+          cp "$bundle/macos/Bull.app.tar.gz" "out/$name"
+          cp "$bundle/macos/Bull.app.tar.gz.sig" "out/$name.sig"
+          cp "$bundle"/dmg/*.dmg out/
       - uses: actions/upload-artifact@v4
         with:
           name: bull-macos
-          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          path: out/*
           if-no-files-found: error
 
   release:
@@ -118,6 +133,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
+      # For write-update-manifest.mjs. Before the download: checkout empties the workspace.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
           path: assets
@@ -149,3 +169,5 @@ jobs:
           gh release edit "$TAG" --notes-file notes.md
       # --clobber replaces only files of the same name: a rerun's own uploads, never the installer.
       - run: gh release upload "$TAG" assets/* --clobber
+      # Lists whatever is signed on the release so far; update-manifest.yml completes it on publish.
+      - run: node scripts/write-update-manifest.mjs "$TAG"

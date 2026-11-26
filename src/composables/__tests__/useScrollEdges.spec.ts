@@ -1,11 +1,25 @@
 import { defineComponent, h, nextTick, useTemplateRef } from 'vue'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useScrollEdges } from '../useScrollEdges'
 
 const VIEW_HEIGHT = 100
 
 enableAutoUnmount(afterEach)
+afterEach(() => vi.unstubAllGlobals())
+
+/** jsdom has no resize observer: like a browser's, this one reports each element it starts observing. */
+class ReportingResizeObserver {
+  readonly callback: ResizeObserverCallback
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback
+  }
+  observe() {
+    queueMicrotask(() => this.callback([], this as unknown as ResizeObserver))
+  }
+  unobserve() {}
+  disconnect() {}
+}
 
 const mountEdges = async () => {
   let edges: ReturnType<typeof useScrollEdges> | undefined
@@ -75,6 +89,7 @@ describe('useScrollEdges', () => {
   })
 
   it('should measure again when content arrives without a scroll', async () => {
+    vi.stubGlobal('ResizeObserver', ReportingResizeObserver)
     const { edges, area } = await mountEdges()
     await scrollTo(area, 80, 0)
 

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { isSpaceKey, withoutHeldSpace, withRestored, withTranscript } from '../dictation'
+import {
+  interimRangeOf,
+  isSpaceKey,
+  withInterim,
+  withoutHeldSpace,
+  withoutInserted,
+  withRestored,
+  withTranscript
+} from '../dictation'
 
 const key = (overrides: Partial<KeyboardEvent> = {}) => ({
   key: ' ',
@@ -82,5 +90,45 @@ describe('withRestored', () => {
 
   it('should leave the text alone when nothing was selected', () => {
     expect(withRestored('Hallo', 5, '')).toEqual({ text: 'Hallo', caret: 5 })
+  })
+})
+
+describe('withInterim', () => {
+  it('should insert like the transcript and say which characters it added', () => {
+    expect(withInterim('Ich bin müde', 7, 'sehr')).toEqual({
+      text: 'Ich bin sehr müde',
+      caret: 12,
+      inserted: { at: 7, text: ' sehr' }
+    })
+  })
+
+  it('should add nothing for an empty interim text', () => {
+    expect(withInterim('Hallo', 5, '')).toEqual({
+      text: 'Hallo',
+      caret: 5,
+      inserted: { at: 5, text: '' }
+    })
+  })
+})
+
+describe('withoutInserted', () => {
+  it('should take the inserted characters out with the caret where they started', () => {
+    expect(withoutInserted('Ich bin sehr müde', { at: 7, text: ' sehr' })).toEqual({
+      text: 'Ich bin müde',
+      caret: 7
+    })
+  })
+
+  it('should leave a text alone that no longer holds them there', () => {
+    expect(withoutInserted('Ich bin müde', { at: 7, text: ' sehr' })).toEqual({
+      text: 'Ich bin müde',
+      caret: 7
+    })
+  })
+})
+
+describe('interimRangeOf', () => {
+  it('should cover only the words, not the spaces around them', () => {
+    expect(interimRangeOf({ at: 7, text: ' sehr ' })).toEqual({ start: 8, end: 12 })
   })
 })

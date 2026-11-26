@@ -73,3 +73,33 @@ export const withTranscript = (text: string, at: number, transcript: string): Te
   const inserted = `${lead ? ' ' : ''}${words}`
   return { text: `${before}${inserted}${trail ? ' ' : ''}${after}`, caret: cut + inserted.length }
 }
+
+/** Characters put into the draft for the time being, to be taken out again exactly. */
+export interface Inserted {
+  at: number
+  text: string
+}
+
+/** `withTranscript`, and which characters that added where. */
+export const withInterim = (
+  text: string,
+  at: number,
+  transcript: string
+): TextEdit & { inserted: Inserted } => {
+  const edit = withTranscript(text, at, transcript)
+  const cut = Math.min(Math.max(at, 0), text.length)
+  const added = edit.text.slice(cut, cut + edit.text.length - text.length)
+  return { ...edit, inserted: { at: cut, text: added } }
+}
+
+/** `inserted` taken out of `text` again, caret where it was; unchanged when it is gone already. */
+export const withoutInserted = (text: string, { at, text: added }: Inserted): TextEdit => {
+  if (text.slice(at, at + added.length) !== added) return { text, caret: Math.min(at, text.length) }
+  return { text: text.slice(0, at) + text.slice(at + added.length), caret: at }
+}
+
+/** The words of an interim insert, without the spaces around them. */
+export const interimRangeOf = ({ at, text }: Inserted): { start: number; end: number } => ({
+  start: at + text.length - text.trimStart().length,
+  end: at + text.trimEnd().length
+})

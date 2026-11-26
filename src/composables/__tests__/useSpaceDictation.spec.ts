@@ -76,6 +76,8 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     await flushPromises()
     service.listener?.({ hold: hold ?? lastHold(), type: 'listening' })
   }
+  /** Claude shows `text` as recognised so far, for the current hold. */
+  const say = (text: string) => service.listener?.({ hold: lastHold(), type: 'interim', text })
   const select = (start: number, end: number) => {
     textarea().focus()
     textarea().value = draft.value
@@ -90,10 +92,13 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     keydown,
     keyup,
     hear,
+    say,
     caretAt,
     select,
     textarea,
-    state: () => dictation!.indicator.value
+    state: () => dictation!.indicator.value,
+    isDictating: () => dictation!.isDictating.value,
+    highlights: () => dictation!.highlights.value
   }
 }
 
@@ -384,5 +389,128 @@ describe('useSpaceDictation', () => {
     composer.keyup(' ')
 
     expect(composer.draft.value).toBe('a  ')
+  })
+
+  describe('interim text', () => {
+    it('should show what Claude recognised so far where the transcript goes', async () => {
+      const composer = await mountComposer('Ich bin müde')
+      composer.caretAt(7)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('seh')
+      composer.say('sehr')
+
+      expect(composer.draft.value).toBe('Ich bin sehr müde')
+      expect(composer.highlights()).toEqual([{ start: 8, end: 12, kind: 'interim' }])
+      expect(composer.setCaret).toHaveBeenLastCalledWith(12)
+    })
+
+    it('should replace the interim text by the final transcript', async () => {
+      const composer = await mountComposer('Ich bin müde')
+      service.stop.mockResolvedValue('sehr, sehr')
+      composer.caretAt(7)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('sehr')
+      composer.keyup(' ')
+      expect(composer.draft.value).toBe('Ich bin sehr müde')
+      await flushPromises()
+
+      expect(composer.draft.value).toBe('Ich bin sehr, sehr müde')
+      expect(composer.highlights()).toEqual([])
+      expect(composer.setCaret).toHaveBeenLastCalledWith(18)
+    })
+
+    it('should give text and selection back when the recording is thrown away', async () => {
+      const composer = await mountComposer('Hallo Welt')
+      composer.select(6, 10)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('Bull')
+      expect(composer.draft.value).toBe('Hallo Bull')
+
+      composer.keydown('Escape')
+      composer.keyup(' ')
+      await flushPromises()
+
+      expect(composer.draft.value).toBe('Hallo Welt')
+      expect(composer.setCaret).toHaveBeenLastCalledWith(10)
+      expect(composer.highlights()).toEqual([])
+    })
+
+    it('should take the interim text out when Claude fails while recording', async () => {
+      const composer = await mountComposer('Hallo')
+      composer.caretAt(5)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('Welt')
+      service.listener?.({ hold: lastHold(), type: 'failed', code: 'exited', detail: '' })
+      await flushPromises()
+
+      expect(composer.draft.value).toBe('Hallo')
+      expect(composer.setCaret).toHaveBeenLastCalledWith(5)
+    })
+
+    it('should take the interim text out when nothing was understood in the end', async () => {
+      const composer = await mountComposer('Hallo')
+      service.stop.mockRejectedValue(new DictationError('nothing_heard', ''))
+      composer.caretAt(5)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('äh')
+      composer.keyup(' ')
+      await flushPromises()
+
+      expect(composer.draft.value).toBe('Hallo')
+    })
+
+    it('should take the interim text out when Claude no longer shows any', async () => {
+      const composer = await mountComposer('Hallo')
+      composer.caretAt(5)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('Welt')
+      composer.say('')
+
+      expect([composer.draft.value, composer.highlights()]).toEqual(['Hallo', []])
+    })
+
+    it('should ignore interim text of an earlier press', async () => {
+      const composer = await mountComposer('Hallo')
+      composer.caretAt(5)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      service.listener?.({ hold: lastHold() - 1, type: 'interim', text: 'alt' })
+
+      expect(composer.draft.value).toBe('Hallo')
+    })
+
+    it('should say a dictation runs from arming until the transcript landed', async () => {
+      const composer = await mountComposer('')
+      service.stop.mockResolvedValue('Hallo')
+      composer.keydown(' ')
+      vi.advanceTimersByTime(200)
+      const engaged = composer.isDictating()
+      vi.advanceTimersByTime(300)
+      const arming = composer.isDictating()
+      await composer.hear()
+      composer.keyup(' ')
+      const transcribing = composer.isDictating()
+      await flushPromises()
+
+      expect([engaged, arming, transcribing, composer.isDictating()]).toEqual([
+        false,
+        true,
+        true,
+        false
+      ])
+    })
   })
 })

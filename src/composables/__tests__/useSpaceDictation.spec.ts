@@ -54,17 +54,19 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     const event = new KeyboardEvent('keydown', { key, cancelable: true, ...options })
     const isTaken = dictation!.handleKeydown(event)
     if (isTaken || event.defaultPrevented || key.length !== 1) return event
-    const at = textarea().selectionStart
-    draft.value = `${draft.value.slice(0, at)}${key}${draft.value.slice(at)}`
+    const { selectionStart: at, selectionEnd: end } = textarea()
+    draft.value = `${draft.value.slice(0, at)}${key}${draft.value.slice(end)}`
     textarea().value = draft.value
     textarea().setSelectionRange(at + 1, at + 1)
     return event
   }
   const keyup = (key: string) => textarea().dispatchEvent(new KeyboardEvent('keyup', { key }))
-  const caretAt = (at: number) => {
+  const select = (start: number, end: number) => {
+    textarea().focus()
     textarea().value = draft.value
-    textarea().setSelectionRange(at, at)
+    textarea().setSelectionRange(start, end)
   }
+  const caretAt = (at: number) => select(at, at)
 
   return {
     wrapper,
@@ -73,6 +75,7 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     keydown,
     keyup,
     caretAt,
+    select,
     state: () => dictation!.indicator.value
   }
 }
@@ -205,5 +208,96 @@ describe('useSpaceDictation', () => {
 
     expect(composer.draft.value).toBe('a ')
     expect(service.start).not.toHaveBeenCalled()
+  })
+  it('should keep swallowing the auto-repeat after a dictation failed while Space is down', async () => {
+    const composer = await mountComposer('Hallo')
+    service.start.mockRejectedValue(new DictationError('not_ready', ''))
+    composer.caretAt(5)
+    composer.keydown(' ')
+    vi.advanceTimersByTime(250)
+    await flushPromises()
+    const repeats = [1, 2, 3].map(() => composer.keydown(' ', { repeat: true }))
+
+    expect(repeats.map((event) => event.defaultPrevented)).toEqual([true, true, true])
+    expect(composer.draft.value).toBe('Hallo ')
+    composer.keyup(' ')
+    composer.keydown(' ')
+    composer.keyup(' ')
+    expect(composer.draft.value).toBe('Hallo  ')
+  })
+
+  it('should not let a late failure of an earlier press reset the current one', async () => {
+    const composer = await mountComposer('')
+    let rejectFirst: (error: unknown) => void = () => undefined
+    service.start.mockImplementationOnce(
+      () => new Promise<void>((_, reject) => (rejectFirst = reject))
+    )
+    composer.keydown(' ')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    composer.keyup(' ')
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    expect(composer.state()).toBe('arming')
+
+    const late = new DictationError('not_ready', 'still starting')
+    rejectFirst(late)
+    await flushPromises()
+
+    expect(composer.state()).toBe('arming')
+    expect(handleError).toHaveBeenCalledWith(late)
+  })
+
+  it('should give a selection back when the dictation is let go before it records', async () => {
+    const composer = await mountComposer('Hallo Welt')
+    composer.select(6, 10)
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    expect(composer.draft.value).toBe('Hallo ')
+
+    composer.keyup(' ')
+    await flushPromises()
+
+    expect(composer.draft.value).toBe('Hallo Welt')
+    expect(composer.setCaret).toHaveBeenLastCalledWith(10)
+  })
+
+  it('should give a selection back when nothing was understood', async () => {
+    const composer = await mountComposer('Hallo Welt')
+    service.stop.mockRejectedValue(new DictationError('nothing_heard', ''))
+    composer.select(6, 10)
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    service.listener?.({ type: 'listening' })
+    composer.keyup(' ')
+    await flushPromises()
+
+    expect(composer.draft.value).toBe('Hallo Welt')
+  })
+
+  it('should replace a selection with the transcript', async () => {
+    const composer = await mountComposer('Hallo Welt')
+    service.stop.mockResolvedValue('Bull')
+    composer.select(6, 10)
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    service.listener?.({ type: 'listening' })
+    composer.keyup(' ')
+    await flushPromises()
+
+    expect(composer.draft.value).toBe('Hallo Bull')
+  })
+
+  it('should stop showing the dictation when Claude fails while recording', async () => {
+    const composer = await mountComposer('')
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    service.listener?.({ type: 'listening' })
+    service.listener?.({ type: 'failed', code: 'exited', detail: '' })
+    await flushPromises()
+
+    expect(composer.state()).toBeNull()
+    expect(handleError).toHaveBeenCalledWith(new DictationError('exited', ''))
+    expect(service.cancel).toHaveBeenCalledTimes(1)
   })
 })

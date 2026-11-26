@@ -1,18 +1,24 @@
 import type { DictationErrorCode } from '@/api/services/dictation.service'
 
-/**
- * Hold Space in the composer to dictate (`useSpaceDictation`). `anchor` is where the caret was
- * when Space went down, so where the held key typed its space and where the transcript goes.
- */
+/** One press of Space: which one, where the caret was, and the selection its space replaced. */
+export interface SpacePress {
+  id: number
+  /** Where the held key typed its space and where the transcript goes */
+  anchor: number
+  /** Selected text the typed space replaced; it comes back when the dictation yields nothing */
+  replaced: string
+}
+
+/** Hold Space in the composer to dictate (`useSpaceDictation`). */
 export type DictationState =
   /** Space is down and typed a normal space; still a tap. */
-  | { kind: 'pressed'; anchor: number }
+  | { kind: 'pressed'; press: SpacePress }
   /** Bull holds Space in the hidden Claude too, which needs a moment before it records. */
-  | { kind: 'engaged'; anchor: number }
+  | { kind: 'engaged'; press: SpacePress }
   /** Held long enough: a dictation, the typed space is gone. Claude is not recording yet. */
-  | { kind: 'arming'; anchor: number }
-  | { kind: 'recording'; anchor: number }
-  | { kind: 'transcribing'; anchor: number }
+  | { kind: 'arming'; press: SpacePress }
+  | { kind: 'recording'; press: SpacePress }
+  | { kind: 'transcribing'; press: SpacePress }
   | { kind: 'error'; code: DictationErrorCode }
   | { kind: 'idle' }
 
@@ -38,6 +44,15 @@ export const withoutHeldSpace = (text: string, at: number): TextEdit =>
   text[at] === ' '
     ? { text: text.slice(0, at) + text.slice(at + 1), caret: at }
     : { text, caret: Math.min(at, text.length) }
+
+/** The selection a held space replaced, back at `at` with the caret behind it. */
+export const withRestored = (text: string, at: number, replaced: string): TextEdit => {
+  const cut = Math.min(Math.max(at, 0), text.length)
+  return {
+    text: `${text.slice(0, cut)}${replaced}${text.slice(cut)}`,
+    caret: cut + replaced.length
+  }
+}
 
 // No space in front after a space or an opening bracket or quote, and none behind before a space,
 // a closing bracket or punctuation. Straight quotes open as often as they close, so they count

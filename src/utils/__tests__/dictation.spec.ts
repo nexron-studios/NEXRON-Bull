@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSpaceKey, withoutHeldSpace, withTranscript } from '../dictation'
+import { isSpaceKey, withoutHeldSpace, withRestored, withTranscript } from '../dictation'
 
 const key = (overrides: Partial<KeyboardEvent> = {}) => ({
   key: ' ',
@@ -72,5 +72,15 @@ describe('withTranscript', () => {
 
   it('should keep the text when nothing was recognised', () => {
     expect(withTranscript('Hallo', 5, '  ')).toEqual({ text: 'Hallo', caret: 5 })
+  })
+})
+
+describe('withRestored', () => {
+  it('should put the replaced selection back with the caret behind it', () => {
+    expect(withRestored('Hallo ', 6, 'Welt')).toEqual({ text: 'Hallo Welt', caret: 10 })
+  })
+
+  it('should leave the text alone when nothing was selected', () => {
+    expect(withRestored('Hallo', 5, '')).toEqual({ text: 'Hallo', caret: 5 })
   })
 })

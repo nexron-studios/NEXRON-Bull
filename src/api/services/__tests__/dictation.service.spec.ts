@@ -1,13 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DictationError, dictationService } from '../dictation.service'
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }))
+const { invoke, listen, platform } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  listen: vi.fn(() => Promise.resolve(() => undefined)),
+  platform: { isDesktop: true }
+}))
 vi.mock('@tauri-apps/api/core', () => ({ invoke }))
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(() => Promise.resolve(() => undefined)) }))
+vi.mock('@tauri-apps/api/event', () => ({ listen }))
+vi.mock('@/lib/platform', () => ({ isDesktopApp: () => platform.isDesktop }))
 
 describe('dictationService', () => {
   beforeEach(() => {
     invoke.mockReset()
+    listen.mockClear()
+    platform.isDesktop = true
+  })
+
+  it('should not listen for Tauri events in a browser', () => {
+    platform.isDesktop = false
+
+    dictationService.onEvent(() => undefined)
+
+    expect(listen).not.toHaveBeenCalled()
   })
 
   it('should hand the transcript back from the stop command', async () => {

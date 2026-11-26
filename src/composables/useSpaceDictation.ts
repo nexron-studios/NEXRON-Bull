@@ -10,9 +10,12 @@ import { handleError } from '@/lib/error'
 import {
   isSpaceKey,
   withoutHeldSpace,
+  withRestored,
   withTranscript,
   type DictationIndicator,
-  type DictationState
+  type DictationState,
+  type SpacePress,
+  type TextEdit
 } from '@/utils/dictation'
 
 /** A tap is over by then; from here Bull holds Space in Claude as well, which warms up first. */
@@ -29,6 +32,9 @@ interface SpaceDictationOptions {
   setCaret: (at: number) => void
 }
 
+const isNothingHeard = (error: unknown): error is DictationError =>
+  error instanceof DictationError && error.code === 'nothing_heard'
+
 /**
  * Hold Space in the composer to dictate with Claude Code's own dictation (`dictation.service`).
  * A tap types its space as always; held for `HOLD_MS` that space goes again, and on release the
@@ -42,6 +48,10 @@ export const useSpaceDictation = ({
 }: SpaceDictationOptions) => {
   const state = ref<DictationState>({ kind: 'idle' })
   const { locale } = useI18n()
+  let pressCount = 0
+  // The key itself, apart from the dictation: once a dictation failed while Space is still down,
+  // the system's auto-repeat must not type a row of spaces until it is let go.
+  let isSpaceDown = false
 
   const indicator = computed<DictationIndicator | null>(() => {
     const { kind } = state.value
@@ -56,6 +66,22 @@ export const useSpaceDictation = ({
     return next
   }
 
+  /** The press the state belongs to; a press that is over gets no say any more. */
+  const currentPress = (): SpacePress | null =>
+    state.value.kind === 'idle' || state.value.kind === 'error' ? null : state.value.press
+  const isCurrent = (press: SpacePress) => currentPress()?.id === press.id
+
+  // A release by losing focus must not pull the focus back.
+  const apply = ({ text, caret }: TextEdit) => {
+    draft.value = text
+    if (document.activeElement === textarea()) setCaret(caret)
+  }
+
+  /** The dictation yielded nothing: the selection its space replaced comes back. */
+  const giveBack = (press: SpacePress) => {
+    if (press.replaced) apply(withRestored(draft.value, press.anchor, press.replaced))
+  }
+
   const errorTimer = useTimeoutFn(
     () => {
       if (state.value.kind === 'error') state.value = { kind: 'idle' }
@@ -64,8 +90,15 @@ export const useSpaceDictation = ({
     { immediate: false }
   )
 
-  const fail = (error: unknown) => {
-    if (error instanceof DictationError && error.code === 'nothing_heard') {
+  const fail = (press: SpacePress, error: unknown) => {
+    // A press that is over only reports a real failure; it does not touch a newer one.
+    if (!isCurrent(press)) {
+      if (!isNothingHeard(error)) handleError(error)
+      return
+    }
+    const { kind } = state.value
+    if (kind !== 'pressed' && kind !== 'engaged') giveBack(press)
+    if (isNothingHeard(error)) {
       state.value = { kind: 'error', code: error.code }
       errorTimer.start()
       return
@@ -78,16 +111,17 @@ export const useSpaceDictation = ({
 
   const commit = () => {
     if (state.value.kind !== 'engaged') return
-    const { text, caret } = withoutHeldSpace(draft.value, state.value.anchor)
-    draft.value = text
-    setCaret(caret)
-    state.value = { kind: 'arming', anchor: caret }
+    const { press } = state.value
+    const edit = withoutHeldSpace(draft.value, press.anchor)
+    apply(edit)
+    state.value = { kind: 'arming', press: { ...press, anchor: edit.caret } }
   }
 
   const engage = () => {
     if (state.value.kind !== 'pressed') return
-    state.value = { kind: 'engaged', anchor: state.value.anchor }
-    enqueue(() => dictationService.start(locale.value)).catch(fail)
+    const { press } = state.value
+    state.value = { kind: 'engaged', press }
+    enqueue(() => dictationService.start(locale.value)).catch((error) => fail(press, error))
   }
 
   const engageTimer = useTimeoutFn(engage, ENGAGE_MS, { immediate: false })
@@ -95,21 +129,32 @@ export const useSpaceDictation = ({
 
   const press = (field: HTMLTextAreaElement) => {
     errorTimer.stop()
-    state.value = { kind: 'pressed', anchor: field.selectionStart }
+    pressCount += 1
+    isSpaceDown = true
+    const { selectionStart, selectionEnd } = field
+    const replaced = draft.value.slice(selectionStart, selectionEnd)
+    state.value = { kind: 'pressed', press: { id: pressCount, anchor: selectionStart, replaced } }
     engageTimer.start()
     holdTimer.start()
   }
 
-  const insert = (transcript: string) => {
-    if (state.value.kind !== 'transcribing') return
-    const { text, caret } = withTranscript(draft.value, state.value.anchor, transcript)
-    draft.value = text
-    setCaret(caret)
+  const insert = (press: SpacePress, transcript: string) => {
+    if (!isCurrent(press)) return
+    apply(withTranscript(draft.value, press.anchor, transcript))
     state.value = { kind: 'idle' }
   }
 
-  /** Space is up, or the field lost focus: a tap stays a space, a recording becomes text. */
-  const release = () => {
+  /** Throws the dictation away, as if Space had never been held. */
+  const discard = (press: SpacePress) => {
+    engageTimer.stop()
+    holdTimer.stop()
+    giveBack(press)
+    state.value = { kind: 'idle' }
+    cancelInClaude()
+  }
+
+  /** The press is over: a tap stays a space, a recording becomes text. */
+  const endPress = () => {
     engageTimer.stop()
     holdTimer.stop()
     const current = state.value
@@ -118,13 +163,19 @@ export const useSpaceDictation = ({
         state.value = { kind: 'idle' }
         return
       case 'engaged':
-      case 'arming':
         state.value = { kind: 'idle' }
         return cancelInClaude()
-      case 'recording':
-        state.value = { kind: 'transcribing', anchor: current.anchor }
-        enqueue(dictationService.stop).then(insert, fail)
+      case 'arming':
+        return discard(current.press)
+      case 'recording': {
+        const { press } = current
+        state.value = { kind: 'transcribing', press }
+        enqueue(dictationService.stop).then(
+          (transcript) => insert(press, transcript),
+          (error) => fail(press, error)
+        )
         return
+      }
       case 'transcribing':
       case 'error':
       case 'idle':
@@ -136,45 +187,46 @@ export const useSpaceDictation = ({
     }
   }
 
+  /** Space is up, or the field lost focus. */
+  const release = () => {
+    isSpaceDown = false
+    endPress()
+  }
+
   const handleEvent = (event: DictationEvent) => {
     const { kind } = state.value
+    const press = currentPress()
+    if (!press || kind === 'pressed' || kind === 'transcribing') return
     if (event.type === 'failed') {
-      if (kind !== 'engaged' && kind !== 'arming') return
-      fail(new DictationError(event.code, event.detail))
+      fail(press, new DictationError(event.code, event.detail))
       return cancelInClaude()
     }
     if (kind === 'engaged') commit()
-    if (state.value.kind === 'arming') {
-      state.value = { kind: 'recording', anchor: state.value.anchor }
-    }
+    if (state.value.kind === 'arming') state.value = { kind: 'recording', press: state.value.press }
   }
 
   /** `true` when the key was the dictation's; the composer then leaves it alone. */
   const handleKeydown = (event: KeyboardEvent): boolean => {
-    const { kind } = state.value
-    const field = textarea()
-    if (kind === 'idle' || kind === 'error') {
-      if (field && isEnabled() && isSpaceKey(event) && !event.repeat) press(field)
-      return false
-    }
-    // The key's auto-repeat, which must not type a row of spaces.
-    if (event.key === ' ') {
+    // Space while a press is running or its key is still down: the auto-repeat, which must not
+    // type a row of spaces, whatever became of the dictation.
+    if (event.key === ' ' && (isSpaceDown || currentPress())) {
       event.preventDefault()
       return true
     }
+    const current = state.value
+    const field = textarea()
+    if (current.kind === 'idle' || current.kind === 'error') {
+      if (field && isEnabled() && isSpaceKey(event) && !event.repeat) press(field)
+      return false
+    }
     // Typing on while Space is down: it was a fast space, not a hold.
-    if (kind === 'pressed' || kind === 'engaged') {
-      release()
+    if (current.kind === 'pressed' || current.kind === 'engaged') {
+      endPress()
       return false
     }
     // While dictating the text stays put; Esc throws the recording away.
     event.preventDefault()
-    if (event.key === 'Escape' && kind !== 'transcribing') {
-      engageTimer.stop()
-      holdTimer.stop()
-      state.value = { kind: 'idle' }
-      cancelInClaude()
-    }
+    if (event.key === 'Escape' && current.kind !== 'transcribing') discard(current.press)
     return true
   }
 
@@ -185,8 +237,9 @@ export const useSpaceDictation = ({
   const stopListening = dictationService.onEvent(handleEvent)
   onScopeDispose(() => {
     stopListening()
-    const { kind } = state.value
-    if (kind === 'engaged' || kind === 'arming' || kind === 'recording') cancelInClaude()
+    const current = state.value
+    if (current.kind === 'engaged') cancelInClaude()
+    if (current.kind === 'arming' || current.kind === 'recording') discard(current.press)
   })
 
   return { state, indicator, handleKeydown }

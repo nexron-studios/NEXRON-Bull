@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { isDesktopApp } from '@/lib/platform'
 
 const DICTATION_EVENT = 'dictation'
 
@@ -76,7 +77,9 @@ export const dictationService = {
   /** Lets go and throws away what was recorded. */
   cancel: (): Promise<void> => call('dictation_cancel'),
 
+  /** In a browser there is no Tauri to listen to, and nothing that would dictate. */
   onEvent: (listener: Listener): (() => void) => {
+    if (!isDesktopApp()) return () => undefined
     void ensureListening()
     listeners.add(listener)
     return () => listeners.delete(listener)

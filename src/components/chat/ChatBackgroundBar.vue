@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Bot, SquareTerminal } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import NchShimmerText from '@/components/common/NchShimmerText.vue'
 import { useAgeFormat } from '@/composables/useAgeFormat'
 import { useMinuteClock } from '@/composables/useClock'
 import { useTabInsights } from '@/composables/useTabInsights'
@@ -87,9 +88,7 @@ const hiddenCount = computed(() => tasks.value.length - shown.value.length)
           />
         </span>
         <span class="flex min-w-0 items-baseline gap-1.5">
-          <span class="min-w-0 text-shimmer truncate font-medium">
-            {{ t('activity.bar_title') }}
-          </span>
+          <NchShimmerText :text="t('activity.bar_title')" class="min-w-0 font-medium" />
           <span class="shrink-0 text-meta text-muted-foreground tabular-nums">
             <span aria-hidden="true">·</span>
             {{ t('activity.bar_count', tasks.length) }}

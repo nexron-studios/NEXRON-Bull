@@ -182,27 +182,35 @@ html.dark {
   background-color: transparent;
 }
 
-/* "Claude is writing", after prompt-kit's Text Shimmer (MIT). Reduced motion stops it via the
-   block above. */
-@keyframes text-shimmer {
+/* "Claude is writing", after prompt-kit's Text Shimmer (MIT), drawn by NchShimmerText. A brighter
+   copy of the text shows through a soft window that sweeps across it, while the copy moves back by
+   as much and so stays on the text. Transform only: the compositor runs it on its own, so it keeps
+   moving while the page is busy. The former sweep of `background-position` behind clipped text
+   was painted on the main thread every frame and stood still whenever a chat streamed. Reduced
+   motion stops it via the block above, with the window outside the text. */
+@keyframes shimmer-window {
   from {
-    background-position: 100% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: -100% 0;
+    transform: translateX(100%);
   }
 }
-@utility text-shimmer {
-  background: linear-gradient(
-      90deg,
-      var(--muted-foreground) 35%,
-      var(--foreground) 50%,
-      var(--muted-foreground) 65%
-    )
-    0 0 / 200% 100%;
-  background-clip: text;
-  color: transparent;
-  animation: text-shimmer 2.4s linear infinite;
+@keyframes shimmer-copy {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+@utility shimmer-window {
+  -webkit-mask-image: linear-gradient(90deg, transparent 20%, black 50%, transparent 80%);
+  mask-image: linear-gradient(90deg, transparent 20%, black 50%, transparent 80%);
+  animation: shimmer-window 2.4s linear infinite both;
+}
+@utility shimmer-copy {
+  animation: shimmer-copy 2.4s linear infinite both;
 }
 
 /* The first ghost row of the info panel while Claude thinks (Figma 42e): a light band sweeps
@@ -241,22 +249,30 @@ html.dark {
    less motion it ends outside the pill. */
 @keyframes effort-sheen {
   from {
-    background-position: 100% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: 0% 0;
+    transform: translateX(100%);
   }
 }
+/* The band is its own layer moved by transform (see the shimmer above), behind the text. */
 @utility effort-sheen {
-  background-image: linear-gradient(
-    110deg,
-    transparent 35%,
-    color-mix(in oklab, var(--brand-foreground) 32%, transparent) 50%,
-    transparent 65%
-  );
-  background-size: 250% 100%;
-  background-repeat: no-repeat;
-  animation: effort-sheen 2s ease-in-out infinite;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: linear-gradient(
+      110deg,
+      transparent 20%,
+      color-mix(in oklab, var(--brand-foreground) 32%, transparent) 50%,
+      transparent 80%
+    );
+    animation: effort-sheen 2s ease-in-out infinite both;
+  }
 }
 @utility effort-glow {
   box-shadow: 0 0 10px color-mix(in oklab, var(--brand) 45%, transparent);

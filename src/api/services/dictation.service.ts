@@ -31,8 +31,10 @@ export class DictationError extends Error {
   }
 }
 
+/** `hold` is the id `start` was given, so an event of an earlier press is told apart. */
 export type DictationEvent =
-  { type: 'listening' } | { type: 'failed'; code: DictationErrorCode; detail: string }
+  | { hold: number; type: 'listening' }
+  | { hold: number; type: 'failed'; code: DictationErrorCode; detail: string }
 
 type Listener = (event: DictationEvent) => void
 
@@ -65,10 +67,10 @@ const ensureListening = () =>
 
 /** Claude Code's own dictation through a hidden `claude` on this machine (desktop app only). */
 export const dictationService = {
-  /** Holds Space in Claude; `listening` follows once it records. */
-  start: async (language: string): Promise<void> => {
+  /** Holds Space in Claude; `listening` with the same `hold` follows once it records. */
+  start: async (language: string, hold: number): Promise<void> => {
     await ensureListening()
-    return call('dictation_start', { language })
+    return call('dictation_start', { language, hold })
   },
 
   /** Lets go and resolves with the transcript. */

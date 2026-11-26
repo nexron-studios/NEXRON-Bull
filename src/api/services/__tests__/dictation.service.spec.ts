@@ -35,9 +35,9 @@ describe('dictationService', () => {
   it('should start with the language to dictate in', async () => {
     invoke.mockResolvedValue(undefined)
 
-    await dictationService.start('de')
+    await dictationService.start('de', 3)
 
-    expect(invoke).toHaveBeenCalledWith('dictation_start', { language: 'de' })
+    expect(invoke).toHaveBeenCalledWith('dictation_start', { language: 'de', hold: 3 })
   })
 
   it('should turn a failure of the Rust side into a DictationError', async () => {

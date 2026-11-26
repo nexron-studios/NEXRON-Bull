@@ -7,7 +7,7 @@ import { handleError } from '@/lib/error'
 import { useSpaceDictation } from '../useSpaceDictation'
 
 const service = vi.hoisted(() => ({
-  start: vi.fn<(language: string) => Promise<void>>(),
+  start: vi.fn<(language: string, hold: number) => Promise<void>>(),
   stop: vi.fn<() => Promise<string>>(),
   cancel: vi.fn<() => Promise<void>>(),
   listener: null as ((event: DictationEvent) => void) | null
@@ -27,6 +27,12 @@ vi.mock('@/api/services/dictation.service', async (importOriginal) => ({
 }))
 vi.mock('@/lib/error', () => ({ handleError: vi.fn() }))
 
+const SPACE = { key: ' ', code: 'Space' }
+const mounted: { unmount: () => void }[] = []
+
+/** The id the composer gave the hidden Claude for its current hold. */
+const lastHold = (): number => service.start.mock.lastCall?.[1] ?? -1
+
 /** The composer's part: a textarea whose keydown goes through the dictation first. */
 const mountComposer = async (initial: string, isEnabled = true) => {
   const draft = ref(initial)
@@ -45,13 +51,15 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     }
   })
   const wrapper = mount(host, { global: { plugins: [i18n] }, attachTo: document.body })
+  mounted.push(wrapper)
   const textarea = () => field.value as HTMLTextAreaElement
   // The keyup and blur listeners attach once the textarea is rendered.
   await flushPromises()
 
   /** Like the browser: a keydown nobody prevented types its key at the caret. */
   const keydown = (key: string, options: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent('keydown', { key, cancelable: true, ...options })
+    const code = key === ' ' ? SPACE.code : ''
+    const event = new KeyboardEvent('keydown', { key, code, cancelable: true, ...options })
     const isTaken = dictation!.handleKeydown(event)
     if (isTaken || event.defaultPrevented || key.length !== 1) return event
     const { selectionStart: at, selectionEnd: end } = textarea()
@@ -60,7 +68,14 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     textarea().setSelectionRange(at + 1, at + 1)
     return event
   }
-  const keyup = (key: string) => textarea().dispatchEvent(new KeyboardEvent('keyup', { key }))
+  // Space's keyup is listened for on the window, as it bubbles there from the field.
+  const keyup = (key: string, code = key === ' ' ? SPACE.code : '') =>
+    window.dispatchEvent(new KeyboardEvent('keyup', { key, code }))
+  /** Claude starts recording for the hold it was given last (or `hold`). */
+  const hear = async (hold?: number) => {
+    await flushPromises()
+    service.listener?.({ hold: hold ?? lastHold(), type: 'listening' })
+  }
   const select = (start: number, end: number) => {
     textarea().focus()
     textarea().value = draft.value
@@ -74,6 +89,7 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     setCaret,
     keydown,
     keyup,
+    hear,
     caretAt,
     select,
     state: () => dictation!.indicator.value
@@ -89,6 +105,7 @@ describe('useSpaceDictation', () => {
     service.stop.mockResolvedValue('')
   })
   afterEach(() => {
+    mounted.splice(0).forEach((wrapper) => wrapper.unmount())
     vi.useRealTimers()
     vi.clearAllMocks()
     document.body.innerHTML = ''
@@ -116,7 +133,7 @@ describe('useSpaceDictation', () => {
     composer.keyup(' ')
     await flushPromises()
 
-    expect(service.start).toHaveBeenCalledWith('de')
+    expect(service.start).toHaveBeenCalledWith('de', lastHold())
     expect(service.cancel).toHaveBeenCalledTimes(1)
     expect(composer.draft.value).toBe('Hallo ')
   })
@@ -130,7 +147,7 @@ describe('useSpaceDictation', () => {
     expect(composer.draft.value).toBe('Ich bin müde')
     expect(composer.state()).toBe('arming')
 
-    service.listener?.({ type: 'listening' })
+    await composer.hear()
     const repeat = composer.keydown(' ', { repeat: true })
     expect(repeat.defaultPrevented).toBe(true)
     expect(composer.state()).toBe('recording')
@@ -149,7 +166,7 @@ describe('useSpaceDictation', () => {
     service.stop.mockRejectedValue(new DictationError('nothing_heard', ''))
     composer.keydown(' ')
     vi.advanceTimersByTime(500)
-    service.listener?.({ type: 'listening' })
+    await composer.hear()
     composer.keyup(' ')
     await flushPromises()
 
@@ -177,7 +194,7 @@ describe('useSpaceDictation', () => {
     composer.caretAt(5)
     composer.keydown(' ')
     vi.advanceTimersByTime(500)
-    service.listener?.({ type: 'listening' })
+    await composer.hear()
     composer.keydown('Escape')
     composer.keyup(' ')
     await flushPromises()
@@ -268,7 +285,7 @@ describe('useSpaceDictation', () => {
     composer.select(6, 10)
     composer.keydown(' ')
     vi.advanceTimersByTime(500)
-    service.listener?.({ type: 'listening' })
+    await composer.hear()
     composer.keyup(' ')
     await flushPromises()
 
@@ -281,7 +298,7 @@ describe('useSpaceDictation', () => {
     composer.select(6, 10)
     composer.keydown(' ')
     vi.advanceTimersByTime(500)
-    service.listener?.({ type: 'listening' })
+    await composer.hear()
     composer.keyup(' ')
     await flushPromises()
 
@@ -292,12 +309,40 @@ describe('useSpaceDictation', () => {
     const composer = await mountComposer('')
     composer.keydown(' ')
     vi.advanceTimersByTime(500)
-    service.listener?.({ type: 'listening' })
-    service.listener?.({ type: 'failed', code: 'exited', detail: '' })
+    await composer.hear()
+    service.listener?.({ hold: lastHold(), type: 'failed', code: 'exited', detail: '' })
     await flushPromises()
 
     expect(composer.state()).toBeNull()
     expect(handleError).toHaveBeenCalledWith(new DictationError('exited', ''))
     expect(service.cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('should not let a late event of an earlier press drive the current one', async () => {
+    const composer = await mountComposer('')
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    await flushPromises()
+    const earlier = lastHold()
+    composer.keyup(' ')
+    composer.keydown(' ')
+    vi.advanceTimersByTime(250)
+    await composer.hear(earlier)
+
+    expect(composer.state()).toBeNull()
+    vi.advanceTimersByTime(250)
+    await composer.hear()
+    expect(composer.state()).toBe('recording')
+  })
+
+  it('should end the press by the physical key, also when Option changed the character', async () => {
+    const composer = await mountComposer('a')
+    composer.caretAt(1)
+    composer.keydown(' ')
+    composer.keyup('\u00a0', 'Space')
+    composer.keydown(' ')
+    composer.keyup(' ')
+
+    expect(composer.draft.value).toBe('a  ')
   })
 })

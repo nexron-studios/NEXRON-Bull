@@ -23,6 +23,11 @@ const ENGAGE_MS = 200
 /** Held this long, Space dictates instead of typing (Jonas, 26.11.2026: "ab etwa ½ s"). */
 const HOLD_MS = 500
 const ERROR_SHOW_MS = 2500
+const SPACE_CODE = 'Space'
+
+// Shared by every composer, so a press id names one press in the whole window: the hidden
+// Claude's events come back with it and must not reach another composer's press.
+let pressCount = 0
 
 interface SpaceDictationOptions {
   textarea: () => HTMLTextAreaElement | null | undefined
@@ -48,7 +53,6 @@ export const useSpaceDictation = ({
 }: SpaceDictationOptions) => {
   const state = ref<DictationState>({ kind: 'idle' })
   const { locale } = useI18n()
-  let pressCount = 0
   // The key itself, apart from the dictation: once a dictation failed while Space is still down,
   // the system's auto-repeat must not type a row of spaces until it is let go.
   let isSpaceDown = false
@@ -121,7 +125,9 @@ export const useSpaceDictation = ({
     if (state.value.kind !== 'pressed') return
     const { press } = state.value
     state.value = { kind: 'engaged', press }
-    enqueue(() => dictationService.start(locale.value)).catch((error) => fail(press, error))
+    enqueue(() => dictationService.start(locale.value, press.id)).catch((error) =>
+      fail(press, error)
+    )
   }
 
   const engageTimer = useTimeoutFn(engage, ENGAGE_MS, { immediate: false })
@@ -196,7 +202,7 @@ export const useSpaceDictation = ({
   const handleEvent = (event: DictationEvent) => {
     const { kind } = state.value
     const press = currentPress()
-    if (!press || kind === 'pressed' || kind === 'transcribing') return
+    if (!press || press.id !== event.hold || kind === 'pressed' || kind === 'transcribing') return
     if (event.type === 'failed') {
       fail(press, new DictationError(event.code, event.detail))
       return cancelInClaude()
@@ -209,7 +215,7 @@ export const useSpaceDictation = ({
   const handleKeydown = (event: KeyboardEvent): boolean => {
     // Space while a press is running or its key is still down: the auto-repeat, which must not
     // type a row of spaces, whatever became of the dictation.
-    if (event.key === ' ' && (isSpaceDown || currentPress())) {
+    if (event.code === SPACE_CODE && (isSpaceDown || currentPress())) {
       event.preventDefault()
       return true
     }
@@ -230,9 +236,12 @@ export const useSpaceDictation = ({
     return true
   }
 
-  useEventListener(textarea, 'keyup', (event: KeyboardEvent) => {
-    if (event.key === ' ') release()
+  // On the window, by the physical key: a keyup with Option held reports another character, and
+  // a textarea rendered anew while Space is down never gets the keyup nor a blur.
+  useEventListener(window, 'keyup', (event: KeyboardEvent) => {
+    if (event.code === SPACE_CODE) release()
   })
+  useEventListener(window, 'blur', release)
   useEventListener(textarea, 'blur', release)
   const stopListening = dictationService.onEvent(handleEvent)
   onScopeDispose(() => {

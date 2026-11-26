@@ -96,8 +96,8 @@ export const useSpaceDictation = ({
 
   /** The dictation yielded nothing: the interim words go, the selection its space replaced comes back. */
   const giveBack = (press: SpacePress) => {
-    interim.takeOut()
-    if (press.replaced) apply(withRestored(draft.value, press.anchor, press.replaced))
+    const at = interim.takeOut() ?? press.anchor
+    if (press.replaced) apply(withRestored(draft.value, at, press.replaced))
   }
 
   const errorTimer = useTimeoutFn(

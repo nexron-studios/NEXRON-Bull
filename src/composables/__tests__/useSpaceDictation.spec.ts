@@ -438,6 +438,22 @@ describe('useSpaceDictation', () => {
       expect(composer.draft.value).toBe('> Frage\n\nIch bin sehr, sehr müde')
     })
 
+    it('should give the selection back where the interim moved when a quote went in front', async () => {
+      const composer = await mountComposer('Hallo Welt')
+      composer.select(6, 10)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('Bull')
+      composer.draft.value = `> Frage\n\n${composer.draft.value}`
+
+      composer.keydown('Escape')
+      composer.keyup(' ')
+      await flushPromises()
+
+      expect(composer.draft.value).toBe('> Frage\n\nHallo Welt')
+    })
+
     it('should give text and selection back when the recording is thrown away', async () => {
       const composer = await mountComposer('Hallo Welt')
       composer.select(6, 10)

@@ -611,6 +611,16 @@ export const withTurnClock = (tab: ChatTabState, now: number): ChatTabState => {
 }
 
 /**
+ * True when an event left everything the turn clock looks at as it was, like a streamed token:
+ * the clock already noted that state, and noting it again walks every message for nothing.
+ */
+export const hasSameTurnInputs = (before: ChatTabState, after: ChatTabState): boolean =>
+  before.status === after.status &&
+  before.turn === after.turn &&
+  before.messages === after.messages &&
+  before.pending === after.pending
+
+/**
  * A turn that ends well finishes the chat; a crash, an exit or an error result mid-turn does not.
  * A background agent still running holds the finish: the chat stays under "running" until a turn
  * ends with no agent left, usually Claude's reply to the last report (Jonas, 25.11.2026). Shells

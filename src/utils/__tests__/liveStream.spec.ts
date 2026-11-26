@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { applyEvent, newTab, type ChatTabState } from '../chatTab'
-import { appendedTo, liveActivityOf, NO_LIVE_BLOCK } from '../liveStream'
+import {
+  appendedTo,
+  isSubagentStream,
+  isTokenEvent,
+  liveActivityOf,
+  NO_LIVE_BLOCK
+} from '../liveStream'
 import type { AgentdEvent, ClaudeEvent } from '@/types/agentd.type'
 import fixtureJson from '../../../agentd/tests/fixtures/stream_replay.json?raw'
 
@@ -87,5 +93,26 @@ describe('the replay agentd derives from the same events', () => {
       replay?.block ?? NO_LIVE_BLOCK,
       replay?.chars ?? 0
     ])
+  })
+})
+
+describe('isTokenEvent', () => {
+  const streamed = (inner: string, parent: string | null = null): AgentdEvent => ({
+    type: 'claude',
+    tab: 't1',
+    event: { type: 'stream_event', parent_tool_use_id: parent, event: { type: inner } }
+  })
+
+  it('should take a delta of Claude itself as a token', () => {
+    expect(isTokenEvent(streamed('content_block_delta'))).toBe(true)
+  })
+
+  it('should not take the start of a message as a token', () => {
+    expect(isTokenEvent(streamed('message_start'))).toBe(false)
+  })
+
+  it("should not take a subagent's delta as a token, but as a subagent stream", () => {
+    const event = streamed('content_block_delta', 'agent-1')
+    expect([isTokenEvent(event), isSubagentStream(event)]).toEqual([false, true])
   })
 })

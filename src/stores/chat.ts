@@ -1,7 +1,8 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { agentdService, type Machine } from '@/api/services/agentd.service'
 import i18n from '@/i18n'
+import { createFrameQueue } from '@/lib/frameQueue'
 import { handleError } from '@/lib/error'
 import { startRefusalNoticeOf } from '@/lib/worktreeText'
 import { queryClient } from '@/lib/queryClient'
@@ -13,6 +14,7 @@ import { useHiddenSessionsStore } from '@/stores/hiddenSessions'
 import { useImageNameStore } from '@/stores/imageNames'
 import { useLimitPolicyStore } from '@/stores/limitPolicy'
 import { useRememberedSettingsStore } from '@/stores/rememberedSettings'
+import { useSavedTabsStore } from '@/stores/savedTabs'
 import { useShellRunsStore, type ShellRun } from '@/stores/shellRuns'
 import { useSlashCommandsStore } from '@/stores/slashCommands'
 import { useWorktreeSettingsStore } from '@/stores/worktreeSettings'
@@ -31,6 +33,7 @@ import {
   isBusyStatus,
   newTab,
   savedTabOf,
+  hasSameTurnInputs,
   stampArrival,
   withAgentNotices,
   withBackgroundTasks,
@@ -78,6 +81,8 @@ import {
   type Steering
 } from '@/utils/steering'
 import { withSubagentEvent } from '@/utils/subagentActions'
+import { fieldPatchOf } from '@/utils/fieldPatch'
+import { isSubagentStream, isTokenEvent } from '@/utils/liveStream'
 import {
   agentNoticesOf,
   backgroundTasksOf,
@@ -144,8 +149,10 @@ interface QueuedPrompt {
 export const useChatStore = defineStore(
   'chat',
   () => {
-    const tabs = ref<ChatTabState[]>([])
-    const activeId = ref<string | null>(null)
+    // The tabs of the last run; only those Claude had started can reopen.
+    const saved = useSavedTabsStore()
+    const tabs = ref<ChatTabState[]>(saved.tabs.filter((tab) => tab.sessionId).map(newTab))
+    const activeId = ref<string | null>(saved.activeId)
     // Messages typed while Claude was still starting; sent once it reports `started`. Reactive, so
     // the pane can tell a chat with a prompt on the way from an empty one.
     const queued = ref(new Map<string, QueuedPrompt[]>())
@@ -176,15 +183,21 @@ export const useChatStore = defineStore(
       return previous && isSameRanks(previous, next) ? previous : next
     })
 
+    // Writes only the fields that changed into the tab, instead of a new tab in a new list. Every
+    // streamed token changes a tab; a new list made the sidebar, the notifications and the open
+    // chat compute and render everything again for each one. Now only readers of the changed
+    // fields (the live text, the token count) run.
     const update = (id: string, change: (tab: ChatTabState) => ChatTabState) => {
-      tabs.value = tabs.value.map((tab) => {
-        if (tab.id !== id) return tab
-        const next = change(tab)
-        // `/clear` moves the tab to a new session; the one it leaves can still be reopened.
-        if (tab.sessionId && next.sessionId !== tab.sessionId)
-          useRememberedSettingsStore().remember(tab.sessionId, tab)
-        return next
-      })
+      const tab = tabOf(id)
+      if (!tab) return
+      const next = change(tab)
+      if (next === tab) return
+      // `/clear` moves the tab to a new session; the one it leaves can still be reopened.
+      if (tab.sessionId && next.sessionId !== tab.sessionId)
+        useRememberedSettingsStore().remember(tab.sessionId, tab)
+      const { changed, removed } = fieldPatchOf(tab, next)
+      Object.assign(tab, changed)
+      for (const key of removed) Reflect.deleteProperty(tab, key)
     }
     const tabOf = (id: string) => tabs.value.find((tab) => tab.id === id)
     /** Every request about a tab goes to the machine its session runs on. */
@@ -367,7 +380,7 @@ export const useChatStore = defineStore(
         steering.value.set(prompt.uuid, withReadingPoint(sent, isTurnEnd))
     }
 
-    const onEvent = (event: AgentdEvent) => {
+    const handleEvent = (event: AgentdEvent) => {
       if (event.type === 'disconnected') return attach.markDisconnected(event.machine)
       if (!('tab' in event) || !event.tab) return
       const id = event.tab
@@ -383,6 +396,7 @@ export const useChatStore = defineStore(
       const isCarried = carriesTurn(id, event)
       update(id, (tab) => {
         const next = applyEvent(tab, stampArrival(event, now))
+        if (!isCarried && hasSameTurnInputs(tab, next)) return next
         return withTurnClock(isCarried ? { ...next, status: 'working' } : next, now)
       })
       markReadingPoint(id, event)
@@ -417,6 +431,17 @@ export const useChatStore = defineStore(
         else if (tab.moveAfterTurn) update(id, (t) => ({ ...t, moveAfterTurn: null }))
       }
       if (tab?.status === 'idle') flushHeld(id)
+    }
+
+    // Every running chat streams many tokens per second. They wait for the next frame and are
+    // applied together, so a chat renders once per frame instead of once per token.
+    const tokens = createFrameQueue<AgentdEvent>((events) => events.forEach(handleEvent))
+    const onEvent = (event: AgentdEvent) => {
+      if (isSubagentStream(event)) return
+      if (isTokenEvent(event)) return tokens.push(event)
+      // Everything else comes after the tokens that arrived before it.
+      tokens.drain()
+      handleEvent(event)
     }
 
     const openNew = (fields: Omit<SavedTab, 'id' | 'title' | 'sessionId' | 'isFresh'>) => {
@@ -921,6 +946,9 @@ export const useChatStore = defineStore(
     // Claude outlives the app on every machine; restored tabs pick up where it is now.
     agentdService.onReady(attach.attachAll)
 
+    // Runs only when a saved field changes, never for a streamed token.
+    watch(() => ({ activeId: activeId.value, tabs: tabs.value.map(savedTabOf) }), saved.save)
+
     return {
       tabs,
       activeId,
@@ -967,23 +995,6 @@ export const useChatStore = defineStore(
       lineUpByFinish
     }
   },
-  {
-    persist: {
-      // Only what reopens a tab; messages come back from the transcript.
-      serializer: {
-        serialize: (state) =>
-          JSON.stringify({
-            activeId: state.activeId,
-            tabs: (state.tabs as ChatTabState[]).map(savedTabOf)
-          }),
-        deserialize: (text) => {
-          const saved = JSON.parse(text) as { activeId: string | null; tabs: SavedTab[] }
-          return {
-            activeId: saved.activeId,
-            tabs: saved.tabs.filter((tab) => tab.sessionId).map(newTab)
-          }
-        }
-      }
-    }
-  }
+  // Saved through the small `savedTabs` store: the plugin would watch this one deeply.
+  { persist: false }
 )

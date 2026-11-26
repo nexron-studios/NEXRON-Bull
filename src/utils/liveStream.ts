@@ -127,3 +127,17 @@ export const withReplay = (
     status: liveActivityOf(event.block) ? 'working' : tab.status
   }
 }
+
+const streamedOf = (event: AgentdEvent): ClaudeEvent | null =>
+  event.type === 'claude' && event.event.type === 'stream_event' ? event.event : null
+
+/** A piece of a subagent's stream: its text belongs to its Agent call, nothing shows it live. */
+export const isSubagentStream = (event: AgentdEvent): boolean =>
+  !!streamedOf(event)?.parent_tool_use_id
+
+/** A piece of the text or reasoning Claude itself streams, many of them per second. */
+export const isTokenEvent = (event: AgentdEvent): boolean => {
+  const streamed = streamedOf(event)
+  if (!streamed || streamed.parent_tool_use_id) return false
+  return (streamed.event as ClaudeEvent | undefined)?.type === 'content_block_delta'
+}

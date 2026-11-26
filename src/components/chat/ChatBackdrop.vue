@@ -6,6 +6,6 @@
      composited, instead of being painted again under every token in WebKit (Bull on the Mac). -->
 <template>
   <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 will-change-transform">
-    <div class="absolute inset-0 shadow-[inset_0_0_160px_var(--vignette)]" />
+    <div class="absolute inset-0 shadow-[inset_0_0_220px_40px_var(--vignette)]" />
   </div>
 </template>

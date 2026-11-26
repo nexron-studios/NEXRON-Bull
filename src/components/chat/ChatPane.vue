@@ -42,6 +42,7 @@ import { useOlderHistory } from '@/composables/useOlderHistory'
 import { useScrollEdges } from '@/composables/useScrollEdges'
 import { providePromptEdit, usePromptEditOf } from '@/composables/usePromptEdit'
 import { useChatStore } from '@/stores/chat'
+import { vSkipOffscreen } from '@/lib/skipOffscreen'
 import { useDraftStore } from '@/stores/drafts'
 import { useRewindStore } from '@/stores/rewind'
 import type { QueuedPromptProps } from '@/types/agentd.type'
@@ -296,6 +297,7 @@ const handlePreviewClick = (event: MouseEvent) => {
             :item
             :results
             :is-running="isWorking"
+            v-skip-offscreen
             :class="arrivals.has(item.key) && 'message-rise'"
             :data-search-key="item.key"
             :data-scroll-anchor="index >= anchorsFrom ? item.key : undefined"

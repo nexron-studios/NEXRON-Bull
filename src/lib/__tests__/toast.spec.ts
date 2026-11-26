@@ -3,7 +3,7 @@ import BrandToastIcon from '@/components/brand/BrandToastIcon.vue'
 import { toast } from '../toast'
 
 const { sonnerToast } = vi.hoisted(() => ({
-  sonnerToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
+  sonnerToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() })
 }))
 vi.mock('vue-sonner', () => ({ toast: sonnerToast }))
 
@@ -29,5 +29,19 @@ describe('toast', () => {
     toast.error('Fehlgeschlagen', { description: 'Netz weg' })
 
     expect(sonnerToast.error).toHaveBeenCalledWith('Fehlgeschlagen', { description: 'Netz weg' })
+  })
+})
+
+describe('toast.message', () => {
+  it('should give the bull to a message toast, which Sonner draws untyped too', () => {
+    toast.message('Exportiert')
+
+    expect(sonnerToast.message).toHaveBeenCalledWith('Exportiert', { icon: BrandToastIcon })
+  })
+
+  it('should fall back to the bull when the caller passes no icon after all', () => {
+    toast.message('Hallo', { icon: undefined })
+
+    expect(sonnerToast.message).toHaveBeenCalledWith('Hallo', { icon: BrandToastIcon })
   })
 })

@@ -436,18 +436,7 @@ export const useChatStore = defineStore(
 
     // Every running chat streams many tokens per second. They wait for the next frame and are
     // applied together, so a chat renders once per frame instead of once per token.
-    // One token that fails to apply must not take the rest of its frame along, nor the event that
-    // made the queue drain.
-    const handleEach = (events: AgentdEvent[]) => {
-      for (const event of events) {
-        try {
-          handleEvent(event)
-        } catch (error) {
-          handleError(error)
-        }
-      }
-    }
-    const tokens = createFrameQueue<AgentdEvent>(handleEach)
+    const tokens = createFrameQueue(handleEvent)
     const onEvent = (event: AgentdEvent) => {
       if (isSubagentStream(event)) return
       if (isTokenEvent(event)) return tokens.push(event)

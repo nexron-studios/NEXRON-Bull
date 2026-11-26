@@ -1,11 +1,14 @@
+import { handleError } from '@/lib/error'
+
 // A window in the background gets no frames; the timer hands the items over there instead.
 const HIDDEN_FALLBACK_MS = 100
 
 /**
- * Collects items and hands them over together once per frame, right before it is painted. `drain`
- * hands over what waits at once, for something that has to come after it.
+ * Collects items and applies them together once per frame, right before it is painted, so their
+ * effects render once. `drain` applies what waits at once, for something that has to come after
+ * it. One item that fails is reported and does not keep the others from being applied.
  */
-export const createFrameQueue = <T>(flush: (items: T[]) => void) => {
+export const createFrameQueue = <T>(apply: (item: T) => void) => {
   let items: T[] = []
   let frame = 0
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -14,10 +17,15 @@ export const createFrameQueue = <T>(flush: (items: T[]) => void) => {
     clearTimeout(timer)
     frame = 0
     timer = undefined
-    if (!items.length) return
     const taken = items
     items = []
-    flush(taken)
+    for (const item of taken) {
+      try {
+        apply(item)
+      } catch (error) {
+        handleError(error)
+      }
+    }
   }
   const push = (item: T) => {
     items.push(item)

@@ -34,7 +34,9 @@ const { labelOf: machineLabelOf } = useMachineLabel()
             :is-waiting="tab.limit.kind === 'waiting'"
             :has-question="openQuestionOf(tab) !== null"
           />
-          <span class="truncate"><ChatTitleText :title="tab.title || t('chat.new_chat')" /></span>
+          <span class="truncate"
+            ><ChatTitleText :title="tab.title || t('chat.new_chat')" :tab
+          /></span>
         </h1>
         <p class="flex max-w-full min-w-0 items-center gap-1.5 text-meta text-muted-foreground">
           <template v-if="machineLabelOf(tab.machine)">

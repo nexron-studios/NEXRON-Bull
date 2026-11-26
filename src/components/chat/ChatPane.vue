@@ -258,7 +258,8 @@ const handlePreviewClick = (event: MouseEvent) => {
       </span>
     </div>
     <ChatSessionBar v-if="!isCompact" :tab :is-search-open="search.isOpen" @search="openSearch" />
-    <!-- The backdrop starts below the session bar: the bar is chrome, not part of the chat. -->
+    <!-- The backdrop starts below the session bar (chrome, not part of the chat) and runs under the
+         composer, so the vignette ends at the window edge instead of in a line above it. -->
     <div class="relative isolate flex min-h-0 flex-1 flex-col">
       <ChatBackdrop />
       <!-- No overflow-anchor: older pages are anchored by hand (useOlderHistory), as WKWebView
@@ -357,64 +358,64 @@ const handlePreviewClick = (event: MouseEvent) => {
         @close="closeSearch"
         @dismiss="dismissSearch"
       />
-    </div>
 
-    <div
-      class="relative mx-auto w-full max-w-4xl"
-      :class="isCompact ? 'px-3 pb-safe' : 'px-6 pb-5'"
-    >
-      <!-- After prompt-kit's Scroll Button (MIT): only there while the reader is scrolled up. -->
-      <NchIconButton
-        v-if="!isAtBottom"
-        :label="t('chat.scroll_down')"
-        variant="outline"
-        size="icon-sm"
-        class="absolute -top-11 left-1/2 -translate-x-1/2 rounded-full bg-card shadow-md"
-        @click="glideToBottom"
+      <div
+        class="relative mx-auto w-full max-w-4xl"
+        :class="isCompact ? 'px-3 pb-safe' : 'px-6 pb-5'"
       >
-        <ArrowDown class="size-4" aria-hidden="true" />
-      </NchIconButton>
-      <p
-        v-if="tab.notice"
-        class="mb-2 flex items-start gap-2 text-small text-critical"
-        role="alert"
-      >
-        <TriangleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        {{ tab.notice }}
-      </p>
-      <p
-        v-else-if="tab.status === 'ended'"
-        class="mb-2 flex items-center gap-2 text-small text-muted-foreground"
-      >
-        <Info class="size-4 shrink-0" aria-hidden="true" />
-        {{ tab.isWorktreePlanned ? t('worktree.planned_hint') : t('chat.ended_hint') }}
-      </p>
-      <ChatLimitNudge
-        v-if="warning"
-        :account="warning.account"
-        :candidate="warning.candidate"
-        @stay="chat.dismissLimit(tab.id)"
-        @move="chat.moveAfterTurn(tab.id, warning.candidate.profile)"
-      />
-      <ChatAutoCompactHint :tab-id="tab.id" />
-      <ChatThinkingBar
-        v-if="isWorking || isWaiting"
-        :tab
-        :results
-        :is-starting="isWaiting"
-        :has-details="isCompact"
-        @interrupt="chat.interrupt(tab.id)"
-        @details="isActivityOpen = true"
-      />
-      <ChatBackgroundBar v-else :tab-id="tab.id" />
-      <ChatComposer
-        ref="composer"
-        :tab
-        :is-working
-        :is-compact
-        @send="send"
-        @interrupt="chat.interrupt(tab.id)"
-      />
+        <!-- After prompt-kit's Scroll Button (MIT): only there while the reader is scrolled up. -->
+        <NchIconButton
+          v-if="!isAtBottom"
+          :label="t('chat.scroll_down')"
+          variant="outline"
+          size="icon-sm"
+          class="absolute -top-11 left-1/2 -translate-x-1/2 rounded-full bg-card shadow-md"
+          @click="glideToBottom"
+        >
+          <ArrowDown class="size-4" aria-hidden="true" />
+        </NchIconButton>
+        <p
+          v-if="tab.notice"
+          class="mb-2 flex items-start gap-2 text-small text-critical"
+          role="alert"
+        >
+          <TriangleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          {{ tab.notice }}
+        </p>
+        <p
+          v-else-if="tab.status === 'ended'"
+          class="mb-2 flex items-center gap-2 text-small text-muted-foreground"
+        >
+          <Info class="size-4 shrink-0" aria-hidden="true" />
+          {{ tab.isWorktreePlanned ? t('worktree.planned_hint') : t('chat.ended_hint') }}
+        </p>
+        <ChatLimitNudge
+          v-if="warning"
+          :account="warning.account"
+          :candidate="warning.candidate"
+          @stay="chat.dismissLimit(tab.id)"
+          @move="chat.moveAfterTurn(tab.id, warning.candidate.profile)"
+        />
+        <ChatAutoCompactHint :tab-id="tab.id" />
+        <ChatThinkingBar
+          v-if="isWorking || isWaiting"
+          :tab
+          :results
+          :is-starting="isWaiting"
+          :has-details="isCompact"
+          @interrupt="chat.interrupt(tab.id)"
+          @details="isActivityOpen = true"
+        />
+        <ChatBackgroundBar v-else :tab-id="tab.id" />
+        <ChatComposer
+          ref="composer"
+          :tab
+          :is-working
+          :is-compact
+          @send="send"
+          @interrupt="chat.interrupt(tab.id)"
+        />
+      </div>
     </div>
     <ChatActivitySheet v-if="isCompact" v-model:open="isActivityOpen" :tab />
     <ChatContextDialog v-if="isCompact" :tab-id="tab.id" />

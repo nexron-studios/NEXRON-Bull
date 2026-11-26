@@ -824,3 +824,28 @@ fn stamps_a_message_with_the_uuid_the_app_gave_it() {
     );
     agentd.send(json!({ "op": "stop", "tab": "t80" }));
 }
+
+#[test]
+fn streams_the_reply_in_order_without_a_subagents_pieces() {
+    let mut agentd = Agentd::spawn();
+    let cwd = temp_dir("burst");
+    agentd.send(json!({ "op": "start", "tab": "t1", "cwd": cwd, "profile": null, "resume": null, "model": null, "permission_mode": null }));
+    agentd.expect(|e| e["type"] == "started");
+
+    agentd.send(json!({ "op": "send", "tab": "t1", "content": [{ "type": "text", "text": "burst" }] }));
+    let mut events = Vec::new();
+    while events.last().is_none_or(|e: &Value| claude_event(e, "result").is_none()) {
+        events.push(agentd.expect(|_| true));
+    }
+    let streamed: Vec<&Value> = events.iter().filter_map(|e| claude_event(e, "stream_event")).collect();
+    assert!(streamed.iter().all(|e| e["parent_tool_use_id"].is_null()));
+    // How many events the pieces arrive in depends on timing; their text and order do not.
+    let text: String = streamed.iter().filter_map(|e| e["event"]["delta"]["text"].as_str()).collect();
+    assert_eq!(text, "Hallo Welt");
+    let last_delta = events.iter().rposition(|e| claude_event(e, "stream_event").is_some_and(|s| s["event"]["type"] == "content_block_delta"));
+    let message = events.iter().position(|e| e["type"] == "message");
+    assert!(last_delta < message, "deltas before the finished message");
+
+    agentd.send(json!({ "op": "stop", "tab": "t1" }));
+    agentd.expect(|e| e["type"] == "exited");
+}

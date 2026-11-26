@@ -5,7 +5,8 @@
 //! like a full account. `get_context_usage` answers with a token count, a control request of
 //! subtype "refuse" with an error. "stream" starts a streamed reply and leaves it unfinished
 //! ("Hallo ", the second part a moment later, so a test can detach in between); "finish" ends it
-//! with "Welt", the complete message and the result. Called with `--no-session-persistence` it
+//! with "Welt", the complete message and the result. "burst" streams "Hal", "lo ", "Welt" at once
+//! with a subagent's piece in between, then the message and the result. Called with `--no-session-persistence` it
 //! is the title call and names a request containing "name me".
 
 use std::io::{self, BufRead, Write};
@@ -105,6 +106,18 @@ fn main() {
                     say(text_delta("Hal"));
                     thread::sleep(STREAM_PAUSE);
                     say(text_delta("lo "));
+                    continue;
+                }
+                if text == "burst" {
+                    say(stream_event(json!({ "type": "message_start", "message": { "id": "msg_burst" } })));
+                    say(text_delta("Hal"));
+                    say(text_delta("lo "));
+                    say(json!({ "type": "stream_event", "uuid": "sub", "parent_tool_use_id": "toolu_1",
+                        "event": { "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "intern" } } }));
+                    say(text_delta("Welt"));
+                    say(json!({ "type": "assistant", "uuid": "burst-text",
+                        "message": { "role": "assistant", "content": [{ "type": "text", "text": "Hallo Welt" }] } }));
+                    say(json!({ "type": "result", "subtype": "success", "result": "Hallo Welt" }));
                     continue;
                 }
                 if text == "finish" {

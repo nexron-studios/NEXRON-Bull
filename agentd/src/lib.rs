@@ -31,5 +31,6 @@ pub mod hooks;
 pub mod profile_defaults;
 pub mod session_settings;
 pub mod shell;
+pub mod stream_coalesce;
 pub mod title_flow;
 pub mod titles;

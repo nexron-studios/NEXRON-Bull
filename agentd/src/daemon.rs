@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
@@ -21,6 +21,7 @@ use crate::commands;
 use crate::file_diff;
 use crate::files;
 use crate::shell;
+use crate::stream_coalesce::{is_subagent_stream, Coalescer};
 use crate::git;
 use crate::limit_flow::Queued;
 use crate::limits::{self, RateInfo};
@@ -408,36 +409,61 @@ impl<W: Write + Send + 'static> Daemon<W> {
         Ok(())
     }
 
-    fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read, replayable: &Mutex<Replayable>) {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            let event: Value = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));
-            if let Some(answer) = self.waiting_control(&event) {
-                // A waiter that timed out has nobody left to tell.
-                let _ = answer.send(event["response"].clone());
-                continue;
-            }
-            let message = chat::message_from(&event);
-            // From taking the line in through its emit, see `attach`.
-            let mut replayable = attach::locked(replayable);
-            self.with_session(tab, |session| track_turn(session, &event));
-            replayable.track(&event);
-            self.observe_limits(tab, &event);
-            if let Some(commands) = commands::commands_in(&event) {
-                replayable.commands = Some(commands.clone());
-                self.emit(&Event::Commands { tab: tab.to_string(), commands });
-            }
-            self.settle_setting(tab, &event);
-            // Messages arrive parsed, everything else (deltas, results, permission asks) raw.
-            match message {
-                Some(message) => {
-                    if message.role == chat::Role::Assistant {
-                        replayable.partial.finish_block();
-                    }
-                    self.emit(&Event::Message { tab: tab.to_string(), message })
-                }
-                None => self.emit(&Event::Claude { tab: tab.to_string(), event }),
+    /// Claude's lines in order, with the pieces of one streamed block merged (`stream_coalesce`).
+    fn pump(self: &Arc<Self>, tab: &str, stdout: impl io::Read + Send + 'static, replayable: &Mutex<Replayable>) {
+        let lines = read_lines(stdout);
+        let mut coalescer = Coalescer::default();
+        loop {
+            let next = match coalescer.due() {
+                Some(due) => lines.recv_timeout(due.saturating_duration_since(Instant::now())),
+                None => lines.recv().map_err(|_| RecvTimeoutError::Disconnected),
+            };
+            match next {
+                Ok(event) => coalescer.push(event, Instant::now()).for_each(|event| self.take_line(tab, event, replayable)),
+                // Claude paused: what it streamed so far goes out without waiting for more.
+                Err(RecvTimeoutError::Timeout) => coalescer.flush().into_iter().for_each(|event| self.take_line(tab, event, replayable)),
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
+        if let Some(event) = coalescer.flush() {
+            self.take_line(tab, event, replayable);
+        }
+        self.end_tab(tab);
+    }
+
+    fn take_line(self: &Arc<Self>, tab: &str, event: Value, replayable: &Mutex<Replayable>) {
+        if let Some(answer) = self.waiting_control(&event) {
+            // A waiter that timed out has nobody left to tell.
+            let _ = answer.send(event["response"].clone());
+            return;
+        }
+        let message = chat::message_from(&event);
+        // From taking the line in through its emit, see `attach`. A merged delta is taken in here,
+        // not when its pieces were read: an app attaching meanwhile would get them twice.
+        let mut replayable = attach::locked(replayable);
+        self.with_session(tab, |session| track_turn(session, &event));
+        replayable.track(&event);
+        self.observe_limits(tab, &event);
+        if let Some(commands) = commands::commands_in(&event) {
+            replayable.commands = Some(commands.clone());
+            self.emit(&Event::Commands { tab: tab.to_string(), commands });
+        }
+        self.settle_setting(tab, &event);
+        // Messages arrive parsed, everything else (deltas, results, permission asks) raw.
+        match message {
+            Some(message) => {
+                if message.role == chat::Role::Assistant {
+                    replayable.partial.finish_block();
+                }
+                self.emit(&Event::Message { tab: tab.to_string(), message })
+            }
+            None if is_subagent_stream(&event) => {}
+            None => self.emit(&Event::Claude { tab: tab.to_string(), event }),
+        }
+    }
+
+    /// Claude's stdout closed: the tab is gone.
+    fn end_tab(&self, tab: &str) {
         // Taken out first so the wait below does not hold the lock for other tabs.
         let session = self.sessions().remove(tab);
         // After the session: a control request arriving now finds no tab instead of waiting on a
@@ -699,6 +725,21 @@ impl<W: Write + Send + 'static> Daemon<W> {
         // If the dashboard is gone there is nobody left to tell.
         let _ = writeln!(out, "{line}").and_then(|()| out.flush());
     }
+}
+
+/// Claude's stdout parsed line by line on its own thread, so the pump can wait for a line and for
+/// the merge window at once. The channel closes with stdout.
+fn read_lines(stdout: impl io::Read + Send + 'static) -> mpsc::Receiver<Value> {
+    let (sender, lines) = mpsc::channel();
+    thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            let event = serde_json::from_str(&line).unwrap_or_else(|_| json!({ "type": "raw", "line": line }));
+            if sender.send(event).is_err() {
+                return;
+            }
+        }
+    });
+    lines
 }
 
 /// The session id Claude runs under, and whether it resumes it. A tab keeps its session id from

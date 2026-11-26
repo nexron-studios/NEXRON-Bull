@@ -4,7 +4,12 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { REPOSITORY, SIGNATURE_SUFFIX, windowsInstallerName } from './update-manifest.mjs'
+import {
+  PRODUCT_NAME,
+  REPOSITORY,
+  SIGNATURE_SUFFIX,
+  windowsInstallerName
+} from './update-manifest.mjs'
 
 const DRY_RUN_FLAG = '--dry-run'
 const NSIS_BUNDLE_DIR = join('src-tauri', 'target', 'release', 'bundle', 'nsis')
@@ -43,7 +48,9 @@ const releaseWindows = (isDryRun) => {
   if (isDryRun) {
     console.log(`would build the app, then attach to ${tag}:`)
     for (const file of files) console.log(`  ${file}${existsSync(file) ? '' : ' (not built yet)'}`)
-    console.log(hasRelease(tag) ? `release ${tag} exists` : `would draft release "Bull ${version}"`)
+    console.log(
+      hasRelease(tag) ? `release ${tag} exists` : `would draft release "${PRODUCT_NAME} ${version}"`
+    )
     console.log(`would rewrite latest.json of ${tag}`)
     return
   }
@@ -60,7 +67,7 @@ const releaseWindows = (isDryRun) => {
       '--draft',
       '--verify-tag',
       '--title',
-      `Bull ${version}`,
+      `${PRODUCT_NAME} ${version}`,
       '--notes',
       ''
     ])

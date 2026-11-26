@@ -115,10 +115,11 @@ jobs:
       - name: Name the updater tarball
         run: |
           bundle=src-tauri/target/universal-apple-darwin/release/bundle
-          name="NEXRON-Bull_${TAG#v}_universal.app.tar.gz"
+          product=$(jq -r .productName src-tauri/tauri.conf.json)
+          name="${product}_${TAG#v}_universal.app.tar.gz"
           mkdir -p out
-          cp "$bundle/macos/NEXRON-Bull.app.tar.gz" "out/$name"
-          cp "$bundle/macos/NEXRON-Bull.app.tar.gz.sig" "out/$name.sig"
+          cp "$bundle/macos/$product.app.tar.gz" "out/$name"
+          cp "$bundle/macos/$product.app.tar.gz.sig" "out/$name.sig"
           cp "$bundle"/dmg/*.dmg out/
       - uses: actions/upload-artifact@v4
         with:
@@ -146,7 +147,7 @@ jobs:
       - name: Draft the release if there is none yet
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --draft --verify-tag --title "Bull ${TAG#v}" --notes ""
+            gh release create "$TAG" --draft --verify-tag --title "NEXRON-Bull ${TAG#v}" --notes ""
           fi
       # Appended once: a rerun finds the marker and leaves the notes alone.
       - name: Add the macOS install note

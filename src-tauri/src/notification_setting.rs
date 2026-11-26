@@ -89,7 +89,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn dev_build_uses_the_powershell_app_id() {
-        let exe_dir = Path::new(r"C:\dev\nexron-chat\src-tauri\target\debug");
+        let exe_dir = Path::new(r"C:\dev\nexron-bull\src-tauri\target\debug");
         assert_eq!(toast_app_id(exe_dir, IDENTIFIER), POWERSHELL_APP_ID);
     }
 

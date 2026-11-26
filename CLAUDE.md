@@ -129,8 +129,11 @@ Outside the app the product is called **NEXRON-Bull** (`productName`, window tit
 taskbar, installer and macOS app name, PWA `name`; Jonas, 27.11.2026, like NEXRON-Manta). Inside it,
 the wordmark and headings keep the animal, **Bull**. The bundle id stays `com.nexron.chat` and the data
 folder `~/.nexron-chat`: changing either would orphan settings, tokens and the updater. Releases up to
-0.7.30 installed as `Bull` (`%LOCALAPPDATA%\Bull`, `/Applications/Bull.app`); the first NEXRON-Bull
-version installs beside it, and the old copy is removed by hand once.
+0.7.30 installed as `Bull`. On Windows `productName` names the install folder, so NEXRON-Bull lands
+in `%LOCALAPPDATA%\NEXRON-Bull` and its installer silently uninstalls `%LOCALAPPDATA%\Bull`
+(`src-tauri/windows/installer-hooks.nsh`; silent keeps the app data). On macOS the updater swaps
+the new app into the running bundle's path, so an updated `/Applications/Bull.app` keeps its file
+name and only calls itself NEXRON-Bull; installing the DMG on top would add a second copy.
 
 `public/favicon.svg` is the one source of the bull: favicon, header mark (`BrandBullLogo`),
 README banner (`docs/brand/banner.json` points at it), Tauri icons and PWA icons (on a dark

@@ -40,6 +40,9 @@
     "macOS": {
       "entitlements": "./Entitlements.plist"
     },
+    "windows": {
+      "nsis": { "installerHooks": "./windows/installer-hooks.nsh" }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

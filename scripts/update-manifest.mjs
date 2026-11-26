@@ -1,5 +1,7 @@
 // What installed copies of Bull read to find an update: Tauri's static `latest.json`, built from
 // the assets of one GitHub release. Pure, so the spec can feed it a release without GitHub.
+import tauriConfig from '../src-tauri/tauri.conf.json' with { type: 'json' }
+
 export const REPOSITORY = 'nexron-studios/NEXRON-Bull'
 export const MANIFEST_NAME = 'latest.json'
 export const SIGNATURE_SUFFIX = '.sig'
@@ -11,13 +13,13 @@ const EARLIEST_REAL_DATE_MS = 0
 
 export const versionOfTag = (tag) => tag.replace(/^v/, '')
 
-// Tauri names the artifacts after `productName` in tauri.conf.json.
-const ARTIFACT_PREFIX = 'NEXRON-Bull'
+// Tauri names the artifacts after it.
+export const PRODUCT_NAME = tauriConfig.productName
 
-export const windowsInstallerName = (version) => `${ARTIFACT_PREFIX}_${version}_x64-setup.exe`
+export const windowsInstallerName = (version) => `${PRODUCT_NAME}_${version}_x64-setup.exe`
 
 // One universal tarball serves both Mac processors.
-export const macUpdaterName = (version) => `${ARTIFACT_PREFIX}_${version}_universal.app.tar.gz`
+export const macUpdaterName = (version) => `${PRODUCT_NAME}_${version}_universal.app.tar.gz`
 
 const PLATFORM_ARTIFACTS = [
   { platform: 'windows-x86_64', artifactNameOf: windowsInstallerName },

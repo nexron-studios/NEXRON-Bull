@@ -98,14 +98,14 @@ describe('soundGroupOf', () => {
 
 describe('soundOfGroup', () => {
   it('should keep a stored sound of the same group', () => {
-    expect(soundOfGroup('done', 'bell')).toBe('bell')
+    expect(soundOfGroup('done', 'bell', 'harp')).toBe('bell')
   })
 
-  it('should fall back to the default for a sound of the other group', () => {
-    expect(soundOfGroup('done', 'knock')).toBe('harp')
+  it('should fall back for a sound of the other group', () => {
+    expect(soundOfGroup('done', 'knock', 'glass')).toBe('glass')
   })
 
-  it('should fall back to the default for an unknown value', () => {
-    expect(soundOfGroup('attention', 42)).toBe('ping')
+  it('should fall back for an unknown value', () => {
+    expect(soundOfGroup('attention', 42, 'duet')).toBe('duet')
   })
 })

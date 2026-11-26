@@ -10,18 +10,16 @@ import type { NotifyReason } from '@/utils/notifications'
 export const soundGroupList = ['done', 'attention'] as const
 export type SoundGroup = (typeof soundGroupList)[number]
 
-export const doneSoundList = ['drop', 'glass', 'marimba', 'harp', 'bell', 'breath'] as const
-export const attentionSoundList = ['knock', 'ask', 'ping', 'nudge', 'crystal', 'duet'] as const
-export type DoneSound = (typeof doneSoundList)[number]
-export type AttentionSound = (typeof attentionSoundList)[number]
-export type NotifySoundId = DoneSound | AttentionSound
+export const SOUNDS_OF_GROUP = {
+  done: ['drop', 'glass', 'marimba', 'harp', 'bell', 'breath'],
+  attention: ['knock', 'ask', 'ping', 'nudge', 'crystal', 'duet']
+} as const
+export type SoundOfGroup<G extends SoundGroup> = (typeof SOUNDS_OF_GROUP)[G][number]
+export type NotifySoundId = SoundOfGroup<SoundGroup>
+/** One picked sound per group; a group only ever holds one of its own sounds. */
+export type PickedSounds = { [G in SoundGroup]: SoundOfGroup<G> }
 
-export const SOUNDS_OF_GROUP: Record<SoundGroup, readonly NotifySoundId[]> = {
-  done: doneSoundList,
-  attention: attentionSoundList
-}
-
-export interface SoundPartial {
+interface SoundPartial {
   /** Multiple of the tone's frequency */
   ratio: number
   /** Level relative to the tone's own */
@@ -139,7 +137,7 @@ export const SOUND_RECIPES: Record<NotifySoundId, readonly SoundTone[]> = {
   ]
 }
 
-export const DEFAULT_SOUNDS: Record<SoundGroup, NotifySoundId> = {
+export const DEFAULT_SOUNDS: PickedSounds = {
   done: 'harp',
   attention: 'ping'
 }
@@ -152,8 +150,12 @@ export const soundLengthOf = (tones: readonly SoundTone[]): number =>
 export const soundGroupOf = (reason: NotifyReason): SoundGroup =>
   reason === 'finished' ? 'done' : 'attention'
 
-/** The stored choice for a group if it is one of that group's sounds, else the default. */
-export const soundOfGroup = (group: SoundGroup, stored: unknown): NotifySoundId =>
-  SOUNDS_OF_GROUP[group].includes(stored as NotifySoundId)
-    ? (stored as NotifySoundId)
-    : DEFAULT_SOUNDS[group]
+/** The stored choice for a group if it is one of that group's sounds, else `fallback`. */
+export const soundOfGroup = <G extends SoundGroup>(
+  group: G,
+  stored: unknown,
+  fallback: SoundOfGroup<G>
+): SoundOfGroup<G> =>
+  (SOUNDS_OF_GROUP[group] as readonly unknown[]).includes(stored)
+    ? (stored as SoundOfGroup<G>)
+    : fallback

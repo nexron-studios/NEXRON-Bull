@@ -1,12 +1,19 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Clock, CornerDownLeft, Pencil, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatImageLightbox from '@/components/chat/ChatImageLightbox.vue'
+import ChatTextPieces from '@/components/chat/ChatTextPieces.vue'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import NchKbd from '@/components/common/NchKbd.vue'
+import { useImageRefFormat } from '@/composables/useImageRefFormat'
 import { useShortcutLabels } from '@/composables/useShortcutLabels'
 import type { HeldPrompt } from '@/stores/heldPrompts'
+import type { LightboxImage } from '@/utils/attachments'
+import { sentImageRefHighlightsOf } from '@/utils/imageRefs'
 import { SEND_CHORD } from '@/utils/shortcuts'
 import { parseSlashInput } from '@/utils/slashCommands'
+import { textPiecesOf } from '@/utils/textPieces'
 
 // Figma 30: what was sent while Claude works or waits for a decision, numbered above the composer
 // until the turn ends. Each one can go into the running turn at once, as Ctrl/Cmd+Enter does for
@@ -16,6 +23,31 @@ const emit = defineEmits<{ edit: [id: string]; remove: [id: string]; sendNow: [i
 
 const { t } = useI18n()
 const { labelOf } = useShortcutLabels()
+const imageRefFormat = useImageRefFormat()
+
+// "[Bild 1 (Name…)]" reads as the same chip as in the composer and a sent prompt.
+const piecesOf = (prompt: HeldPrompt) =>
+  textPiecesOf(
+    prompt.text,
+    sentImageRefHighlightsOf(
+      prompt.text,
+      prompt.images.map((image) => image.src),
+      imageRefFormat.value
+    )
+  )
+
+// Only to look at: without an `id` the preview offers no markup that would replace an attachment.
+const imagesOf = (prompt: HeldPrompt): LightboxImage[] =>
+  prompt.images.map(({ src, name, bytes }) => ({ src, name, bytes }))
+
+const previewImages = ref<LightboxImage[]>([])
+const previewIndex = ref(0)
+const isPreviewOpen = ref(false)
+const openPreview = (prompt: HeldPrompt, n: number) => {
+  previewImages.value = imagesOf(prompt)
+  previewIndex.value = n - 1
+  isPreviewOpen.value = true
+}
 </script>
 
 <template>
@@ -44,7 +76,13 @@ const { labelOf } = useShortcutLabels()
         >
           {{ index + 1 }}
         </span>
-        <span class="min-w-0 flex-1 truncate text-small">{{ prompt.text }}</span>
+        <span class="min-w-0 flex-1 truncate text-small">
+          <ChatTextPieces
+            :pieces="piecesOf(prompt)"
+            :images="imagesOf(prompt)"
+            @open="openPreview(prompt, $event)"
+          />
+        </span>
         <span v-if="prompt.images.length" class="shrink-0 text-meta text-muted-foreground">
           {{ t('prompt_input.queue_images', { n: prompt.images.length }) }}
         </span>
@@ -75,5 +113,11 @@ const { labelOf } = useShortcutLabels()
         </NchIconButton>
       </li>
     </ol>
+    <ChatImageLightbox
+      v-if="previewImages.length"
+      v-model:open="isPreviewOpen"
+      v-model:index="previewIndex"
+      :images="previewImages"
+    />
   </section>
 </template>

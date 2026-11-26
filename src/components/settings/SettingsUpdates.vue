@@ -93,6 +93,7 @@ const openReleases = () => void openLink(BULL_RELEASES_URL).catch(handleError)
     <div class="border-t border-border pt-3">
       <SettingsSwitchRow
         v-model="isAutomatic"
+        :icon="RefreshCw"
         :title="t('settings.updates.automatic')"
         :hint="t('settings.updates.automatic_hint')"
       />

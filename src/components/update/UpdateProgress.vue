@@ -44,7 +44,7 @@ const bytes = computed(() => {
         <Check v-if="progress.kind === 'done'" class="size-3.5" aria-hidden="true" />
         {{ label }}
       </span>
-      <span class="text-meta text-muted-foreground tabular-nums">{{ percent }}</span>
+      <span class="font-mono text-meta text-muted-foreground tabular-nums">{{ percent }}</span>
     </div>
     <UpdateBar class="h-1.5" :ratio :label :is-done="progress.kind === 'done'" />
     <span v-if="bytes" class="font-mono text-meta text-subtle tabular-nums">{{ bytes }}</span>

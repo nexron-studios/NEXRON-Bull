@@ -14,6 +14,7 @@ const MARKDOWN_LEAD = /^(?:#{1,6}\s+|[-*+]\s+|>\s*|\d+\.\s+)/
 const MARKDOWN_MARKS = /\*\*|__|`/g
 
 type RankedTab = Pick<ChatTabState, 'id' | 'unseenAt' | 'notice'>
+type LinedUpTab = RankedTab & Pick<ChatTabState, 'finishedAt' | 'turn'>
 
 /**
  * A chat that reported an error after it finished shows that instead of its number: the error
@@ -34,17 +35,44 @@ export const finishOrderOf = (tabs: RankedTab[]): string[] =>
     .sort((a, b) => b.at - a.at)
     .map((entry) => entry.id)
 
+const ranksOf = (order: string[]): Map<string, number> =>
+  new Map(order.map((id, index) => [id, index + 1]))
+
 /** Tab id → its number in the finish order, starting at 1. */
 export const finishRanksOf = (tabs: RankedTab[]): Map<string, number> =>
-  new Map(finishOrderOf(tabs).map((id, index) => [id, index + 1]))
+  ranksOf(finishOrderOf(tabs))
+
+/**
+ * When the tab's last turn ended, seen or not; `null` while a turn runs. A tab restored after a
+ * restart knows only its unseen finish: `finishedAt` is not saved.
+ */
+const lastFinishOf = (tab: LinedUpTab): number | null =>
+  tab.unseenAt ?? (tab.turn === null ? tab.finishedAt : null)
+
+/**
+ * Every finished tab, the most recently finished first: the order of the tab bar, which keeps its
+ * numbers after the chat was seen (26.11.2026). The sidebar's numbers still mean "not seen yet".
+ */
+export const tabFinishOrderOf = (tabs: LinedUpTab[]): string[] =>
+  tabs
+    .flatMap((tab) => {
+      const at = lastFinishOf(tab)
+      return at === null || hasFailedSince(tab) ? [] : [{ id: tab.id, at }]
+    })
+    .sort((a, b) => b.at - a.at)
+    .map((entry) => entry.id)
+
+/** Tab id → its number in the tab bar's finish order, starting at 1. */
+export const tabFinishRanksOf = (tabs: LinedUpTab[]): Map<string, number> =>
+  ranksOf(tabFinishOrderOf(tabs))
 
 /**
  * The tabs with the finish order up front, ① leftmost, so the header reads like the numbers. The
- * others follow in the order they had, which keeps where the user dragged them. The same array
- * when nothing moves.
+ * others (running, never finished) follow in the order they had, which keeps where the user
+ * dragged them. The same array when nothing moves.
  */
-export const finishSortedOf = <T extends RankedTab>(tabs: T[]): T[] => {
-  const order = finishOrderOf(tabs)
+export const finishSortedOf = <T extends LinedUpTab>(tabs: T[]): T[] => {
+  const order = tabFinishOrderOf(tabs)
   const ranked = new Set(order)
   const byId = new Map(tabs.map((tab) => [tab.id, tab]))
   const sorted = [

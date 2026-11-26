@@ -1313,6 +1313,7 @@ export default {
   },
   finish: {
     rank: 'Fertig, noch nicht angesehen, Platz {n}',
+    rank_seen: 'Fertig, Platz {n}',
     new_count: '{n} neu'
   },
   worktree: {

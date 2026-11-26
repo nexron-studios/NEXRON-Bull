@@ -15,7 +15,8 @@ import BrandClawdMark from '@/components/brand/BrandClawdMark.vue'
 import ChatFinishBadge from '@/components/chat/ChatFinishBadge.vue'
 import type { TabStatus } from '@/utils/chatTab'
 
-// `rank`: a finished chat not seen yet shows its place in the finish order instead of the check.
+// `rank`: a finished chat not seen yet shows its place in the finish order instead of the check;
+// with `isSeen` the tab bar shows it for a chat already opened, in a quieter look.
 // `isFailed`: the last turn ended with an error; a ready chat then shows a warning, not the check.
 // `isWaiting`: the account is full and the chat waits for its reset; that outranks the rest.
 // `hasQuestion`: the last answer ends on a question (`> [!question]`); it outranks the finish number.
@@ -23,6 +24,7 @@ import type { TabStatus } from '@/utils/chatTab'
 const {
   status,
   rank = null,
+  isSeen = false,
   isFailed = false,
   isWaiting = false,
   hasQuestion = false,
@@ -30,6 +32,7 @@ const {
 } = defineProps<{
   status: TabStatus
   rank?: number | null
+  isSeen?: boolean
   isFailed?: boolean
   isWaiting?: boolean
   hasQuestion?: boolean
@@ -70,7 +73,7 @@ const label = computed(() => {
     <BrandClawdMark :size="9" />
     <span class="sr-only">{{ t('chat.status.empty') }}</span>
   </span>
-  <ChatFinishBadge v-else-if="rank !== null && !isWaiting && !hasQuestion" :rank />
+  <ChatFinishBadge v-else-if="rank !== null && !isWaiting && !hasQuestion" :rank :is-seen />
   <template v-else>
     <component :is="look.icon" class="size-4 shrink-0" :class="look.class" aria-hidden="true" />
     <span class="sr-only">{{ label }}</span>

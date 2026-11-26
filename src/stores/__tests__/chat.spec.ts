@@ -709,18 +709,34 @@ describe('useChatStore: tabs in finish order', () => {
     finishedAt
   })
 
-  it('should move a chat that finishes unseen to the front, after newer ones keep a drag', () => {
+  it('should line finished chats up newest first, seen or not, and keep a later drag', () => {
     const chat = useChatStore()
     chat.tabs = [finishedTab('a', 1), finishedTab('b', 2), finishedTab('c', 3)]
 
     chat.markUnseen('b', 2)
-    chat.markUnseen('c', 3)
+    chat.lineUpByFinish()
     const afterFinishing = chat.tabs.map((tab) => tab.id)
     chat.reorder(['a', 'c', 'b'])
 
     expect([afterFinishing, chat.tabs.map((tab) => tab.id)]).toEqual([
       ['c', 'b', 'a'],
       ['a', 'c', 'b']
+    ])
+  })
+
+  it('should keep the tab bar number of a chat once it was seen', () => {
+    const chat = useChatStore()
+    chat.tabs = [finishedTab('a', 1), finishedTab('b', 2)]
+    chat.markUnseen('b', 2)
+
+    chat.markSeen('b')
+
+    expect([[...chat.tabFinishRanks], [...chat.finishRanks]]).toEqual([
+      [
+        ['b', 1],
+        ['a', 2]
+      ],
+      []
     ])
   })
 })

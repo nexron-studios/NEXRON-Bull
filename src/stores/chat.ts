@@ -48,6 +48,7 @@ import { apiRetryOf } from '@/utils/apiRetry'
 import { buildContent, type PendingImage } from '@/utils/content'
 import {
   finishRanksOf,
+  tabFinishRanksOf,
   finishSortedOf,
   isSameRanks,
   withSeen,
@@ -167,6 +168,11 @@ export const useChatStore = defineStore(
      */
     const finishRanks = computed<Map<string, number>>((previous) => {
       const next = finishRanksOf(tabs.value)
+      return previous && isSameRanks(previous, next) ? previous : next
+    })
+    /** Every finished tab, seen or not: tab id → its number in the tab bar, ① the newest. */
+    const tabFinishRanks = computed<Map<string, number>>((previous) => {
+      const next = tabFinishRanksOf(tabs.value)
       return previous && isSameRanks(previous, next) ? previous : next
     })
 
@@ -872,10 +878,11 @@ export const useChatStore = defineStore(
     }
 
     /** The turn that ended at `at` finished while the user looked elsewhere. */
-    const markUnseen = (id: string, at: number) => {
-      update(id, (tab) => withUnseen(tab, at))
-      // Only when a number appears: a drag afterwards stands until the next chat finishes.
-      if (tabOf(id)?.unseenAt === at) tabs.value = finishSortedOf(tabs.value)
+    const markUnseen = (id: string, at: number) => update(id, (tab) => withUnseen(tab, at))
+
+    /** After a chat finished: a drag afterwards stands until the next chat finishes. */
+    const lineUpByFinish = () => {
+      tabs.value = finishSortedOf(tabs.value)
     }
 
     /** The user looked at the chat: it leaves the finish order. */
@@ -914,6 +921,7 @@ export const useChatStore = defineStore(
       activeId,
       activeTab,
       finishRanks,
+      tabFinishRanks,
       openNew,
       resume,
       loadHistory,
@@ -950,7 +958,8 @@ export const useChatStore = defineStore(
       reorder,
       moveTab,
       markUnseen,
-      markSeen
+      markSeen,
+      lineUpByFinish
     }
   },
   {

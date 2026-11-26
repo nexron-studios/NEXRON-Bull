@@ -48,7 +48,7 @@ const line = useTemplateRef<HTMLElement>('line')
 const { t } = useI18n()
 const { ariaOf } = useShortcutLabels()
 const dragOptions = useDragOptions('x')
-const { finishRanks } = storeToRefs(useChatStore())
+const { finishRanks, tabFinishRanks } = storeToRefs(useChatStore())
 const { tabs: terminalTabs } = storeToRefs(useTerminalStore())
 const tabOrder = () => tabs.map((tab) => tab.id).join('|')
 const activeCell = () =>
@@ -164,7 +164,8 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
           <ChatStatusIcon
             :status="shownStatusOf(tab)"
             :is-empty="isEmptyChat(tab)"
-            :rank="finishRanks.get(tab.id) ?? null"
+            :rank="tabFinishRanks.get(tab.id) ?? null"
+            :is-seen="!finishRanks.has(tab.id)"
             :is-failed="tab.notice !== null"
             :is-waiting="tab.limit.kind === 'waiting'"
             :has-question="openQuestionOf(tab) !== null"

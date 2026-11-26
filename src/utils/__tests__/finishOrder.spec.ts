@@ -9,6 +9,7 @@ import {
   isSameRanks,
   newlyFinishedOf,
   summaryOf,
+  tabFinishOrderOf,
   withSeen,
   withUnseen
 } from '../finishOrder'
@@ -60,6 +61,19 @@ describe('finishSortedOf', () => {
   it('should return the same list when the order already fits', () => {
     const tabs = [tab('first', { unseenAt: 2 }), tab('second', { unseenAt: 1 }), tab('rest')]
     expect(finishSortedOf(tabs)).toBe(tabs)
+  })
+})
+
+describe('tabFinishOrderOf', () => {
+  it('should order every finished chat by its end, seen or not, and skip running ones', () => {
+    const tabs = [
+      tab('seen', { finishedAt: 2000 }),
+      tab('unseen', { finishedAt: 1000, unseenAt: 1000 }),
+      tab('running', { finishedAt: 3000, turn: { startedAt: 3500, afterUuid: null } }),
+      tab('failed', { finishedAt: 4000, notice: 'Fehler' }),
+      tab('never')
+    ]
+    expect(tabFinishOrderOf(tabs)).toEqual(['seen', 'unseen'])
   })
 })
 

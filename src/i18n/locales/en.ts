@@ -1291,6 +1291,7 @@ export default {
   },
   finish: {
     rank: 'Finished, not seen yet, place {n}',
+    rank_seen: 'Finished, place {n}',
     new_count: '{n} new'
   },
   worktree: {

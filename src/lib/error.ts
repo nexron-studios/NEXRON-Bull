@@ -1,4 +1,4 @@
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { AgentdDisconnectedError, type Machine } from '@/api/services/agentd.service'
 import { DictationError } from '@/api/services/dictation.service'
 import { useMachineNames } from '@/composables/useMachineNames'

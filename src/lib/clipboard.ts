@@ -1,5 +1,5 @@
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { isDesktopApp } from '@/lib/platform'
 import i18n from '@/i18n'
 import { handleError } from '@/lib/error'

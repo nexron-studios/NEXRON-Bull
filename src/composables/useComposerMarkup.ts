@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import type { useImageReferences } from '@/composables/useImageReferences'
 import type { MarkupHandoff, MarkupResult } from '@/composables/useMarkupTarget'

@@ -73,3 +73,47 @@ export const withTranscript = (text: string, at: number, transcript: string): Te
   const inserted = `${lead ? ' ' : ''}${words}`
   return { text: `${before}${inserted}${trail ? ' ' : ''}${after}`, caret: cut + inserted.length }
 }
+
+/** Characters put into the draft for the time being, to be taken out again exactly. */
+export interface Inserted {
+  at: number
+  text: string
+}
+
+/** `withTranscript`, and which characters that added where. */
+export const withInterim = (
+  text: string,
+  at: number,
+  transcript: string
+): TextEdit & { inserted: Inserted } => {
+  const edit = withTranscript(text, at, transcript)
+  const cut = Math.min(Math.max(at, 0), text.length)
+  const added = edit.text.slice(cut, cut + edit.text.length - text.length)
+  return { ...edit, inserted: { at: cut, text: added } }
+}
+
+/** Where `added` sits in `text` closest to `at`, or -1 when it is not there at all. */
+const nearestIndexOf = (text: string, added: string, at: number): number => {
+  let nearest = -1
+  for (let i = text.indexOf(added); i !== -1; i = text.indexOf(added, i + 1)) {
+    if (nearest === -1 || Math.abs(i - at) < Math.abs(nearest - at)) nearest = i
+  }
+  return nearest
+}
+
+/**
+ * `inserted` taken out of `text` again, caret where it was; unchanged when it is gone already.
+ * A quote or a dropped file can change the draft mid-dictation and move the words, so they are
+ * looked for where they ended up, nearest to where they were put.
+ */
+export const withoutInserted = (text: string, { at, text: added }: Inserted): TextEdit => {
+  const found = nearestIndexOf(text, added, at)
+  if (found === -1) return { text, caret: Math.min(at, text.length) }
+  return { text: text.slice(0, found) + text.slice(found + added.length), caret: found }
+}
+
+/** The words of an interim insert, without the spaces around them. */
+export const interimRangeOf = ({ at, text }: Inserted): { start: number; end: number } => ({
+  start: at + text.length - text.trimStart().length,
+  end: at + text.trimEnd().length
+})

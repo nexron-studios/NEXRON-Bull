@@ -2,7 +2,7 @@
 import { computed, nextTick, type HTMLAttributes } from 'vue'
 import { Ellipsis, LogIn, Star, UserMinus } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import {
   DropdownMenu,

@@ -136,11 +136,15 @@ const { handOver } = useComposerMarkup({
 
 const { handlePaste } = useComposerPaste({ images, pastes, isShell, addFiles: attachFiles })
 
-// Images still being read would otherwise miss this message and turn up in the next one.
+// Images still being read would otherwise miss this message and turn up in the next one. A
+// dictation still running would send its interim words, or leave its transcript behind.
 const canSend = computed(
   () =>
-    !isReading.value && (!!draft.value.trim() || images.value.length > 0 || pastes.value.length > 0)
+    !isReading.value &&
+    !dictation.isDictating.value &&
+    (!!draft.value.trim() || images.value.length > 0 || pastes.value.length > 0)
 )
+const highlights = computed(() => [...references.highlights.value, ...dictation.highlights.value])
 const heldPrompts = computed(() => held.heldOf(tab.id))
 const isShellReady = computed(() => isShell.value && !!draft.value.trim())
 // A chat waiting for its limit to reset says where a message goes meanwhile.
@@ -318,7 +322,7 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, handOver, 
             :label="isShell ? t('prompt_input.shell_label') : t('chat.composer_label')"
             :placeholder="placeholder"
             :known="menu.known.value"
-            :highlights="references.highlights.value"
+            :highlights
             :is-shell
             :menu-id="menu.isOpen.value ? menuId : null"
             :active-option-id="menuView?.activeOptionId ?? null"

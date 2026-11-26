@@ -551,6 +551,22 @@ export default {
     background: 'Im Hintergrund',
     delivery: { os: 'System', toast: 'Im Fenster' },
     sound: 'Ton',
+    sound_group: { done: 'Fertig', attention: 'Braucht dich' },
+    sound_play: '{sound} anhören',
+    sound_name: {
+      drop: 'Tropfen',
+      glass: 'Glas',
+      marimba: 'Holz',
+      harp: 'Harfe',
+      bell: 'Glocke',
+      breath: 'Hauch',
+      knock: 'Klopfen',
+      ask: 'Frage',
+      ping: 'Doppel-Ping',
+      nudge: 'Stups',
+      crystal: 'Kristall',
+      duet: 'Duett'
+    },
     footnote:
       'Der Chat, den du gerade ansiehst, meldet sich nie. Einzelne Chats stummschalten: Rechtsklick auf den Tab.',
     footnote_phone:

@@ -111,6 +111,9 @@ impl Serialize for DictationError {
 pub enum HoldEvent {
     /// Claude records now: the composer may say so.
     Listening,
+    /// What Claude shows while it records, still being recognised: the composer shows it until
+    /// the final transcript replaces it. Sent only when it changed; empty when it went again.
+    Interim { text: String },
     /// The hold failed; the composer stops waiting for it.
     Failed { code: &'static str, detail: String },
 }
@@ -380,26 +383,48 @@ fn hold_until_stopped(
 ) -> Result<bool, DictationError> {
     let started = Instant::now();
     let mut is_listening = false;
+    let mut interim = InterimWatch::default();
     while !stop.load(Ordering::Relaxed) {
         claude.send(KEY_SPACE)?;
         thread::sleep(REPEAT_INTERVAL);
         if !claude.is_alive() {
             return Err(DictationError::Exited);
         }
+        let prompt = prompt_of(claude);
         if !is_listening
-            && prompt_of(claude).is_some_and(|prompt| prompt.phase == VoicePhase::Listening)
+            && prompt
+                .as_ref()
+                .is_some_and(|prompt| prompt.phase == VoicePhase::Listening)
         {
             is_listening = true;
             report(HoldEvent::Listening);
         }
+        if is_listening && let Some(text) = prompt.as_ref().and_then(|p| interim.changed(&p.live)) {
+            report(HoldEvent::Interim { text });
+        }
         if !is_listening && started.elapsed() >= LISTEN_TIMEOUT {
-            let detail = prompt_of(claude)
-                .map(|prompt| prompt.notice)
-                .unwrap_or_default();
+            let detail = prompt.map(|prompt| prompt.notice).unwrap_or_default();
             return Err(DictationError::NotListening(detail));
         }
     }
     Ok(is_listening)
+}
+
+/// The interim text last reported. The screen is read at key-repeat speed, so only a change goes
+/// out; that alone keeps the events down to how often Claude redraws its transcript.
+#[derive(Default)]
+struct InterimWatch {
+    last: String,
+}
+
+impl InterimWatch {
+    fn changed(&mut self, live: &str) -> Option<String> {
+        if live == self.last {
+            return None;
+        }
+        self.last = live.to_string();
+        Some(self.last.clone())
+    }
 }
 
 /// After the release: the transcript once Claude is idle again and it stopped changing.
@@ -567,6 +592,35 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&failed).unwrap(),
             r#"{"hold":8,"type":"failed","code":"not_listening","detail":"x"}"#
+        );
+        let interim = DictationEvent {
+            hold: 9,
+            event: HoldEvent::Interim {
+                text: "Hallo Welt".into(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&interim).unwrap(),
+            r#"{"hold":9,"type":"interim","text":"Hallo Welt"}"#
+        );
+    }
+
+    #[test]
+    fn reports_the_interim_text_only_when_it_changed() {
+        let mut watch = InterimWatch::default();
+        let reported: Vec<Option<String>> = ["", "Hallo", "Hallo", "Hallo Welt", ""]
+            .iter()
+            .map(|live| watch.changed(live))
+            .collect();
+        assert_eq!(
+            reported,
+            vec![
+                None,
+                Some("Hallo".to_string()),
+                None,
+                Some("Hallo Welt".to_string()),
+                Some(String::new()),
+            ]
         );
     }
 

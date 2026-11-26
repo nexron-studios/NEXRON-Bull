@@ -231,7 +231,8 @@ html.dark {
   }
 }
 @utility animate-update-indeterminate {
-  animation: update-indeterminate 1.4s var(--ease-in-out-quart, cubic-bezier(0.77, 0, 0.175, 1)) infinite;
+  animation: update-indeterminate 1.4s var(--ease-in-out-quart, cubic-bezier(0.77, 0, 0.175, 1))
+    infinite;
 }
 
 /* The thinking bar's wave (Figma "37" A). It rests at full height, so with less motion the bars

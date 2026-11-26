@@ -11,6 +11,7 @@ import {
   readOsPermission,
   showOsNotification
 } from '@/lib/osNotification'
+import { playSound } from '@/lib/soundPlayer'
 import {
   isAllOff,
   settingsOfLegacy,
@@ -82,13 +83,14 @@ export const useNotificationSetting = () => {
     const title = t('notifications.test_title')
     const body = t('notifications.test_body')
     try {
-      const canUseOs = settings.value.background === 'os' && (await canShowOsNotification())
+      const { background, hasSound, sounds } = settings.value
+      if (hasSound) await playSound(sounds.done)
+      const canUseOs = background === 'os' && (await canShowOsNotification())
       if (!canUseOs) {
         toast(title, { description: body })
         return
       }
-      const { hasSound } = settings.value
-      showOsNotification({ id: TEST_NOTIFICATION_ID, title, body, hasSound, hasOpenAction: false })
+      showOsNotification({ id: TEST_NOTIFICATION_ID, title, body, hasOpenAction: false })
     } catch (error) {
       handleError(error)
     }

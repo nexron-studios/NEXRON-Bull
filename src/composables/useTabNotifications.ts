@@ -16,6 +16,7 @@ import {
   registerOpenAction,
   showOsNotification
 } from '@/lib/osNotification'
+import { playSound, unlockSounds } from '@/lib/soundPlayer'
 import { useChatStore } from '@/stores/chat'
 import { useLimitPolicyStore } from '@/stores/limitPolicy'
 import type { AgentdEvent } from '@/types/agentd.type'
@@ -33,6 +34,7 @@ import {
   type QuotaAlert,
   type TabSnapshot
 } from '@/utils/notifications'
+import { soundGroupOf, type SoundGroup } from '@/utils/notifySounds'
 
 // Store actions after which the end of a turn is the user's own doing, and the one that starts anew.
 // `stopAndWait` stops a tab the user removes or deletes; `clearChat` interrupts the running turn.
@@ -52,6 +54,8 @@ interface Message {
   tabId: string | null
   title: string
   body: string
+  /** Which of the two picked sounds goes with it */
+  sound: SoundGroup
 }
 
 /** What to tell about a tab: the reason, a line instead of the reason's own, and a fallback. */
@@ -107,10 +111,10 @@ export const useTabNotifications = () => {
     if (tabs.value.some((tab) => tab.id === id)) activeId.value = id
   }
 
-  const deliver = async ({ tabId, title, body }: Message): Promise<boolean> => {
+  const deliver = async ({ tabId, title, body, sound }: Message): Promise<boolean> => {
     const canUseOs = await canShowOsNotification()
     const isFocused = await isWindowFocused()
-    const { background, hasSound } = settings.value
+    const { background, hasSound, sounds } = settings.value
     const delivery = deliveryOf({
       tabId,
       activeId: activeId.value,
@@ -119,13 +123,13 @@ export const useTabNotifications = () => {
       background
     })
     if (!delivery) return false
+    if (hasSound) playSound(sounds[sound]).catch(handleError)
     if (delivery === 'os') {
       const id = nextNotificationId++
       if (tabId) tabOfNotification.set(id, tabId)
-      showOsNotification({ id, title, body, hasSound, hasOpenAction: tabId !== null })
+      showOsNotification({ id, title, body, hasOpenAction: tabId !== null })
       return true
     }
-    // shortcut: in-window toasts play no sound; add one if the user misses it there.
     toast(title, {
       description: body,
       // The system notification carries the app icon; its stand-in in the window does too.
@@ -159,7 +163,8 @@ export const useTabNotifications = () => {
     const message = {
       tabId,
       title: titleOf(tabId),
-      body: body ?? t(`notifications.reason.${reason}`)
+      body: body ?? t(`notifications.reason.${reason}`),
+      sound: soundGroupOf(reason)
     }
     if (await deliver(message)) return
     if (previous === undefined) lastSentAt.delete(key)
@@ -216,7 +221,8 @@ export const useTabNotifications = () => {
       await deliver({
         tabId: null,
         title: t('notifications.quota_low.title', { account: alert.label }),
-        body: t('notifications.quota_low.body', { percent: alert.percent })
+        body: t('notifications.quota_low.body', { percent: alert.percent }),
+        sound: 'attention'
       })
     } catch (error) {
       // Not told after all: the next poll tries again.
@@ -235,9 +241,12 @@ export const useTabNotifications = () => {
   const tellQueueSent = (tabId: string) => {
     const isMuted = tabs.value.find((tab) => tab.id === tabId)?.isMuted ?? false
     if (!limitPolicy.notifyQueueSent || !settings.value.isOn || isMuted) return
-    deliver({ tabId, title: titleOf(tabId), body: t('notifications.queue_sent') }).catch(
-      handleError
-    )
+    deliver({
+      tabId,
+      title: titleOf(tabId),
+      body: t('notifications.queue_sent'),
+      sound: 'done'
+    }).catch(handleError)
   }
 
   const onLimit = (event: Extract<AgentdEvent, { type: 'limit' }>) => {
@@ -258,6 +267,7 @@ export const useTabNotifications = () => {
     replayedAsks.set(String(event.event.request_id), event.tab)
   }
 
+  unlockSounds()
   const stopAgentd = agentdService.onEvent(onAgentdEvent)
   const stopActions = chat.$onAction(({ name, args }) => {
     const id = String(args[0])

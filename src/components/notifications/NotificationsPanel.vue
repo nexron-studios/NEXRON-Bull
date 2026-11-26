@@ -15,6 +15,7 @@ import {
 } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchRangeSwitch from '@/components/common/NchRangeSwitch.vue'
+import NotificationsSoundPicker from '@/components/notifications/NotificationsSoundPicker.vue'
 import { Switch } from '@/components/ui/switch'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
 import { handleError } from '@/lib/error'
@@ -26,6 +27,7 @@ import {
   type NotifyDelivery,
   type NotifyEvent
 } from '@/utils/notifications'
+import { soundGroupList } from '@/utils/notifySounds'
 import { leftPercentOf } from '@/utils/percent'
 import { systemNameOf } from '@/utils/platform'
 
@@ -69,10 +71,8 @@ const background = computed({
 })
 // Only the master switch: with every event off, the switches must stay usable to turn one back on.
 const isMasterOff = computed(() => !settings.value.isOn)
-// Sound rides on the system notification; toasts in the window are silent.
-const canSound = computed(
-  () => settings.value.isOn && settings.value.background === 'os' && permission.value === 'granted'
-)
+// Bull plays its own sound, for system notifications and in-window toasts alike.
+const canPickSound = computed(() => settings.value.isOn && settings.value.hasSound)
 
 const canOpenSettings = canOpenSystemSettings()
 const systemName = systemNameOf(navigator.userAgent)
@@ -184,16 +184,22 @@ const openSettings = () => openSystemNotificationSettings().catch(handleError)
           :inert="isMasterOff"
         />
       </div>
-      <div class="flex min-h-10 items-center gap-3 px-1.5" :class="{ 'opacity-60': !canSound }">
+      <div class="flex min-h-10 items-center gap-3 px-1.5" :class="{ 'opacity-60': isMasterOff }">
         <Volume2 class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span class="min-w-0 flex-1">{{ t('notifications.sound') }}</span>
         <Switch
           :model-value="settings.hasSound"
-          :disabled="!canSound"
+          :disabled="isMasterOff"
           :aria-label="t('notifications.sound')"
           @update:model-value="update({ hasSound: $event })"
         />
       </div>
+      <NotificationsSoundPicker
+        v-for="group in soundGroupList"
+        :key="group"
+        :group
+        :disabled="!canPickSound"
+      />
 
       <div class="my-1 h-px bg-border" aria-hidden="true" />
       <p class="flex gap-2 px-1.5 pb-1 text-meta text-muted-foreground">

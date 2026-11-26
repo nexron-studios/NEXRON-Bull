@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into Bull's Info.plist by Tauri. The dictation's hidden Claude records the microphone,
+     and macOS asks on behalf of Bull, the process that started it; without this text it refuses. -->
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Bull diktiert über Claude Code: Halte im Eingabefeld die Leertaste und sprich. / Bull dictates through Claude Code: hold Space in the message field and speak.</string>
+</dict>
+</plist>

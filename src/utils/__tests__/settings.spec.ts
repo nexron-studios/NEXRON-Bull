@@ -37,11 +37,12 @@ describe('offeredSettingsSectionsOf', () => {
       'notifications',
       'terminal',
       'worktrees',
-      'appearance'
+      'appearance',
+      'updates'
     ])
   })
 
-  it('should leave out machines and terminal in a browser', () => {
+  it('should leave out machines, terminal and updates in a browser', () => {
     expect(offeredSettingsSectionsOf(false)).toEqual([
       'accounts',
       'limits',

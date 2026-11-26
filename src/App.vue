@@ -7,6 +7,8 @@ import BridgeTokenScreen from '@/components/bridge/BridgeTokenScreen.vue'
 import NchCopyHint from '@/components/common/NchCopyHint.vue'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import UpdateDialog from '@/components/update/UpdateDialog.vue'
+import { useAppUpdateSchedule } from '@/composables/useAppUpdateSchedule'
 import { useColorSchemeApply } from '@/composables/useColorScheme'
 import { useCopyOnSelect } from '@/composables/useCopyOnSelect'
 import { useUiZoomApply } from '@/composables/useUiZoom'
@@ -14,6 +16,8 @@ import { useUiZoomApply } from '@/composables/useUiZoom'
 useColorSchemeApply()
 useUiZoomApply()
 useCopyOnSelect()
+// Only the installed app has something to update; a browser tab reloads its own code.
+if (isDesktopApp()) useAppUpdateSchedule()
 
 // A browser reaches agentd through the bridge, which first wants this device's token.
 const needsToken = computed(() => {
@@ -35,5 +39,6 @@ const needsToken = computed(() => {
     </div>
     <Toaster />
     <NchCopyHint />
+    <UpdateDialog v-if="isDesktopApp()" />
   </TooltipProvider>
 </template>

@@ -1,3 +1,4 @@
+import { handleError } from '@/lib/error'
 import { SOUND_RECIPES, type NotifySoundId, type SoundTone } from '@/utils/notifySounds'
 
 /** All sounds through one quiet master level, so none of them is ever loud. */
@@ -10,14 +11,18 @@ const SILENT = 0.0001
 const PARTIAL_DECAY_SHARE = 0.5
 /** Share of the decay over which a gliding pitch arrives. */
 const GLIDE_SHARE = 0.4
-/** Sounds asked for in a burst would pile up; one within this gap of the last is dropped. */
+/** The same sound asked for in a burst would pile up; within this gap the repeat is dropped. */
 const MIN_GAP_MS = 250
 /** A browser without a user gesture yet leaves `resume()` pending; this long is worth waiting. */
 const RESUME_WAIT_MS = 100
 
 let context: AudioContext | null = null
 let output: AudioNode | null = null
-let lastPlayedAt = 0
+/** Per sound, so a "needs you" right after a "done" still plays. */
+const lastPlayedAt = new Map<NotifySoundId, number>()
+/** What a person does that lets a browser play audio; pointerdown alone does not on iOS. */
+const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'] as const
+let isUnlockArmed = false
 
 const outputOf = (audio: AudioContext): AudioNode => {
   if (output) return output
@@ -74,33 +79,47 @@ const playTone = (audio: AudioContext, origin: number, tone: SoundTone) => {
 }
 
 /**
- * Plays one of Bull's sounds. The Tauri window allows audio from the start (wry passes
- * `--autoplay-policy=no-user-gesture-required`); a browser tab holds it back until the user
- * touched the page once (`unlockSounds`). A sound asked for before that stays silent rather than
- * playing late on the next click.
+ * Schedules one of Bull's sounds and tells whether it plays. The Tauri window allows audio from the start
+ * on every system (wry enables autoplay in WebView2, WKWebView and WebKitGTK); a browser tab holds
+ * it back until the user touched the page (`unlockSounds`). A sound asked for before that stays
+ * silent rather than playing late on the next click, and the caller can fall back.
  */
-export const playSound = async (id: NotifySoundId): Promise<void> => {
+const schedule = async (id: NotifySoundId): Promise<boolean> => {
   const now = Date.now()
-  if (now - lastPlayedAt < MIN_GAP_MS) return
-  lastPlayedAt = now
+  const last = lastPlayedAt.get(id)
+  if (last !== undefined && now - last < MIN_GAP_MS) return true
   const audio = contextOf()
   if (audio.state === 'suspended')
     await Promise.race([
       audio.resume(),
       new Promise((resolve) => setTimeout(resolve, RESUME_WAIT_MS))
     ])
-  if (audio.state !== 'running') return
+  if (audio.state !== 'running') return false
+  lastPlayedAt.set(id, now)
   const origin = audio.currentTime
   for (const tone of SOUND_RECIPES[id]) playTone(audio, origin, tone)
+  return true
 }
 
-/** Lets the first click or key press of the session allow audio, for sounds that come later. */
-export const unlockSounds = (): void => {
+/** Never rejects: a webview without working audio is reported once per try and counts as silent. */
+export const playSound = (id: NotifySoundId): Promise<boolean> =>
+  schedule(id).catch((error: unknown) => {
+    handleError(error)
+    return false
+  })
+
+/**
+ * Lets the user's clicks and key presses allow audio for sounds that come later, once per app.
+ * Stays armed: a phone suspends audio again when the app goes to the background. `isWanted` keeps
+ * it from creating audio at all while sound is off.
+ */
+export const unlockSounds = (isWanted: () => boolean): void => {
+  if (isUnlockArmed) return
+  isUnlockArmed = true
   const unlock = () => {
-    contextOf()
-      .resume()
-      .catch((error: unknown) => console.warn('sounds.unlock_failed', { error }))
+    if (!isWanted() || context?.state === 'running') return
+    contextOf().resume().catch(handleError)
   }
-  window.addEventListener('pointerdown', unlock, { once: true, capture: true })
-  window.addEventListener('keydown', unlock, { once: true, capture: true })
+  for (const event of UNLOCK_EVENTS)
+    window.addEventListener(event, unlock, { capture: true, passive: true })
 }

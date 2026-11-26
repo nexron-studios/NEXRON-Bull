@@ -11,7 +11,6 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
-import { handleError } from '@/lib/error'
 import { playSound } from '@/lib/soundPlayer'
 import { SOUNDS_OF_GROUP, type NotifySoundId, type SoundGroup } from '@/utils/notifySounds'
 
@@ -35,7 +34,7 @@ const choice = computed({
   }
 })
 
-const play = () => playSound(choice.value).catch(handleError)
+const play = () => void playSound(choice.value)
 </script>
 
 <template>

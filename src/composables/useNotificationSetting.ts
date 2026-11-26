@@ -84,13 +84,20 @@ export const useNotificationSetting = () => {
     const body = t('notifications.test_body')
     try {
       const { background, hasSound, sounds } = settings.value
-      if (hasSound) await playSound(sounds.done)
+      // Not awaited: a webview without audio must not keep the test notification away.
+      if (hasSound) void playSound(sounds.done)
       const canUseOs = background === 'os' && (await canShowOsNotification())
       if (!canUseOs) {
         toast(title, { description: body })
         return
       }
-      showOsNotification({ id: TEST_NOTIFICATION_ID, title, body, hasOpenAction: false })
+      showOsNotification({
+        id: TEST_NOTIFICATION_ID,
+        title,
+        body,
+        hasSystemSound: false,
+        hasOpenAction: false
+      })
     } catch (error) {
       handleError(error)
     }

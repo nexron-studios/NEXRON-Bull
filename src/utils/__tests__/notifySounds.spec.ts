@@ -5,8 +5,46 @@ import {
   soundGroupOf,
   soundLengthOf,
   soundOfGroup,
-  type NotifySoundId
+  type NotifySoundId,
+  type SoundTone
 } from '../notifySounds'
+
+/** The level the player's envelopes fall to (`soundPlayer`), and how fast partials fade. */
+const SILENT = 0.0001
+const PARTIAL_DECAY_SHARE = 0.5
+
+/** One voice's level at `moment`: a ramp up over the attack, then the exponential fall. */
+const levelOf = (gain: number, at: number, attack: number, decay: number, moment: number) => {
+  const peakAt = at + attack
+  if (moment < at || moment > peakAt + decay) return 0
+  if (moment < peakAt) return gain
+  return gain * (SILENT / gain) ** ((moment - peakAt) / decay)
+}
+
+/** The loudest the tones get together, measured at each tone's peak, partials included. */
+const peakGainOf = (tones: readonly SoundTone[]): number =>
+  Math.max(
+    ...tones.map(({ at, attack }) =>
+      tones.reduce(
+        (sum, tone) =>
+          sum +
+          levelOf(tone.gain, tone.at, tone.attack, tone.decay, at + attack) +
+          (tone.partials ?? []).reduce(
+            (total, partial) =>
+              total +
+              levelOf(
+                tone.gain * partial.gain,
+                tone.at,
+                tone.attack,
+                tone.decay * PARTIAL_DECAY_SHARE,
+                at + attack
+              ),
+            0
+          ),
+        0
+      )
+    )
+  )
 
 const ALL_SOUNDS = Object.keys(SOUND_RECIPES) as NotifySoundId[]
 /** "Nicht nervig": nothing rings on for longer than this, in seconds. */
@@ -30,14 +68,8 @@ describe('SOUND_RECIPES', () => {
     expect(SOUND_RECIPES[id].every((tone) => tone.attack > 0)).toBe(true)
   })
 
-  it.each(ALL_SOUNDS)('should keep %s below full scale where its tones overlap', (id) => {
-    const tones = SOUND_RECIPES[id]
-    const loudest = Math.max(
-      ...tones.map(({ at }) =>
-        tones.filter((tone) => tone.at === at).reduce((sum, tone) => sum + tone.gain, 0)
-      )
-    )
-    expect(loudest).toBeLessThanOrEqual(MAX_SUMMED_GAIN)
+  it.each(ALL_SOUNDS)('should keep %s below full scale where its tones ring together', (id) => {
+    expect(peakGainOf(SOUND_RECIPES[id])).toBeLessThanOrEqual(MAX_SUMMED_GAIN)
   })
 })
 

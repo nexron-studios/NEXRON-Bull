@@ -123,11 +123,13 @@ export const useTabNotifications = () => {
       background
     })
     if (!delivery) return false
-    if (hasSound) playSound(sounds[sound]).catch(handleError)
+    const isPlayed = hasSound ? playSound(sounds[sound]) : Promise.resolve(false)
     if (delivery === 'os') {
       const id = nextNotificationId++
       if (tabId) tabOfNotification.set(id, tabId)
-      showOsNotification({ id, title, body, hasOpenAction: tabId !== null })
+      // A background webview whose audio is held back still gets a sound, the system's.
+      const hasSystemSound = hasSound && !(await isPlayed)
+      showOsNotification({ id, title, body, hasSystemSound, hasOpenAction: tabId !== null })
       return true
     }
     toast(title, {
@@ -267,7 +269,7 @@ export const useTabNotifications = () => {
     replayedAsks.set(String(event.event.request_id), event.tab)
   }
 
-  unlockSounds()
+  unlockSounds(() => settings.value.isOn && settings.value.hasSound)
   const stopAgentd = agentdService.onEvent(onAgentdEvent)
   const stopActions = chat.$onAction(({ name, args }) => {
     const id = String(args[0])

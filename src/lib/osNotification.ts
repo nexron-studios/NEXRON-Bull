@@ -18,6 +18,8 @@ const TAP_ACTION = 'tap'
 const OPEN_ACTION = 'open'
 /** Notifications about a tab carry one button, "Open"; approving stays in the chat, by design. */
 const TAB_ACTION_TYPE = 'bull-tab'
+/** The system's own sound; only when Bull could not play its own. */
+const SYSTEM_SOUND = 'Default'
 
 /** System notifications exist only in the Tauri window; the browser tab uses in-app toasts. */
 export const hasOsNotifications = (): boolean => isTauri()
@@ -84,16 +86,25 @@ export interface OsNotification {
   id: number
   title: string
   body: string
+  /** The system's sound, as a fallback when Bull could not play its own */
+  hasSystemSound: boolean
   /** Shows the "Open" button; a click on the toast itself opens it as well. */
   hasOpenAction: boolean
 }
 
-export const showOsNotification = ({ id, title, body, hasOpenAction }: OsNotification): void =>
-  // Always silent: Bull plays its own sound (`soundPlayer`), the system's would come on top.
+export const showOsNotification = ({
+  id,
+  title,
+  body,
+  hasSystemSound,
+  hasOpenAction
+}: OsNotification): void =>
+  // Bull plays its own sound (`soundPlayer`); the system's would come on top of it.
   sendNotification({
     id,
     title,
     body,
+    sound: hasSystemSound ? SYSTEM_SOUND : undefined,
     actionTypeId: hasOpenAction ? TAB_ACTION_TYPE : undefined
   })
 

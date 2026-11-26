@@ -40,6 +40,7 @@ import { provideCalloutTarget } from '@/composables/useCalloutTarget'
 import { provideMarkupTarget } from '@/composables/useMarkupTarget'
 import { useOlderHistory } from '@/composables/useOlderHistory'
 import { useScrollEdges } from '@/composables/useScrollEdges'
+import { useSkipOffscreenWidth } from '@/composables/useSkipOffscreenWidth'
 import { providePromptEdit, usePromptEditOf } from '@/composables/usePromptEdit'
 import { useChatStore } from '@/stores/chat'
 import { vSkipOffscreen } from '@/lib/skipOffscreen'
@@ -87,6 +88,7 @@ const reducedMotion = usePreferredReducedMotion()
 // The session bar (phone: the screen's top bar) casts its edge. The composer deliberately does
 // not: a band above it read as a footer and blinked off after every message.
 const { hasMoreAbove } = useScrollEdges(scroller)
+useSkipOffscreenWidth(scroller)
 
 const isWorking = computed(() => tab.status === 'working' || tab.status === 'asking')
 // Every streamed token replaces the tab object, but not its message lists. These computeds return
@@ -291,18 +293,21 @@ const handlePreviewClick = (event: MouseEvent) => {
           </NchEmpty>
           <ChatOlderHistory v-if="tab.hasMore" :history="tab.history" @load="loadOlder" />
           <ChatHistorySkeleton v-if="tab.history === 'loading' && !messages.length" />
-          <ChatStreamItem
+          <!-- The frame the browser skips off screen (`v-skip-offscreen`). Skipping clips what a
+               message draws beyond its box, so the frame gives rings and the tool rule room: its
+               padding and negative margin of equal size leave the layout as it was. -->
+          <div
             v-for="(item, index) in stream"
             :key="item.key"
-            :item
-            :results
-            :is-running="isWorking"
             v-skip-offscreen
+            class="-mx-2 -my-1 flex flex-col px-2 py-1"
             :class="arrivals.has(item.key) && 'message-rise'"
             :data-search-key="item.key"
             :data-scroll-anchor="index >= anchorsFrom ? item.key : undefined"
             @animationend="settleArrival($event, item.key)"
-          />
+          >
+            <ChatStreamItem :item :results :is-running="isWorking" />
+          </div>
           <ChatRetryCard v-if="tab.retry" :retry="tab.retry" class="message-fade" />
           <ChatLiveBlock :tab />
           <ChatShellRuns :tab-id="tab.id" />

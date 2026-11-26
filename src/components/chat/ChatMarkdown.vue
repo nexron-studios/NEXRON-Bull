@@ -5,14 +5,22 @@ import ChatCallout from '@/components/chat/ChatCallout.vue'
 import { copyText } from '@/lib/clipboard'
 import { handleError } from '@/lib/error'
 import { renderSegments } from '@/lib/markdown'
+import { settledLengthOf } from '@/utils/markdownStream'
 
 // `small`: inside a compact card (the plan), where headings stay at body size.
 // `hasCalloutActions`: the last answer of a finished turn, whose callouts get their buttons.
+// `isStreaming`: the reply Claude is still writing.
 const {
   text,
   size = 'body',
-  hasCalloutActions = false
-} = defineProps<{ text: string; size?: 'body' | 'small'; hasCalloutActions?: boolean }>()
+  hasCalloutActions = false,
+  isStreaming = false
+} = defineProps<{
+  text: string
+  size?: 'body' | 'small'
+  hasCalloutActions?: boolean
+  isStreaming?: boolean
+}>()
 
 const SIZE_CLASSES = {
   body: 'gap-3 text-body [&_h1]:text-title [&_h2]:text-title',
@@ -21,7 +29,16 @@ const SIZE_CLASSES = {
 const SPACING = { body: 'space-y-3', small: 'space-y-2' } as const
 
 // Callouts (`> [!question] …`) become components with buttons; the rest stays markdown.
-const segments = computed(() => renderSegments(text))
+// While Claude writes, the finished paragraphs keep their segments (and their DOM): only the
+// paragraph in progress is parsed and replaced with each token.
+const settledLength = computed(() => (isStreaming ? settledLengthOf(text) : text.length))
+const settledText = computed(() => text.slice(0, settledLength.value))
+const settledSegments = computed(() => renderSegments(settledText.value))
+const segments = computed(() =>
+  settledLength.value === text.length
+    ? settledSegments.value
+    : [...settledSegments.value, ...renderSegments(text.slice(settledLength.value))]
+)
 
 const copyCode = (button: HTMLElement) => {
   void copyText(button.closest('pre')?.querySelector('code')?.textContent ?? '')

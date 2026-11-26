@@ -16,14 +16,13 @@ import ChatContextDialog from '@/components/chat/ChatContextDialog.vue'
 import ChatHistorySkeleton from '@/components/chat/ChatHistorySkeleton.vue'
 import ChatLimitNudge from '@/components/chat/ChatLimitNudge.vue'
 import ChatLimitWaitingCard from '@/components/chat/ChatLimitWaitingCard.vue'
+import ChatLiveBlock from '@/components/chat/ChatLiveBlock.vue'
 import ChatOlderHistory from '@/components/chat/ChatOlderHistory.vue'
-import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import ChatPermissionCard from '@/components/chat/ChatPermissionCard.vue'
 import ChatPlanCard from '@/components/chat/ChatPlanCard.vue'
 import ChatPromptSuggestions from '@/components/chat/ChatPromptSuggestions.vue'
 import ChatQuestionCard from '@/components/chat/ChatQuestionCard.vue'
 import ChatBackdrop from '@/components/chat/ChatBackdrop.vue'
-import ChatReasoning from '@/components/chat/ChatReasoning.vue'
 import ChatRewindDialog from '@/components/chat/ChatRewindDialog.vue'
 import ChatRetryCard from '@/components/chat/ChatRetryCard.vue'
 import ChatSearch from '@/components/chat/ChatSearch.vue'
@@ -302,18 +301,7 @@ const handlePreviewClick = (event: MouseEvent) => {
             @animationend="settleArrival($event, item.key)"
           />
           <ChatRetryCard v-if="tab.retry" :retry="tab.retry" class="message-fade" />
-          <ChatReasoning
-            v-if="tab.live.kind === 'thinking'"
-            :text="tab.live.text"
-            is-streaming
-            class="message-fade"
-          />
-          <!-- self-start: as wide as the finished reply that replaces it, so no line rewraps then. -->
-          <ChatMarkdown
-            v-if="tab.live.kind === 'writing'"
-            :text="tab.live.text"
-            class="message-fade self-start"
-          />
+          <ChatLiveBlock :tab />
           <ChatShellRuns :tab-id="tab.id" />
           <ChatQuestionCard
             v-if="approvalKind === 'question' && tab.permission"

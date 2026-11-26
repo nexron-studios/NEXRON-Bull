@@ -284,7 +284,8 @@ describe('settingsOfLegacy', () => {
         quota_low: false
       },
       background: 'os',
-      hasSound: false
+      hasSound: false,
+      sounds: { done: 'harp', attention: 'ping' }
     })
   })
 
@@ -311,7 +312,8 @@ describe('withSettingDefaults', () => {
         quota_low: false
       },
       background: 'toast',
-      hasSound: false
+      hasSound: false,
+      sounds: { done: 'harp', attention: 'ping' }
     })
   })
 
@@ -319,6 +321,14 @@ describe('withSettingDefaults', () => {
     expect(withSettingDefaults(null, DEFAULT_NOTIFICATION_SETTINGS)).toEqual(
       DEFAULT_NOTIFICATION_SETTINGS
     )
+  })
+
+  it('should keep picked sounds and replace one that is not of its group', () => {
+    const stored = { sounds: { done: 'bell', attention: 'drop' } } as never
+    expect(withSettingDefaults(stored, DEFAULT_NOTIFICATION_SETTINGS).sounds).toEqual({
+      done: 'bell',
+      attention: 'ping'
+    })
   })
 
   it('should drop values of the wrong kind', () => {

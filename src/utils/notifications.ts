@@ -1,5 +1,6 @@
 import { openQuestionOf } from '@/utils/answerCallouts'
 import { isBusyStatus, type ChatTabState, type TabStatus } from '@/utils/chatTab'
+import { DEFAULT_SOUNDS, soundOfGroup, type PickedSounds } from '@/utils/notifySounds'
 import { leftPercentOf } from '@/utils/percent'
 import { accountKeyOf, windowOf, type MachineQuota } from '@/utils/quota'
 
@@ -19,7 +20,10 @@ export interface NotificationSettings {
   events: Record<NotifyEvent, boolean>
   /** How to tell while Bull is in the background; in front it is always a toast. */
   background: NotifyDelivery
+  /** Bull plays its own sound, for system notifications and toasts in the window alike. */
   hasSound: boolean
+  /** The sound picked for a finished chat and for one that needs the user */
+  sounds: PickedSounds
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -33,7 +37,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     quota_low: false
   },
   background: 'os',
-  hasSound: false
+  hasSound: false,
+  sounds: DEFAULT_SOUNDS
 }
 
 /** The settings before there were any: the one on/off switch, saved as `"true"` or `"false"`. */
@@ -60,7 +65,11 @@ export const withSettingDefaults = (
     background: notifyDeliveryList.includes(stored.background as NotifyDelivery)
       ? (stored.background as NotifyDelivery)
       : defaults.background,
-    hasSound: typeof stored.hasSound === 'boolean' ? stored.hasSound : defaults.hasSound
+    hasSound: typeof stored.hasSound === 'boolean' ? stored.hasSound : defaults.hasSound,
+    sounds: {
+      done: soundOfGroup('done', stored.sounds?.done, defaults.sounds.done),
+      attention: soundOfGroup('attention', stored.sounds?.attention, defaults.sounds.attention)
+    }
   }
 }
 

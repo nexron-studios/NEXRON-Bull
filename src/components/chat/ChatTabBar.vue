@@ -166,6 +166,7 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
             :is-empty="isEmptyChat(tab)"
             :rank="tabFinishRanks.get(tab.id) ?? null"
             :is-seen="!finishRanks.has(tab.id)"
+            :is-newest-unseen="finishRanks.get(tab.id) === 1"
             :is-failed="tab.notice !== null"
             :is-waiting="tab.limit.kind === 'waiting'"
             :has-question="openQuestionOf(tab) !== null"

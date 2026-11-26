@@ -714,7 +714,8 @@ describe('useChatStore: tabs in finish order', () => {
     chat.tabs = [finishedTab('a', 1), finishedTab('b', 2), finishedTab('c', 3)]
 
     chat.markUnseen('b', 2)
-    chat.lineUpByFinish()
+    chat.lineUpByFinish('b', 2)
+    chat.lineUpByFinish('c', 3)
     const afterFinishing = chat.tabs.map((tab) => tab.id)
     chat.reorder(['a', 'c', 'b'])
 
@@ -722,6 +723,25 @@ describe('useChatStore: tabs in finish order', () => {
       ['c', 'b', 'a'],
       ['a', 'c', 'b']
     ])
+  })
+
+  it('should put a chat watched while it finished before an older unseen one', () => {
+    const chat = useChatStore()
+    chat.tabs = [finishedTab('unseen', 1), finishedTab('watched', 2)]
+    chat.markUnseen('unseen', 1)
+
+    chat.lineUpByFinish('watched', 2)
+
+    expect(chat.tabs.map((tab) => tab.id)).toEqual(['watched', 'unseen'])
+  })
+
+  it('should leave the order alone when the chat went on before it was lined up', () => {
+    const chat = useChatStore()
+    chat.tabs = [finishedTab('a', 1), finishedTab('b', 5)]
+
+    chat.lineUpByFinish('b', 2)
+
+    expect(chat.tabs.map((tab) => tab.id)).toEqual(['a', 'b'])
   })
 
   it('should keep the tab bar number of a chat once it was seen', () => {

@@ -39,7 +39,7 @@ export const useFinishTracking = (shownId: MaybeRefOrGetter<string | null>) => {
     // The shown chat is read after the wait: the user may have opened this one meanwhile.
     if (!isLookingAt(id, shownChatId.value, isFocusedNow)) chat.markUnseen(id, at)
     // Also a chat the user watched finish: the tab bar is in finish order either way.
-    chat.lineUpByFinish()
+    chat.lineUpByFinish(id, at)
   }
 
   const markShownSeen = () => {

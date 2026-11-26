@@ -67,11 +67,16 @@ describe('finishSortedOf', () => {
 describe('tabFinishOrderOf', () => {
   it('should order every finished chat by its end, seen or not, and skip running ones', () => {
     const tabs = [
-      tab('seen', { finishedAt: 2000 }),
+      tab('seen', { status: 'idle', finishedAt: 2000 }),
       tab('unseen', { finishedAt: 1000, unseenAt: 1000 }),
-      tab('running', { finishedAt: 3000, turn: { startedAt: 3500, afterUuid: null } }),
-      tab('failed', { finishedAt: 4000, notice: 'Fehler' }),
-      tab('never')
+      tab('running', {
+        status: 'working',
+        finishedAt: 3000,
+        turn: { startedAt: 3500, afterUuid: null }
+      }),
+      tab('crashed', { status: 'ended', finishedAt: 3600 }),
+      tab('failed', { status: 'idle', finishedAt: 4000, notice: 'Fehler' }),
+      tab('never', { status: 'idle' })
     ]
     expect(tabFinishOrderOf(tabs)).toEqual(['seen', 'unseen'])
   })

@@ -880,8 +880,13 @@ export const useChatStore = defineStore(
     /** The turn that ended at `at` finished while the user looked elsewhere. */
     const markUnseen = (id: string, at: number) => update(id, (tab) => withUnseen(tab, at))
 
-    /** After a chat finished: a drag afterwards stands until the next chat finishes. */
-    const lineUpByFinish = () => {
+    /**
+     * The turn that ended at `at` moves its tab into the finish order; a drag afterwards stands
+     * until the next chat finishes. Ignored when the tab went on meanwhile.
+     */
+    const lineUpByFinish = (id: string, at: number) => {
+      const tab = tabOf(id)
+      if (tab?.turn !== null || tab.finishedAt !== at) return
       tabs.value = finishSortedOf(tabs.value)
     }
 

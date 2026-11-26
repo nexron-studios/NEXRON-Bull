@@ -14,7 +14,7 @@ const MARKDOWN_LEAD = /^(?:#{1,6}\s+|[-*+]\s+|>\s*|\d+\.\s+)/
 const MARKDOWN_MARKS = /\*\*|__|`/g
 
 type RankedTab = Pick<ChatTabState, 'id' | 'unseenAt' | 'notice'>
-type LinedUpTab = RankedTab & Pick<ChatTabState, 'finishedAt' | 'turn'>
+type LinedUpTab = RankedTab & Pick<ChatTabState, 'finishedAt' | 'turn' | 'status'>
 
 /**
  * A chat that reported an error after it finished shows that instead of its number: the error
@@ -43,11 +43,15 @@ export const finishRanksOf = (tabs: RankedTab[]): Map<string, number> =>
   ranksOf(finishOrderOf(tabs))
 
 /**
- * When the tab's last turn ended, seen or not; `null` while a turn runs. A tab restored after a
- * restart knows only its unseen finish: `finishedAt` is not saved.
+ * When the tab's last turn ended, seen or not. A seen tab counts only while it is ready: a turn
+ * that crashed or a dropped connection leaves `finishedAt` from the turn before, and the pause
+ * icon matters more then. A tab restored after a restart knows only its unseen finish:
+ * `finishedAt` is not saved, and Claude is not running there until the next prompt anyway.
  */
-const lastFinishOf = (tab: LinedUpTab): number | null =>
-  tab.unseenAt ?? (tab.turn === null ? tab.finishedAt : null)
+const lastFinishOf = (tab: LinedUpTab): number | null => {
+  if (tab.unseenAt !== null) return tab.unseenAt
+  return tab.status === 'idle' && tab.turn === null ? tab.finishedAt : null
+}
 
 /**
  * Every finished tab, the most recently finished first: the order of the tab bar, which keeps its

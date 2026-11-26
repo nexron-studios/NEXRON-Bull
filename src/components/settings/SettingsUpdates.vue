@@ -13,7 +13,7 @@ import { handleError } from '@/lib/error'
 import { openLink } from '@/lib/links'
 import { useAppUpdateStore } from '@/stores/appUpdate'
 import { MS_PER_MINUTE } from '@/utils/elapsed'
-import { BULL_RELEASES_URL, updateCardViewOf, updateStatusOf } from '@/utils/appUpdateDialog'
+import { BULL_RELEASES_URL, updateStatusOf } from '@/utils/appUpdateDialog'
 
 // Settings › Updates (Figma "42f"): the running version, the last look on GitHub, and whether a
 // new version downloads by itself.
@@ -23,7 +23,7 @@ const { isPhone = false } = defineProps<{ isPhone?: boolean }>()
 const version = __APP_VERSION__
 
 const store = useAppUpdateStore()
-const { phase, isAutomatic, lastCheckedAt } = storeToRefs(store)
+const { phase, info, isAutomatic, lastCheckedAt } = storeToRefs(store)
 
 const { t } = useI18n()
 const formatAge = useAgeFormat()
@@ -40,7 +40,7 @@ const statusText = computed(() => {
   return t(key, { ...status.value.text.params, age: formatAge.value(age) })
 })
 // With an update on its way the button opens it; otherwise it looks again.
-const hasUpdate = computed(() => updateCardViewOf(phase.value) !== null)
+const hasUpdate = computed(() => info.value !== null)
 
 const checkOrShow = () => {
   if (hasUpdate.value) return store.openDialog()

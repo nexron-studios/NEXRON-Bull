@@ -51,6 +51,26 @@ const foundView = (info: UpdateInfo, isAutomatic: boolean): UpdateDialogView => 
   isClosable: true
 })
 
+type FailedPhase = Extract<UpdatePhase, { kind: 'failed' }>
+
+// A failed look has no update to name, so it names the running Bull instead.
+const failedView = (phase: FailedPhase, appVersion: string): UpdateDialogView => {
+  const isCheck = phase.step === 'check'
+  const current = isCheck ? appVersion : phase.info.currentVersion
+  return {
+    title: { key: isCheck ? 'update.check_failed_title' : 'update.failed_title' },
+    sub: isCheck
+      ? { key: 'update.sub_failed_check', params: { current } }
+      : { key: `update.sub_failed_${phase.step}`, params: { version: phase.info.version } },
+    notes: [],
+    progress: null,
+    error: { text: { key: `update.error_${phase.step}` }, reason: phase.reason },
+    hint: { key: 'update.hint_failed', params: { current } },
+    actions: RETRY_ACTIONS,
+    isClosable: true
+  }
+}
+
 /**
  * What the update dialog shows in each phase (Figma "42a" to "42e"); `null` while there is
  * nothing to show. `appVersion` names the running Bull when no update was found yet.
@@ -105,28 +125,7 @@ export const updateDialogViewOf = (
         isClosable: false
       }
     case 'failed':
-      if (phase.step === 'check') {
-        return {
-          title: { key: 'update.check_failed_title' },
-          sub: { key: 'update.sub_failed_check', params: { current: appVersion } },
-          notes: [],
-          progress: null,
-          error: { text: { key: 'update.error_check' }, reason: phase.reason },
-          hint: { key: 'update.hint_failed', params: { current: appVersion } },
-          actions: RETRY_ACTIONS,
-          isClosable: true
-        }
-      }
-      return {
-        title: { key: 'update.failed_title' },
-        sub: { key: `update.sub_failed_${phase.step}`, params: { version: phase.info.version } },
-        notes: [],
-        progress: null,
-        error: { text: { key: `update.error_${phase.step}` }, reason: phase.reason },
-        hint: { key: 'update.hint_failed', params: { current: phase.info.currentVersion } },
-        actions: RETRY_ACTIONS,
-        isClosable: true
-      }
+      return failedView(phase, appVersion)
     default: {
       const unhandled: never = phase
       throw new Error(`Unhandled update phase: ${JSON.stringify(unhandled)}`)

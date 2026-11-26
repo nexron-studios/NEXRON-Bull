@@ -12,7 +12,8 @@ const KEY_PATH_ENV = 'BULL_UPDATER_KEY_PATH'
 const DEFAULT_KEY_PATH = join(homedir(), '.tauri', 'bull-updater.key')
 
 const signingEnvOf = (env) => {
-  if (env[KEY_ENV]) return env
+  // Bull's key has no password; without an empty one Tauri stops and asks for it.
+  if (env[KEY_ENV]) return { ...env, [PASSWORD_ENV]: env[PASSWORD_ENV] ?? '' }
   const keyPath = env[KEY_PATH_ENV] || DEFAULT_KEY_PATH
   if (!existsSync(keyPath)) {
     console.error(

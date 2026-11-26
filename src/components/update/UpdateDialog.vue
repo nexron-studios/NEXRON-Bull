@@ -30,13 +30,19 @@ const { phase, isAutomatic, isDialogOpen } = storeToRefs(store)
 
 const { t } = useI18n()
 
-const ACTION: Record<UpdateAction, { variant: ButtonVariants['variant']; icon?: Component }> = {
+// The step forward in Bull blue (`brand-strong`, white on it 5.1:1), like "Neue Session".
+const PRIMARY_CLASS = 'bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover'
+
+const ACTION: Record<
+  UpdateAction,
+  { variant: ButtonVariants['variant']; icon?: Component; class?: string }
+> = {
   open_github: { variant: 'ghost', icon: Globe },
   later: { variant: 'outline' },
   background: { variant: 'outline' },
-  update_now: { variant: 'default', icon: RefreshCw },
-  restart: { variant: 'default', icon: RefreshCw },
-  retry: { variant: 'default', icon: RefreshCw }
+  update_now: { variant: 'default', icon: RefreshCw, class: PRIMARY_CLASS },
+  restart: { variant: 'default', icon: RefreshCw, class: PRIMARY_CLASS },
+  retry: { variant: 'default', icon: RefreshCw, class: PRIMARY_CLASS }
 }
 
 const view = computed(() => updateDialogViewOf(phase.value, isAutomatic.value, __APP_VERSION__))
@@ -85,7 +91,9 @@ const run = (action: UpdateAction) => {
         </span>
         <div class="flex min-w-0 flex-col gap-0.5">
           <DialogTitle class="text-body font-semibold">{{ textOf(view.title) }}</DialogTitle>
-          <DialogDescription class="text-meta">{{ textOf(view.sub) }}</DialogDescription>
+          <DialogDescription class="text-meta text-muted-foreground">{{
+            textOf(view.sub)
+          }}</DialogDescription>
         </div>
       </DialogHeader>
 
@@ -129,6 +137,7 @@ const run = (action: UpdateAction) => {
           :key="action"
           :variant="ACTION[action].variant"
           class="motion-press"
+          :class="ACTION[action].class"
           @click="run(action)"
         >
           <component

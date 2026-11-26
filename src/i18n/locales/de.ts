@@ -1642,7 +1642,7 @@ export default {
     ready_title: 'Bull {version} ist bereit',
     installing_title: 'Bull wird aktualisiert',
     failed_title: 'Update hat nicht geklappt',
-    check_failed_title: 'Keine Verbindung zu GitHub',
+    check_failed_title: 'Suche nach Updates hat nicht geklappt',
     sub_found_automatic: 'Du hast {current} · wird automatisch geladen',
     sub_found: 'Du hast {current}',
     sub_ready: 'Geladen und geprüft',
@@ -1669,7 +1669,6 @@ export default {
     update_now: 'Jetzt aktualisieren',
     retry: 'Nochmal versuchen',
     open_github: 'Auf GitHub öffnen',
-    close: 'Schließen',
     card: {
       label: 'Update',
       downloading_title: 'Update wird geladen',

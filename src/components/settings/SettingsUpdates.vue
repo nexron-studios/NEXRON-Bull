@@ -12,6 +12,7 @@ import { useMinuteClock } from '@/composables/useClock'
 import { handleError } from '@/lib/error'
 import { openLink } from '@/lib/links'
 import { useAppUpdateStore } from '@/stores/appUpdate'
+import { MS_PER_MINUTE } from '@/utils/elapsed'
 import { BULL_RELEASES_URL, updateCardViewOf, updateStatusOf } from '@/utils/appUpdateDialog'
 
 // Settings › Updates (Figma "42f"): the running version, the last look on GitHub, and whether a
@@ -29,12 +30,15 @@ const formatAge = useAgeFormat()
 const now = useMinuteClock()
 
 const status = computed(() => updateStatusOf(phase.value, lastCheckedAt.value > 0))
-const statusText = computed(() =>
-  t(status.value.text.key, {
-    ...status.value.text.params,
-    age: formatAge.value(now.value.getTime() - lastCheckedAt.value)
-  })
-)
+const statusText = computed(() => {
+  const age = now.value.getTime() - lastCheckedAt.value
+  // "checked < 1 min ago" reads like a measurement; right after a look it just says so.
+  const key =
+    status.value.text.key === 'settings.updates.status_current' && age < MS_PER_MINUTE
+      ? 'settings.updates.status_current_now'
+      : status.value.text.key
+  return t(key, { ...status.value.text.params, age: formatAge.value(age) })
+})
 // With an update on its way the button opens it; otherwise it looks again.
 const hasUpdate = computed(() => updateCardViewOf(phase.value) !== null)
 

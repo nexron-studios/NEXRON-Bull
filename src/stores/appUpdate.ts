@@ -82,11 +82,13 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
   /** Looks for a newer Bull. Asked by hand, the dialog opens for whatever it finds. */
   const check = async ({ isManual }: { isManual: boolean }) => {
     if (isBusy.value) return
-    // Already downloaded: nothing new to fetch until this one is installed.
-    if (phase.value.kind === 'ready') {
+    // One found update at a time: it stays until it is installed, and a look in the background
+    // must not swap it for a network error. Asked by hand, its dialog opens instead.
+    if (info.value) {
       isDialogOpen.value = isDialogOpen.value || isManual
       return
     }
+    isDialogOpen.value = false
     phase.value = { kind: 'checking' }
     try {
       const update = await appUpdateService.find()
@@ -101,6 +103,7 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
       if (isAutomatic.value) await download()
     } catch (error) {
       failCheck(error)
+      isDialogOpen.value = isManual
     }
   }
 

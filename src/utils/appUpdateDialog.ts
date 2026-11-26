@@ -36,6 +36,7 @@ export type UpdateDialogView = {
 
 const RETRY_ACTIONS: UpdateAction[] = ['open_github', 'retry']
 
+// While downloading the line says whether Bull started it by itself.
 const foundView = (info: UpdateInfo, isAutomatic: boolean): UpdateDialogView => ({
   title: { key: 'update.found_title', params: { version: info.version } },
   sub: {
@@ -45,8 +46,8 @@ const foundView = (info: UpdateInfo, isAutomatic: boolean): UpdateDialogView => 
   notes: info.notes,
   progress: null,
   error: null,
-  hint: { key: isAutomatic ? 'update.hint_chats' : 'update.hint_manual' },
-  actions: isAutomatic ? ['background'] : ['later', 'update_now'],
+  hint: { key: 'update.hint_chats' },
+  actions: ['background'],
   isClosable: true
 })
 
@@ -64,8 +65,13 @@ export const updateDialogViewOf = (
     case 'checking':
     case 'current':
       return null
+    // Not downloading yet, whatever the setting says now: it may have been switched on later.
     case 'available':
-      return foundView(phase.info, isAutomatic)
+      return {
+        ...foundView(phase.info, false),
+        hint: { key: 'update.hint_manual' },
+        actions: ['later', 'update_now']
+      }
     case 'downloading':
       return {
         ...foundView(phase.info, isAutomatic),
@@ -74,9 +80,7 @@ export const updateDialogViewOf = (
           ratio: downloadRatioOf(phase.downloadedBytes, phase.totalBytes),
           downloadedBytes: phase.downloadedBytes,
           totalBytes: phase.totalBytes
-        },
-        hint: { key: 'update.hint_chats' },
-        actions: ['background']
+        }
       }
     case 'ready':
       return {
@@ -84,7 +88,6 @@ export const updateDialogViewOf = (
         title: { key: 'update.ready_title', params: { version: phase.info.version } },
         sub: { key: 'update.sub_ready' },
         progress: { kind: 'done' },
-        hint: { key: 'update.hint_chats' },
         actions: ['later', 'restart']
       }
     case 'installing':

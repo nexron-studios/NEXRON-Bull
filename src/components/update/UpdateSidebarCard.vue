@@ -57,6 +57,10 @@ const act = () => {
           :variant="view.action === 'restart' ? 'default' : 'outline'"
           size="sm"
           class="motion-press"
+          :class="{
+            'bg-brand-strong text-brand-foreground hover:bg-brand-strong-hover':
+              view.action === 'restart'
+          }"
           @click="act"
         >
           {{ t(`update.card.${view.action}`) }}

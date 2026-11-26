@@ -41,6 +41,8 @@ export const appUpdateService = {
    * process itself and starts Bull again, so `relaunch` only runs on macOS and Linux.
    */
   installAndRestart: async (update: Update): Promise<void> => {
+    // The installer would put the release over the dev build's own `target` folder.
+    if (import.meta.env.DEV) throw new Error('A dev build does not install updates.')
     await update.install()
     await relaunch()
   }

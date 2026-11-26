@@ -1606,7 +1606,7 @@ export default {
     ready_title: 'Bull {version} is ready',
     installing_title: 'Updating Bull',
     failed_title: 'The update did not work',
-    check_failed_title: 'No connection to GitHub',
+    check_failed_title: 'Could not look for updates',
     sub_found_automatic: 'You have {current} · downloading automatically',
     sub_found: 'You have {current}',
     sub_ready: 'Downloaded and verified',
@@ -1632,7 +1632,6 @@ export default {
     update_now: 'Update now',
     retry: 'Try again',
     open_github: 'Open on GitHub',
-    close: 'Close',
     card: {
       label: 'Update',
       downloading_title: 'Downloading update',

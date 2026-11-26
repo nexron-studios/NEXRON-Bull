@@ -13,11 +13,12 @@ const open = async (wrapper: ReturnType<typeof mountCall>) => {
 }
 
 describe('ChatToolCall', () => {
-  it('should name the skill of a Skill call on its own tint with the args beside it', () => {
+  it('should name the skill of a Skill call in skill orange on a tinted row, args beside it', () => {
     i18n.global.locale.value = 'en'
     const wrapper = mountCall('Skill', { args: 'high --fix', skill: 'code-review' })
 
-    expect(wrapper.find('.text-act-skill.bg-act-skill\\/12').text()).toBe('code-review')
+    expect(wrapper.find('summary .text-act-skill').text()).toBe('code-review')
+    expect(wrapper.find('summary').classes()).toContain('bg-clawd/10')
     expect(wrapper.find('summary').text()).toContain('Skillcode-reviewhigh --fix')
   })
 

@@ -43,8 +43,6 @@ export const useLightboxActions = ({
 
   /** Closing or paging drops strokes and comment. */
   const mayLeave = () => mayDrop(markup.isDirty.value)
-  /** Back to viewing drops only the strokes. */
-  const mayStopMarking = () => mayDrop(markup.strokes.value.length > 0)
 
   // A comment alone on a history image brings a copy along, so Claude sees what it is about. An
   // attachment stays where it is for the composer, but a message sent from here needs it along.
@@ -109,5 +107,5 @@ export const useLightboxActions = ({
     hasWarned.value = false
   })
 
-  return { isApplying, mayLeave, mayStopMarking, apply, copy, download }
+  return { isApplying, mayLeave, apply, copy, download }
 }

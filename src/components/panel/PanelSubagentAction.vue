@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useClippedTooltip } from '@/composables/useClippedTooltip'
 import { formatElapsed } from '@/utils/elapsed'
 import type { ToolRun } from '@/utils/tabActivity'
-import { TOOL_ICON, TOOL_RUN_LOOK } from '@/utils/toolIcons'
+import { SKILL_ROW_TINT, TOOL_ICON, TOOL_RUN_LOOK } from '@/utils/toolIcons'
 import { toolInfoOf } from '@/utils/toolKind'
 
 // One tool call of a subagent (Figma "10", `.subact`). It has no card in the chat, so it only
@@ -23,6 +23,7 @@ const { t } = useI18n()
 const { open, setOpen } = useClippedTooltip([nameEl, targetEl])
 
 const info = computed(() => toolInfoOf(run.name, run.target))
+const isSkill = computed(() => info.value.kind === 'skill')
 const duration = computed(() => {
   if (run.startedAt === null) return ''
   if (run.finishedAt !== null) return formatElapsed(run.finishedAt - run.startedAt)
@@ -33,7 +34,11 @@ const duration = computed(() => {
 <template>
   <Tooltip :open @update:open="setOpen">
     <TooltipTrigger as-child>
-      <span v-bind="$attrs" class="flex min-w-0 items-center gap-1.5 py-0.5 text-meta">
+      <span
+        v-bind="$attrs"
+        class="flex min-w-0 items-center gap-1.5 py-0.5 text-meta"
+        :class="isSkill && [SKILL_ROW_TINT, '-mx-1 rounded-sm px-1']"
+      >
         <component
           :is="TOOL_RUN_LOOK[run.status].icon"
           class="size-3 shrink-0"
@@ -43,7 +48,8 @@ const duration = computed(() => {
         <span class="sr-only">{{ t(`activity.tool_state.${run.status}`) }}</span>
         <component
           :is="TOOL_ICON[info.icon]"
-          class="size-3 shrink-0 text-muted-foreground"
+          class="size-3 shrink-0"
+          :class="isSkill ? 'text-clawd' : 'text-muted-foreground'"
           aria-hidden="true"
         />
         <span ref="name" class="max-w-3/5 shrink-0 truncate font-semibold text-foreground">{{

@@ -152,7 +152,7 @@ export default {
         searches_web: 'Claude sucht im Web nach {target}',
         delegates: 'Claude gibt eine Aufgabe an einen Subagent',
         plans: 'Claude plant die Schritte',
-        uses_skill: 'Claude nutzt den Skill {target}',
+        applies_skill: 'Claude nutzt den Skill {target}',
         uses: 'Claude nutzt {tool}'
       }
     },
@@ -309,8 +309,6 @@ export default {
     open_marked: '{name} ansehen, markiert',
     note_count: 'keine Notiz | {n} Notiz | {n} Notizen',
     marked: 'markiert',
-    mode: 'Modus',
-    view: 'Ansehen',
     mark: 'Markieren',
     zoom_out: 'Verkleinern',
     zoom_in: 'Vergrößern',
@@ -639,6 +637,8 @@ export default {
     bar_agent_hint:
       'Claude antwortet, sobald der Subagent fertig ist | Claude antwortet, sobald die Subagents fertig sind',
     bar_more: '+{n} weitere',
+    bar_count: '{n} Aufgabe | {n} Aufgaben',
+    bar_running_for: 'läuft seit',
     tool_count: '{n} Tool | {n} Tools',
     live: 'live',
     needs_you: 'braucht dich',

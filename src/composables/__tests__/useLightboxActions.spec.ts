@@ -136,11 +136,4 @@ describe('useLightboxActions', () => {
     expect(actions.mayLeave()).toBe(false)
     expect(actions.mayLeave()).toBe(true)
   })
-
-  it('should let marking stop without a warning when only a comment was written', () => {
-    const { markup, actions } = setup(attached)
-    markup.comment.value = 'note'
-    expect(actions.mayStopMarking()).toBe(true)
-    expect(toast.warning).not.toHaveBeenCalled()
-  })
 })

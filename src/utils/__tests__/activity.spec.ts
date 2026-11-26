@@ -58,7 +58,7 @@ describe('activityOfTab', () => {
     }
     expect(activityOfTab(tab({ messages: [prompt, skill], turn }), noResults)).toEqual({
       kind: 'tool',
-      activity: 'uses_skill',
+      activity: 'applies_skill',
       tool: 'Skill',
       target: 'simplify'
     })

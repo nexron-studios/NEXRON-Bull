@@ -24,8 +24,10 @@ const meta = computed(() => {
 </script>
 
 <template>
+  <!-- `relative`: the hidden radio stays in this row, so focusing it scrolls the list, not the
+       dialog around it (same bug as the question card, 25.11.2026). -->
   <label
-    class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-input px-2.5 py-2 has-checked:border-brand has-checked:bg-brand/7 has-focus-visible:ring-2 has-focus-visible:ring-ring"
+    class="relative flex cursor-pointer items-center gap-2.5 rounded-lg border border-input px-2.5 py-2 has-checked:border-brand has-checked:bg-brand/7 has-focus-visible:ring-2 has-focus-visible:ring-ring"
   >
     <input v-model="chosen" type="radio" :name :value="point.uuid" class="sr-only" />
     <CircleDot v-if="isChosen" class="size-3.5 shrink-0 text-brand" aria-hidden="true" />

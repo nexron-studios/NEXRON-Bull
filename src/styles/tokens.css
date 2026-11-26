@@ -8,11 +8,10 @@
  *   good       done, allowed
  *   act-*      what a tool does, on icons only: read/search, change/run, web/MCP.
  *              act-read is a muted slate so it never reads as the blue brand
- *   act-skill  a skill Claude loads (code-review, simplify …): its icon and the skill name on its
- *              own 12 % tint in the chat step row (25.11.2026: skills get a look of their own).
- *              Claude orange like the skills share of the context breakdown, so a skill reads the
- *              same in both places; deeper than clawd so the name keeps 4.5:1 as text, and redder
- *              than warning so it never reads as "Claude is working"
+ *   act-skill  the name of a skill Claude loads (code-review, simplify …) as text in the chat step
+ *              row; icon and row tint stay clawd (26.11.2026: both skill looks combined). Claude
+ *              orange like clawd, deeper so the name keeps 4.5:1 on the tinted row, and redder than
+ *              warning so it never reads as "Claude is working"
  *   foreground / muted-foreground  content and meta text
  *   brand      the bull (public/favicon.svg), the focus ring, the scrollbar thumb, the bar marking
  *              the open session, the drag-and-drop line, Clawd (18.11.2026), and the thinking bar's
@@ -22,7 +21,8 @@
  *   link       brand-blue text: links in Claude's answers and the "Vorschlag" callout. Brand on
  *              dark (4.9:1), brand-strong on light (4.7:1); link-hover is lighter on dark, deeper on
  *              light (19.11.2026: links in the main colour, with hover)
- *   clawd      Claude orange, only the skills share of the context breakdown. Clawd himself is
+ *   clawd      Claude orange, only for skills: their share of the context breakdown and a skill
+ *              Claude runs (icon and row tint in chat and panel, never its text: 3:1 on light, 25.11.2026). Clawd himself is
  *              brand blue, so he follows the theme (18.11.2026)
  *   stage      the black backdrop of the full-screen image viewer on phones, in both themes
  *   account-a…d  the dot that marks a Claude account (composer chip, panel, sidebar footer),

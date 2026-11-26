@@ -151,7 +151,7 @@ export default {
         searches_web: 'Claude is searching the web for {target}',
         delegates: 'Claude is handing a task to a subagent',
         plans: 'Claude is planning the steps',
-        uses_skill: 'Claude is using the {target} skill',
+        applies_skill: 'Claude is using the {target} skill',
         uses: 'Claude is using {tool}'
       }
     },
@@ -306,8 +306,6 @@ export default {
     open_marked: 'View {name}, marked',
     note_count: 'no notes | {n} note | {n} notes',
     marked: 'marked',
-    mode: 'Mode',
-    view: 'View',
     mark: 'Mark up',
     zoom_out: 'Zoom out',
     zoom_in: 'Zoom in',
@@ -624,6 +622,8 @@ export default {
     bar_agent_hint:
       'Claude replies once the subagent is done | Claude replies once the subagents are done',
     bar_more: '+{n} more',
+    bar_count: '{n} task | {n} tasks',
+    bar_running_for: 'running for',
     tool_count: '{n} tool | {n} tools',
     live: 'live',
     needs_you: 'needs you',

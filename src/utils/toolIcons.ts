@@ -50,13 +50,16 @@ export const TOOL_ICON: Record<ToolIcon, Component> = {
   config: Settings2
 }
 
-/** Read, change, outside and skill each have their act colour. */
+/** Read, change and outside each have their act colour; a skill's icon has the skills orange. */
 export const TOOL_KIND_CLASS: Record<ToolKind, string> = {
   read: 'text-act-read',
   change: 'text-act-change',
   outside: 'text-act-outside',
-  skill: 'text-act-skill'
+  skill: 'text-clawd'
 }
+
+/** The tint behind a skill's row in chat and panel, so a running code review is seen at a glance. */
+export const SKILL_ROW_TINT = 'bg-clawd/10'
 
 /** How a tool call's state looks in the panel: the activity list and a subagent's actions. */
 export const TOOL_RUN_LOOK: Record<ToolRunStatus, { icon: Component; class: string }> = {

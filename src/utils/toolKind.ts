@@ -1,4 +1,7 @@
-/** What a tool does, as the colour hierarchy in tokens.css sees it. */
+/**
+ * What a tool does, as the colour hierarchy in tokens.css sees it. `skill`: Claude follows a skill
+ * (code-review, a house skill …), tinted in the skills orange so it stands out from plain steps.
+ */
 export const toolKindList = ['read', 'change', 'outside', 'skill'] as const
 export type ToolKind = (typeof toolKindList)[number]
 
@@ -12,7 +15,7 @@ export const activityList = [
   'searches_web',
   'delegates',
   'plans',
-  'uses_skill',
+  'applies_skill',
   'uses'
 ] as const
 export type Activity = (typeof activityList)[number]
@@ -134,7 +137,8 @@ const UNKNOWN_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'wrenc
  * summary (`summarizeToolInput`): for a Skill call it names the skill, which picks the icon.
  */
 export const toolInfoOf = (name: string, target = ''): ToolInfo => {
-  if (isSkillTool(name)) return { kind: 'skill', activity: 'uses_skill', icon: skillIconOf(target) }
+  if (isSkillTool(name))
+    return { kind: 'skill', activity: 'applies_skill', icon: skillIconOf(target) }
   return TOOLS[name] ?? (name.startsWith(MCP_PREFIX) ? MCP_TOOL : UNKNOWN_TOOL)
 }
 

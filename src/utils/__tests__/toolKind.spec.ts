@@ -6,6 +6,10 @@ describe('toolInfoOf', () => {
     expect(toolInfoOf('Grep')).toEqual({ kind: 'read', activity: 'searches', icon: 'search' })
   })
 
+  it('should mark a skill with its own kind, activity and icon', () => {
+    expect(toolInfoOf('Skill')).toEqual({ kind: 'skill', activity: 'applies_skill', icon: 'skill' })
+  })
+
   it('should treat every task tool as planning', () => {
     expect(['TodoWrite', 'TaskCreate', 'TaskUpdate'].map((name) => toolInfoOf(name))).toEqual([
       { kind: 'change', activity: 'plans', icon: 'tasks' },
@@ -26,13 +30,13 @@ describe('toolInfoOf for skills', () => {
   it('should give a Skill call the skill colour, activity and the icon of its skill', () => {
     expect(toolInfoOf('Skill', 'code-review')).toEqual({
       kind: 'skill',
-      activity: 'uses_skill',
+      activity: 'applies_skill',
       icon: 'review'
     })
   })
 
   it('should give a Skill call without a skill name the generic skill icon', () => {
-    expect(toolInfoOf('Skill')).toEqual({ kind: 'skill', activity: 'uses_skill', icon: 'skill' })
+    expect(toolInfoOf('Skill')).toEqual({ kind: 'skill', activity: 'applies_skill', icon: 'skill' })
   })
 
   it('should ignore the target of every other tool', () => {

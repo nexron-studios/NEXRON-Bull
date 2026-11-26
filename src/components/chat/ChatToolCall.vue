@@ -6,7 +6,7 @@ import ChatDiffView from '@/components/chat/ChatDiffView.vue'
 import ChatShellOutput from '@/components/chat/ChatShellOutput.vue'
 import { countsOf, rowsOfHunks } from '@/utils/diffRows'
 import { hunksOfTool } from '@/utils/toolInput'
-import { TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
+import { SKILL_ROW_TINT, TOOL_ICON, TOOL_KIND_CLASS } from '@/utils/toolIcons'
 import { isSkillTool, toolInfoOf } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
 import { resultTextOf, type ToolResultBlock } from '@/utils/toolPairs'
@@ -77,7 +77,7 @@ const images = computed(() =>
   >
     <summary
       class="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 text-small select-none hover:bg-muted/60 [&::-webkit-details-marker]:hidden"
-      :class="{ 'bg-muted/60': state === 'running' }"
+      :class="isSkill ? SKILL_ROW_TINT : { 'bg-muted/60': state === 'running' }"
     >
       <component
         :is="TOOL_ICON[info.icon]"
@@ -88,7 +88,7 @@ const images = computed(() =>
       <span class="font-medium">{{ name }}</span>
       <span
         v-if="isSkill && summary"
-        class="max-w-1/2 shrink-0 truncate rounded-sm bg-act-skill/12 px-1.5 font-medium text-act-skill"
+        class="max-w-1/2 shrink-0 truncate font-semibold text-act-skill"
         >{{ summary }}</span
       >
       <span

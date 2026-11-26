@@ -30,10 +30,12 @@ const label = computed(() => {
       class="size-1.5 shrink-0 rounded-full bg-warning motion-safe:animate-pulse"
       aria-hidden="true"
     />
-    <!-- Hover only: the row is one button, so the names go to screen readers as text instead. -->
+    <!-- Hover only: the row is one button, so the names go to screen readers as text instead.
+         `relative` makes the truncated line clip its `sr-only` text: absolute, it sat after the
+         full label, past the sidebar's edge, and the list scrolled sideways. -->
     <Tooltip>
       <TooltipTrigger as-child>
-        <span class="min-w-0 truncate">
+        <span class="relative min-w-0 truncate">
           <span aria-hidden="true">{{ label }}</span>
           <span class="sr-only">
             {{ t('sidebar.background_count', tasks.length) }}: {{ names.join(', ') }}

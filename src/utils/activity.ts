@@ -1,5 +1,4 @@
 import { hasRepliedThisTurn, turnMessagesOf, type ChatTabState } from '@/utils/chatTab'
-import { liveActivityOf } from '@/utils/liveStream'
 import type { LiveBlockKind } from '@/types/agentd.type'
 import { shortTarget, toolInfoOf, type Activity } from '@/utils/toolKind'
 import { isShellTool } from '@/utils/toolOutput'
@@ -47,11 +46,6 @@ export const activityOf = (
   const target = shortTarget(summarizeToolInput(call.input))
   return { kind: 'tool', activity: toolInfoOf(call.name, target).activity, tool: call.name, target }
 }
-
-export const activityOfTab = (
-  tab: ChatTabState,
-  results: Map<string, ToolResultBlock>
-): TabActivity => activityOf(tab, liveActivityOf(tab.live), results)
 
 /**
  * The shell call Claude waits on right now: Ctrl+B sends it to the background, as in the terminal.

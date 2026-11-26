@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { activityOfTab, foregroundShellOf, isAwaitingReply } from '../activity'
+import { activityOf, foregroundShellOf, isAwaitingReply } from '../activity'
+import { liveActivityOf } from '../liveStream'
 import { newTab, type ChatTabState } from '../chatTab'
 import type { ChatMessage } from '@/types/agentd.type'
+import type { ToolResultBlock } from '../toolPairs'
 
 const tab = (fields: Partial<ChatTabState> = {}): ChatTabState => ({
   ...newTab({
@@ -37,7 +39,11 @@ const read: ChatMessage = {
 
 const noResults = new Map()
 
-describe('activityOfTab', () => {
+/** The activity as the thinking bar asks for it, with the kind of the live block apart. */
+const activityOfTab = (tab: ChatTabState, results: Map<string, ToolResultBlock>) =>
+  activityOf(tab, liveActivityOf(tab.live), results)
+
+describe('activityOf', () => {
   it('should name the tool call that waits for its result', () => {
     const turn = { startedAt: 0, afterUuid: null }
     expect(activityOfTab(tab({ messages: [prompt, read], turn }), noResults)).toEqual({

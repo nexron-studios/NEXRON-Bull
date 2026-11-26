@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainTitleOf, titleImageSrcsOf, titlePiecesOf } from '../chatTitle'
+import { plainTitleOf, promptImageSrcsOf, titlePiecesOf, titleSourceOf } from '../chatTitle'
 import type { ChatMessage } from '@/types/agentd.type'
 import { IMAGE_REF_SLOTS, imageRefFormatOf } from '../imageRefs'
 
@@ -74,20 +74,37 @@ const prompt = (uuid: string, text: string, data: string[]): ChatMessage => ({
   ]
 })
 
-describe('titleImageSrcsOf', () => {
-  it('should give the images of the prompt the title was cut from, in order', () => {
-    const messages = [
-      prompt('a', 'something else [Bild 1 (x.png)]', ['WFla']),
-      prompt('b', 'wa [Bild 1 (a.png)] [Bild 2 (b.png)] mir brutal wichtig', ['QQ==', 'Qg=='])
-    ]
+describe('titleSourceOf', () => {
+  const first = prompt('a', 'wa [Bild 1 (a.png)] [Bild 2 (b.png)] mir brutal wichtig', [
+    'QQ==',
+    'Qg=='
+  ])
 
-    expect(titleImageSrcsOf('wa [Bild 1 (a.png)] [Bild 2 (b.png)] mir', messages)).toEqual([
+  it('should give the first prompt when the title was cut from it', () => {
+    const tab = { messages: [first, prompt('b', 'später', [])], hasMore: false }
+
+    expect(titleSourceOf('wa [Bild 1 (a.png)] [Bild 2 (b.p', tab)?.uuid).toBe('a')
+  })
+
+  it('should not take a later prompt that starts like the title', () => {
+    const tab = {
+      messages: [prompt('a', 'Fang an', []), prompt('b', '[Bild 1 (image.png)] und das', ['Qg=='])],
+      hasMore: false
+    }
+
+    expect(titleSourceOf('[Bild 1 (image.png)]', tab)).toBeNull()
+  })
+
+  it('should give nothing while older messages are not loaded', () => {
+    expect(titleSourceOf('wa [Bild 1 (a.png)]', { messages: [first], hasMore: true })).toBeNull()
+  })
+})
+
+describe('promptImageSrcsOf', () => {
+  it('should give the prompt’s images as data URLs in order', () => {
+    expect(promptImageSrcsOf(prompt('a', 'x', ['QQ==', 'Qg==']))).toEqual([
       'data:image/png;base64,QQ==',
       'data:image/png;base64,Qg=='
     ])
-  })
-
-  it('should give no images when the prompt of the title is not loaded', () => {
-    expect(titleImageSrcsOf('wa [Bild 1 (a.png)]', [prompt('a', 'later', ['QQ=='])])).toEqual([])
   })
 })

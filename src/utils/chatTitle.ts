@@ -1,6 +1,7 @@
 import type { ChatMessage } from '@/types/agentd.type'
 import { imageBlocksOf, toDataUrl } from '@/utils/attachments'
 import { imageRefsOf, type ImageRefFormat } from '@/utils/imageRefs'
+import { isPromptEcho } from '@/utils/pendingPrompts'
 
 /**
  * A run of a chat title: plain text, or an image reference by its number. A title has no images
@@ -35,21 +36,29 @@ export const titlePiecesOf = (title: string, format: ImageRefFormat): TitlePiece
   return pieces
 }
 
-/**
- * The images of the prompt the title was cut from, as data URLs in prompt order; empty when that
- * prompt is not among `messages` (an older page of the history) or the title is Haiku's.
- */
-export const titleImageSrcsOf = (title: string, messages: readonly ChatMessage[]): string[] => {
-  if (!title) return []
-  const source = messages.find(
-    (message) =>
-      message.role === 'user' &&
-      message.blocks.some((block) => block.type === 'text' && block.text.startsWith(title))
-  )
-  return source
-    ? imageBlocksOf(source.blocks).map((block) => toDataUrl(block.media_type, block.data))
-    : []
+/** What `titleSourceOf` needs of a tab: its loaded messages and whether older ones are missing. */
+export interface TitleSourceTab {
+  messages: readonly ChatMessage[]
+  hasMore: boolean
 }
+
+/**
+ * The chat's first prompt, when the title was cut from it; `null` when the history does not reach
+ * back to it, or the title is Haiku's. Only the first prompt counts: a later one may start the same
+ * way ("[Bild 1 (image.png)]" with another screenshot) and would lend the chip its picture.
+ */
+export const titleSourceOf = (title: string, tab: TitleSourceTab): ChatMessage | null => {
+  if (!title || tab.hasMore) return null
+  const first = tab.messages.find(isPromptEcho)
+  const isSource = first?.blocks.some(
+    (block) => block.type === 'text' && block.text.startsWith(title)
+  )
+  return first && isSource ? first : null
+}
+
+/** A prompt's images as data URLs, in the order its references number them. */
+export const promptImageSrcsOf = (message: ChatMessage): string[] =>
+  imageBlocksOf(message.blocks).map((block) => toDataUrl(block.media_type, block.data))
 
 /** The title as plain text, each reference as its short label ("Bild 1"): tooltips, toasts. */
 export const plainTitleOf = (

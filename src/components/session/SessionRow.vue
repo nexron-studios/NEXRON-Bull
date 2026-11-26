@@ -108,10 +108,7 @@ const background = computed(() => (isEmpty.value ? [] : backgroundWorkOf(row.tab
         <span v-if="isWide" class="flex min-w-0 flex-1 items-center gap-4 text-small">
           <span class="flex w-64 min-w-0 shrink-0 items-center gap-1.5">
             <span class="truncate font-medium text-foreground" :class="{ 'opacity-72': isSeen }">
-              <ChatTitleText
-                :title="row.title || t('chat.new_chat')"
-                :messages="row.tab.messages"
-              />
+              <ChatTitleText :title="row.title || t('chat.new_chat')" :tab="row.tab" />
             </span>
             <ChatMutedMark v-if="row.tab.isMuted" />
           </span>
@@ -146,10 +143,7 @@ const background = computed(() => (isEmpty.value ? [] : backgroundWorkOf(row.tab
               class="truncate text-small font-medium text-foreground"
               :class="{ 'opacity-72': isSeen }"
             >
-              <ChatTitleText
-                :title="row.title || t('chat.new_chat')"
-                :messages="row.tab.messages"
-              />
+              <ChatTitleText :title="row.title || t('chat.new_chat')" :tab="row.tab" />
             </span>
             <ChatMutedMark v-if="row.tab.isMuted" />
           </span>

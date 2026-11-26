@@ -87,7 +87,7 @@ const openRow = (event: MouseEvent) => {
           <!-- The title keeps its room; folder and machine give way first in a narrow window. -->
           <span class="flex min-w-0 flex-col @2xl:min-w-40 @2xl:flex-1">
             <span class="truncate text-small font-medium"
-              ><ChatTitleText :title :messages="openTab?.messages"
+              ><ChatTitleText :title :tab="openTab"
             /></span>
             <span v-if="summary" class="truncate text-meta text-muted-foreground @max-2xl:hidden">
               {{ summary }}

@@ -3,25 +3,28 @@ import { computed } from 'vue'
 import { Image } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useChatTitle } from '@/composables/useChatTitle'
-import type { ChatMessage } from '@/types/agentd.type'
-import { titleImageSrcsOf } from '@/utils/chatTitle'
+import { promptImageSrcsOf, titleSourceOf, type TitleSourceTab } from '@/utils/chatTitle'
 
 // A chat title as inline text, its image references as small chips like the composer's. With the
-// chat's `messages`, a chip shows the thumbnail of the prompt the title came from; without them, or
-// when that prompt is not loaded, an icon. Sized in `em`, it fits a row as well as a card heading.
-const { title, messages = [] } = defineProps<{
+// chat's `tab`, a chip shows the thumbnail from the chat's first prompt, if the title was cut from
+// it and the history reaches back to it; otherwise an icon. Sized in `em`, it fits a row as well as
+// a card heading.
+const { title, tab = null } = defineProps<{
   title: string
-  messages?: readonly ChatMessage[]
+  tab?: TitleSourceTab | null
 }>()
 
 const { t } = useI18n()
 const { piecesOf } = useChatTitle()
 
 const pieces = computed(() => piecesOf(title))
-// Only searched for a title that has references; most titles are Haiku's and have none.
-const srcs = computed(() =>
-  pieces.value.some((piece) => piece.kind === 'image') ? titleImageSrcsOf(title, messages) : []
+// Only looked up for a title that has references; most titles are Haiku's and have none.
+const source = computed(() =>
+  tab && pieces.value.some((piece) => piece.kind === 'image') ? titleSourceOf(title, tab) : null
 )
+// Its own computed: a new message leaves the source the same object, so the data URLs of large
+// images are not built again for every message that streams in.
+const srcs = computed(() => (source.value ? promptImageSrcsOf(source.value) : []))
 </script>
 
 <template>

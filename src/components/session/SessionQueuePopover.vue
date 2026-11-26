@@ -72,10 +72,7 @@ const messageCount = computed(() =>
             @click="openChat(entry.tab.id)"
           >
             <span class="truncate text-small font-semibold">
-              <ChatTitleText
-                :title="entry.tab.title || t('chat.new_chat')"
-                :messages="entry.tab.messages"
-              />
+              <ChatTitleText :title="entry.tab.title || t('chat.new_chat')" :tab="entry.tab" />
             </span>
             <span class="shrink-0 text-meta text-muted-foreground">
               {{ folderNameOf(entry.tab.cwd) }}

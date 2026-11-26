@@ -265,10 +265,14 @@ const handlePreviewClick = (event: MouseEvent) => {
     <div class="relative isolate flex min-h-0 flex-1 flex-col">
       <ChatBackdrop />
       <!-- No overflow-anchor: older pages are anchored by hand (useOlderHistory), as WKWebView
-           has no native anchoring; Chromium's on top would move the list a second time. -->
+           has no native anchoring; Chromium's on top would move the list a second time.
+           The messages fade out over the list's bottom padding instead of ending in a hard cut
+           above the composer. Always on, not a band that comes and goes (Jonas, 24.11.2026):
+           at rest it lies over empty padding, so only messages scrolled past it fade. -->
       <div
         ref="scroller"
         class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]"
+        :class="isCompact ? 'mask-b-from-[calc(100%-1rem)]' : 'mask-b-from-[calc(100%-1.5rem)]'"
       >
         <!-- data-tab-content: the part that fades in on a tab switch (transitions.css). -->
         <div

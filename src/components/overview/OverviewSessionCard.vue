@@ -63,7 +63,7 @@ const openCard = (event: MouseEvent) => {
     <OverviewSessionCardHeader :tab :status />
 
     <h3 class="mt-4 truncate text-title font-semibold tracking-tight">
-      <ChatTitleText :title />
+      <ChatTitleText :title :messages />
     </h3>
     <OverviewSessionCardMeta class="mt-1" :tab :now :prompt-count="prompts.count" />
     <OverviewSessionCardContext :tab-id="tab.id" :model="tab.model" />

@@ -173,7 +173,7 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
             :has-question="openQuestionOf(tab) !== null"
           />
           <span class="truncate" :class="tab.id === activeId ? 'text-foreground' : 'text-subtle'">
-            <ChatTitleText :title="tab.title || t('chat.new_chat')" />
+            <ChatTitleText :title="tab.title || t('chat.new_chat')" :messages="tab.messages" />
           </span>
           <ChatMutedMark v-if="tab.isMuted" />
         </button>

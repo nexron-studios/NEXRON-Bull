@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { plainTitleOf, titlePiecesOf } from '../chatTitle'
+import { plainTitleOf, titleImageSrcsOf, titlePiecesOf } from '../chatTitle'
+import type { ChatMessage } from '@/types/agentd.type'
 import { IMAGE_REF_SLOTS, imageRefFormatOf } from '../imageRefs'
 
 const FORMAT = imageRefFormatOf(`[Bild ${IMAGE_REF_SLOTS.n} (${IMAGE_REF_SLOTS.name})]`)
@@ -60,5 +61,33 @@ describe('plainTitleOf', () => {
     expect(plainTitleOf('[Bild 2 (shot.png)] passt so', FORMAT, (n) => `Bild ${n}`)).toBe(
       'Bild 2 passt so'
     )
+  })
+})
+
+const prompt = (uuid: string, text: string, data: string[]): ChatMessage => ({
+  uuid,
+  role: 'user',
+  at: null,
+  blocks: [
+    ...data.map((d) => ({ type: 'image' as const, media_type: 'image/png', data: d })),
+    { type: 'text' as const, text }
+  ]
+})
+
+describe('titleImageSrcsOf', () => {
+  it('should give the images of the prompt the title was cut from, in order', () => {
+    const messages = [
+      prompt('a', 'something else [Bild 1 (x.png)]', ['WFla']),
+      prompt('b', 'wa [Bild 1 (a.png)] [Bild 2 (b.png)] mir brutal wichtig', ['QQ==', 'Qg=='])
+    ]
+
+    expect(titleImageSrcsOf('wa [Bild 1 (a.png)] [Bild 2 (b.png)] mir', messages)).toEqual([
+      'data:image/png;base64,QQ==',
+      'data:image/png;base64,Qg=='
+    ])
+  })
+
+  it('should give no images when the prompt of the title is not loaded', () => {
+    expect(titleImageSrcsOf('wa [Bild 1 (a.png)]', [prompt('a', 'later', ['QQ=='])])).toEqual([])
   })
 })

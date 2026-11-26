@@ -73,6 +73,12 @@ export default {
     close_tab: 'Close tab',
     composer_label: 'Message to Claude',
     composer_placeholder: 'Message to Claude …',
+    dictation: {
+      starting: 'Starting the microphone …',
+      listening: 'Listening…',
+      transcribing: 'Transcribing …',
+      nothing_heard: 'Nothing recognised'
+    },
     send: 'Send',
     stop: 'Stop',
     load_older: 'Load older messages',
@@ -1575,6 +1581,19 @@ export default {
   },
   errors: {
     unexpected: 'Something went wrong: {message}',
-    unreachable: '{machine} is not reachable. Try again once the machine is back online.'
+    unreachable: '{machine} is not reachable. Try again once the machine is back online.',
+    dictation: {
+      claude_missing:
+        'This @:computer has no Claude Code, which Bull dictates with. Install it and hold Space again.',
+      spawn_failed: 'Claude Code for dictation does not start: {detail}',
+      not_ready: 'Claude Code for dictation did not get ready. {detail}',
+      exited: 'Claude Code for dictation quit. Hold Space again.',
+      not_listening:
+        'Claude Code does not record. Dictation needs a Claude.ai account, and Bull must be allowed to use the microphone. {detail}',
+      nothing_heard: 'Nothing recognised. {detail}',
+      timeout: 'The dictated text did not arrive in time. Try again.',
+      not_holding: 'No dictation is running.',
+      io: 'Dictation failed: {detail}'
+    }
   }
 }

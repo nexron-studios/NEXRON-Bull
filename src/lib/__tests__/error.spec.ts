@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentdDisconnectedError } from '@/api/services/agentd.service'
+import { DictationError } from '@/api/services/dictation.service'
 import i18n from '@/i18n'
 import { handleError } from '../error'
 
@@ -34,5 +35,13 @@ describe('handleError', () => {
     handleError(new Error('bad request'))
 
     expect(toastError).toHaveBeenCalledWith('Etwas ist schiefgelaufen: bad request')
+  })
+
+  it('should say what went wrong with the dictation, with what Claude said', () => {
+    handleError(new DictationError('spawn_failed', 'permission denied'))
+
+    expect(toastError).toHaveBeenCalledWith(
+      'Claude Code für das Diktat startet nicht: permission denied'
+    )
   })
 })

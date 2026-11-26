@@ -1,5 +1,6 @@
 import { toast } from 'vue-sonner'
 import { AgentdDisconnectedError, type Machine } from '@/api/services/agentd.service'
+import { DictationError } from '@/api/services/dictation.service'
 import { useMachineNames } from '@/composables/useMachineNames'
 import i18n from '@/i18n'
 import { isUnknownOpError } from '@/utils/sessionActions'
@@ -15,6 +16,12 @@ export const handleError = (error: unknown): void => {
     const machine = useMachineNames().nameOf(error.machine)
     console.warn('agentd.unreachable', { machine: error.machine })
     toast.error(i18n.global.t('errors.unreachable', { machine }))
+    return
+  }
+  // Claude Code's dictation failed: Bull's sentence, with what Claude said behind it.
+  if (error instanceof DictationError) {
+    console.warn('dictation.failed', { code: error.code, detail: error.detail })
+    toast.error(i18n.global.t(`errors.dictation.${error.code}`, { detail: error.detail }))
     return
   }
   const message = error instanceof Error ? error.message : String(error)

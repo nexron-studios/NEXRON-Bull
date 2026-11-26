@@ -10,6 +10,7 @@ import ChatComposerField from '@/components/chat/ChatComposerField.vue'
 import ChatComposerMenu from '@/components/chat/ChatComposerMenu.vue'
 import ChatComposerQueue from '@/components/chat/ChatComposerQueue.vue'
 import ChatContextRing from '@/components/chat/ChatContextRing.vue'
+import ChatDictationIndicator from '@/components/chat/ChatDictationIndicator.vue'
 import ChatPasteChip from '@/components/chat/ChatPasteChip.vue'
 import { useComposerMarkup } from '@/composables/useComposerMarkup'
 import { useComposerMenu } from '@/composables/useComposerMenu'
@@ -17,6 +18,8 @@ import { useComposerPaste } from '@/composables/useComposerPaste'
 import { useImageAttachments } from '@/composables/useImageAttachments'
 import { useImageReferences } from '@/composables/useImageReferences'
 import { usePromptHistory } from '@/composables/usePromptHistory'
+import { useSpaceDictation } from '@/composables/useSpaceDictation'
+import { isDesktopApp } from '@/lib/platform'
 import { useDraftStore } from '@/stores/drafts'
 import { useChatStore } from '@/stores/chat'
 import { useHeldPromptsStore } from '@/stores/heldPrompts'
@@ -91,6 +94,13 @@ const menu = useComposerMenu({
   }
 })
 const history = usePromptHistory(() => [...tab.messages, ...tab.pending], draft, setCaret)
+// Hold Space to dictate; the microphone is this machine's, so only the app window has it.
+const dictation = useSpaceDictation({
+  textarea: () => field.value?.field,
+  draft,
+  isEnabled: () => isDesktopApp() && !isShell.value,
+  setCaret
+})
 
 /**
  * Pasted, dropped or picked images: each also gets a reference where the user writes, or at the
@@ -191,7 +201,8 @@ const handleShellKey = (event: KeyboardEvent): boolean => {
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
-  if (event.isComposing || menu.handleKey(event) || handleShellKey(event)) return
+  if (event.isComposing || dictation.handleKeydown(event)) return
+  if (menu.handleKey(event) || handleShellKey(event)) return
   const textarea = field.value?.field
   if (textarea) references.selectWhole(event, textarea)
   if (textarea && history.handleKey(event, textarea)) return
@@ -365,6 +376,10 @@ defineExpose({ addFiles: attachFiles, fill, focus: focusField, quote, handOver, 
             >
               <Paperclip class="size-4" aria-hidden="true" />
             </NchIconButton>
+            <ChatDictationIndicator
+              v-if="dictation.indicator.value"
+              :kind="dictation.indicator.value"
+            />
             <ChatComposerChips :tab :is-compact class="flex-1" />
             <ChatContextRing v-if="!isCompact" :tab-id="tab.id" />
             <NchIconButton

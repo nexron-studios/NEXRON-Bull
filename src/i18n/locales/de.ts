@@ -74,6 +74,12 @@ export default {
     close_tab: 'Tab schließen',
     composer_label: 'Nachricht an Claude',
     composer_placeholder: 'Nachricht an Claude …',
+    dictation: {
+      starting: 'Mikrofon startet …',
+      listening: 'Hört zu …',
+      transcribing: 'Schreibt auf …',
+      nothing_heard: 'Nichts verstanden'
+    },
     send: 'Senden',
     stop: 'Stoppen',
     load_older: 'Ältere Nachrichten laden',
@@ -1612,6 +1618,19 @@ export default {
   errors: {
     unexpected: 'Etwas ist schiefgelaufen: {message}',
     unreachable:
-      '{machine} ist nicht erreichbar. Versuch es noch einmal, sobald der Rechner wieder online ist.'
+      '{machine} ist nicht erreichbar. Versuch es noch einmal, sobald der Rechner wieder online ist.',
+    dictation: {
+      claude_missing:
+        'Auf diesem @:computer fehlt Claude Code, mit dem Bull diktiert. Installier es und halt die Leertaste noch einmal.',
+      spawn_failed: 'Claude Code für das Diktat startet nicht: {detail}',
+      not_ready: 'Claude Code für das Diktat wurde nicht bereit. {detail}',
+      exited: 'Claude Code für das Diktat hat sich beendet. Halt die Leertaste noch einmal.',
+      not_listening:
+        'Claude Code nimmt nicht auf. Diktieren braucht ein Claude.ai-Konto, und Bull muss das Mikrofon benutzen dürfen. {detail}',
+      nothing_heard: 'Nichts verstanden. {detail}',
+      timeout: 'Der diktierte Text kam nicht rechtzeitig an. Versuch es noch einmal.',
+      not_holding: 'Gerade läuft kein Diktat.',
+      io: 'Diktieren ist fehlgeschlagen: {detail}'
+    }
   }
 }

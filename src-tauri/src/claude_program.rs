@@ -66,9 +66,8 @@ mod ask {
     /// What `$SHELL -i -l` prints: `-i` reads `.zshrc` and `.bashrc` too, where installers put
     /// their PATH lines. `None` when it gives no answer in time.
     pub fn login_shell_output() -> Option<String> {
-        let shell = std::env::var("SHELL").ok().filter(|shell| !shell.is_empty());
         let script = format!("printf '%s\\n%s\\n%s\\n' {MARKER} \"$PATH\" {MARKER}");
-        let mut child = Command::new(shell.as_deref().unwrap_or(FALLBACK_SHELL))
+        let mut child = Command::new(user_shell())
             .args(["-i", "-l", "-c", &script])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -86,6 +85,27 @@ mod ask {
         let _ = child.kill();
         let _ = child.wait();
         answer
+    }
+
+    /// `$SHELL`, else the login shell of the account: an app started by launchd may lack the
+    /// variable, and `/bin/sh` reads none of the profiles where installers put their PATH.
+    fn user_shell() -> String {
+        if let Some(shell) = std::env::var("SHELL").ok().filter(|shell| !shell.is_empty()) {
+            return shell;
+        }
+        account_shell().unwrap_or_else(|| FALLBACK_SHELL.into())
+    }
+
+    pub(super) fn account_shell() -> Option<String> {
+        // SAFETY: getpwuid returns a pointer into static storage or null; it is copied at once.
+        // Another thread calling getpwuid meanwhile could overwrite it, which only risks a wrong
+        // shell name, and Bull calls it nowhere else.
+        let shell = unsafe {
+            let entry = libc::getpwuid(libc::getuid());
+            (!entry.is_null() && !(*entry).pw_shell.is_null())
+                .then(|| std::ffi::CStr::from_ptr((*entry).pw_shell).to_string_lossy().into_owned())
+        };
+        shell.filter(|shell| !shell.is_empty())
     }
 
     /// What the shell printed up to the closing marker, not up to the end: a job a profile starts
@@ -142,6 +162,13 @@ mod tests {
         let noisy = format!("Welcome back\n{MARKER}\n/opt/homebrew/bin:/usr/bin\n{MARKER}\nlogout\n");
         assert_eq!(path_in(&noisy), Some("/opt/homebrew/bin:/usr/bin"));
         assert_eq!(path_in(&format!("{MARKER}\n/usr/bin\n")), None);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn the_account_names_its_login_shell() {
+        let shell = ask::account_shell().unwrap();
+        assert!(Path::new(&shell).is_file(), "{shell}");
     }
 
     #[test]

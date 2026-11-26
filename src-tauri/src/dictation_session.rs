@@ -36,11 +36,17 @@ pub const KEY_DOWN: &str = "\x1b[B";
 /// Ctrl+U deletes to the start of the line, Ctrl+K to its end.
 pub const KEYS_CLEAR_LINE: &str = "\x15\x0b";
 const KEY_ENTER: &str = "\r";
+/// Device status report "where is the cursor". ConPTY (portable-pty opens it with
+/// PSEUDOCONSOLE_INHERIT_CURSOR) sends it first and draws nothing until it is answered, as a real
+/// terminal would.
+const CURSOR_REQUEST: &[u8] = b"\x1b[6n";
+
+type Writer = Arc<Mutex<Box<dyn Write + Send>>>;
 
 pub struct HiddenClaude {
     pub language: String,
     parser: Arc<Mutex<vt100::Parser>>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    writer: Writer,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     is_alive: Arc<AtomicBool>,
     // Closing the master ends the console; it lives as long as this Claude.
@@ -59,8 +65,9 @@ impl HiddenClaude {
         let parser = Arc::new(Mutex::new(vt100::Parser::new(ROWS, COLS, 0)));
         let is_alive = Arc::new(AtomicBool::new(true));
         let killer = Mutex::new(child.clone_killer());
-        let to_screen = Arc::clone(&parser);
-        thread::spawn(move || read_into(reader, &to_screen));
+        let writer: Writer = Arc::new(Mutex::new(writer));
+        let (to_screen, answers) = (Arc::clone(&parser), Arc::clone(&writer));
+        thread::spawn(move || read_into(reader, &to_screen, &answers));
         let alive = Arc::clone(&is_alive);
         thread::spawn(move || {
             // The exit code says nothing the screen does not; only that it ended counts.
@@ -68,7 +75,7 @@ impl HiddenClaude {
             alive.store(false, Ordering::Relaxed);
         });
         let language = language.to_string();
-        Ok(Self { language, parser, writer: Mutex::new(writer), killer, is_alive, _master: Mutex::new(pair.master) })
+        Ok(Self { language, parser, writer, killer, is_alive, _master: Mutex::new(pair.master) })
     }
 
     pub fn view(&self) -> ScreenView {
@@ -111,14 +118,43 @@ impl HiddenClaude {
     }
 }
 
-fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>) {
+fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>, writer: &Mutex<Box<dyn Write + Send>>) {
     let mut buffer = vec![0; READ_BUFFER_BYTES];
+    let mut carry = Vec::new();
     loop {
-        match reader.read(&mut buffer) {
+        let read = match reader.read(&mut buffer) {
             Ok(0) | Err(_) => return,
-            Ok(read) => lock(parser).process(&buffer[..read]),
+            Ok(read) => read,
+        };
+        let chunk = &buffer[..read];
+        let report = {
+            let mut parser = lock(parser);
+            parser.process(chunk);
+            cursor_report(parser.screen())
+        };
+        for _ in 0..cursor_requests(&mut carry, chunk) {
+            let mut writer = lock(writer);
+            if let Err(err) = writer.write_all(report.as_bytes()).and_then(|()| writer.flush()) {
+                eprintln!("dictation: cannot answer the cursor request: {err}");
+            }
         }
     }
+}
+
+/// How many complete cursor requests `chunk` holds. A read can end inside one, so the start of
+/// a request at the end stays in `carry` for the next chunk.
+fn cursor_requests(carry: &mut Vec<u8>, chunk: &[u8]) -> usize {
+    carry.extend_from_slice(chunk);
+    let count = carry.windows(CURSOR_REQUEST.len()).filter(|window| *window == CURSOR_REQUEST).count();
+    let kept = (1..CURSOR_REQUEST.len()).rev().find(|&len| carry.ends_with(&CURSOR_REQUEST[..len])).unwrap_or(0);
+    carry.drain(..carry.len() - kept);
+    count
+}
+
+/// The answer to a cursor request: row and column, counted from 1.
+fn cursor_report(screen: &vt100::Screen) -> String {
+    let (row, col) = screen.cursor_position();
+    format!("\x1b[{};{}R", u32::from(row) + 1, u32::from(col) + 1)
 }
 
 /// `--safe-mode` keeps the user's hooks, MCP servers, plugins, status line and key bindings out
@@ -148,4 +184,33 @@ fn work_folder() -> Result<PathBuf, DictationError> {
     let folder = home.join(".nexron-chat").join(WORK_FOLDER);
     std::fs::create_dir_all(&folder).map_err(DictationError::Io)?;
     Ok(folder)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn counts_cursor_requests_also_when_a_read_cuts_one() {
+        let mut carry = Vec::new();
+        assert_eq!(cursor_requests(&mut carry, b"\x1b[?25l\x1b[6n"), 1);
+        assert!(carry.is_empty());
+        assert_eq!(cursor_requests(&mut carry, b"text\x1b["), 0);
+        assert_eq!(carry, b"\x1b[");
+        assert_eq!(cursor_requests(&mut carry, b"6nmore\x1b[6n"), 2);
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn other_sequences_are_no_cursor_request() {
+        let mut carry = Vec::new();
+        assert_eq!(cursor_requests(&mut carry, b"\x1b[6;1H\x1b[5n"), 0);
+    }
+
+    #[test]
+    fn answers_with_the_cursor_counted_from_one() {
+        let mut parser = vt100::Parser::new(ROWS, COLS, 0);
+        parser.process(b"ab\r\ncd");
+        assert_eq!(cursor_report(parser.screen()), "\x1b[2;3R");
+    }
 }

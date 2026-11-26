@@ -189,11 +189,13 @@ impl DictationHost {
             Ok(false) => Err(DictationError::NotListening(changed_notice(&claude, &baseline))),
             Err(err) => Err(err),
         };
-        if matches!(result, Err(DictationError::Timeout)) {
-            claude.send(KEY_ESCAPE)?;
-        }
-        clear_input(&claude)?;
-        result
+        let is_timeout = matches!(result, Err(DictationError::Timeout));
+        with_cleanup(result, || {
+            if is_timeout {
+                claude.send(KEY_ESCAPE)?;
+            }
+            clear_input(&claude)
+        })
     }
 
     /// Lets go of Space and throws away whatever Claude recorded.
@@ -303,8 +305,20 @@ fn wait_ready(claude: &HiddenClaude) -> Result<(), DictationError> {
     }
 }
 
-/// Spaces at key-repeat speed until told to stop. `Ok(true)` once Claude recorded.
+/// Spaces at key-repeat speed until told to stop. `Ok(true)` once Claude recorded. Every failure
+/// is also an event: the composer waits for `Listening` while Space is still down.
 fn hold_space(claude: &HiddenClaude, stop: &AtomicBool, sink: &(dyn Fn(DictationEvent) + Send + Sync)) -> Result<bool, DictationError> {
+    reported(hold_until_stopped(claude, stop, sink), sink)
+}
+
+fn reported<T>(result: Result<T, DictationError>, sink: &(dyn Fn(DictationEvent) + Send + Sync)) -> Result<T, DictationError> {
+    if let Err(err) = &result {
+        sink(DictationEvent::Failed { code: err.code(), detail: err.detail() });
+    }
+    result
+}
+
+fn hold_until_stopped(claude: &HiddenClaude, stop: &AtomicBool, sink: &(dyn Fn(DictationEvent) + Send + Sync)) -> Result<bool, DictationError> {
     let started = Instant::now();
     let mut is_listening = false;
     while !stop.load(Ordering::Relaxed) {
@@ -319,9 +333,7 @@ fn hold_space(claude: &HiddenClaude, stop: &AtomicBool, sink: &(dyn Fn(Dictation
         }
         if !is_listening && started.elapsed() >= LISTEN_TIMEOUT {
             let detail = prompt_of(claude).map(|prompt| prompt.notice).unwrap_or_default();
-            let failure = DictationError::NotListening(detail);
-            sink(DictationEvent::Failed { code: failure.code(), detail: failure.detail() });
-            return Err(failure);
+            return Err(DictationError::NotListening(detail));
         }
     }
     Ok(is_listening)
@@ -355,6 +367,15 @@ fn await_transcript(claude: &HiddenClaude, baseline: &str) -> Result<String, Dic
         thread::sleep(POLL);
     }
     Err(DictationError::Timeout)
+}
+
+/// The clean-up after a stop only keeps the next dictation tidy (`start` clears again): its
+/// failure never costs the transcript already read.
+fn with_cleanup<T>(result: Result<T, DictationError>, cleanup: impl FnOnce() -> Result<(), DictationError>) -> Result<T, DictationError> {
+    if let Err(err) = cleanup() {
+        eprintln!("dictation: cleaning up after the stop failed: {err}");
+    }
+    result
 }
 
 fn notice_unless(notice: &str, baseline: &str) -> String {
@@ -448,6 +469,22 @@ mod tests {
     fn a_notice_that_was_there_before_is_no_detail() {
         assert_eq!(notice_unless("◐ medium · /effort", "◐ medium · /effort"), "");
         assert_eq!(notice_unless("No speech detected", "◐ medium · /effort"), "No speech detected");
+    }
+
+    #[test]
+    fn a_failing_hold_tells_the_composer() {
+        let events = Mutex::new(Vec::new());
+        let sink = |event| lock(&events).push(event);
+        let result: Result<bool, _> = reported(Err(DictationError::Exited), &sink);
+        assert!(matches!(result, Err(DictationError::Exited)));
+        assert!(reported(Ok(true), &sink).is_ok());
+        assert_eq!(*lock(&events), vec![DictationEvent::Failed { code: "exited", detail: String::new() }]);
+    }
+
+    #[test]
+    fn a_failed_clean_up_keeps_the_transcript() {
+        let result = with_cleanup(Ok("Hallo Welt".to_string()), || Err(DictationError::Exited));
+        assert_eq!(result.unwrap(), "Hallo Welt");
     }
 
     #[test]

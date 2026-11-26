@@ -27,6 +27,11 @@ portable-pty = "0.9"
 # Reads the screen of the hidden Claude that Bull dictates through (dictation_screen.rs).
 vt100 = "0.18"
 
+# The account's login shell when $SHELL is missing, as for an app launchd started
+# (claude_program.rs); already in the tree.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # Already in the tree through the notification plugin and tao; asked for the real toast setting and
 # to set the big window icon (taskbar), which Tauri's set_icon leaves alone.
 [target.'cfg(windows)'.dependencies]

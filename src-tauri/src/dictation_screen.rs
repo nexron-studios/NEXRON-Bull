@@ -56,8 +56,20 @@ pub enum ScreenView {
 struct Row {
     text: String,
     plain: String,
-    /// The last column holds a character: a long input continues on the next row mid-word.
-    is_full: bool,
+    edge: Edge,
+    /// The first character after the input indent takes two columns
+    starts_wide: bool,
+}
+
+/// How a row ends at the right edge, which says whether a long input was cut there mid-word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Edge {
+    /// The last column holds a character, or the second half of a wide one.
+    Full,
+    /// The last column is empty after a character: cut there if the next row starts with a wide
+    /// character, which did not fit into the one column left.
+    OneShort,
+    Open,
 }
 
 pub fn view_of(screen: &vt100::Screen) -> ScreenView {
@@ -89,8 +101,20 @@ fn row_of(screen: &vt100::Screen, row: u16, width: u16) -> Row {
         // Indent and gaps stay, so the column of a character is still where it was.
         plain.push_str(if cell.dim() { " " } else { contents });
     }
-    let is_full = screen.cell(row, width - 1).is_some_and(vt100::Cell::has_contents);
-    Row { text, plain, is_full }
+    let starts_wide = screen.cell(row, INPUT_INDENT).is_some_and(vt100::Cell::is_wide);
+    Row { text, plain, edge: edge_of(screen, row, width), starts_wide }
+}
+
+fn edge_of(screen: &vt100::Screen, row: u16, width: u16) -> Edge {
+    let is_taken = |col: u16| screen.cell(row, col).is_some_and(|cell| cell.has_contents() || cell.is_wide_continuation());
+    let is_letter = |col: u16| screen.cell(row, col).is_some_and(|cell| cell.has_contents() && cell.contents() != " ");
+    if is_taken(width - 1) {
+        Edge::Full
+    } else if width >= 2 && is_letter(width - 2) {
+        Edge::OneShort
+    } else {
+        Edge::Open
+    }
 }
 
 fn trust_choice(rows: &[Row]) -> Option<TrustChoice> {
@@ -123,13 +147,21 @@ fn input_text(input: &[Row]) -> String {
     for (i, row) in input.iter().enumerate() {
         let line: String = row.plain.chars().skip(usize::from(INPUT_INDENT)).collect();
         let line = line.replace('\u{a0}', " ");
-        let is_cut = i > 0 && input[i - 1].is_full;
+        let is_cut = i > 0 && is_cut_before(&input[i - 1], row);
         if !text.is_empty() && !is_cut {
             text.push(' ');
         }
         text.push_str(if is_cut { line.trim_end() } else { line.trim() });
     }
     text.trim().to_string()
+}
+
+fn is_cut_before(previous: &Row, row: &Row) -> bool {
+    match previous.edge {
+        Edge::Full => true,
+        Edge::OneShort => row.starts_wide,
+        Edge::Open => false,
+    }
 }
 
 fn phase_of(notice: &str, footer: &[&str]) -> VoicePhase {
@@ -214,6 +246,27 @@ mod tests {
         let full = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT)));
         let parser = screen("", &[&full, "  bc"], "");
         assert_eq!(prompt(&parser).text, format!("{}bc", "a".repeat(usize::from(COLS - INPUT_INDENT))));
+    }
+
+    #[test]
+    fn joins_a_row_that_ends_in_a_wide_character_without_a_space() {
+        let full = format!("❯\u{a0}{}漢", "a".repeat(usize::from(COLS - INPUT_INDENT - 2)));
+        let parser = screen("", &[&full, "  字"], "");
+        assert_eq!(prompt(&parser).text, format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 2))));
+    }
+
+    #[test]
+    fn joins_a_row_wrapped_early_for_a_wide_character_without_a_space() {
+        let short = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
+        let parser = screen("", &[&short, "  漢字"], "");
+        assert_eq!(prompt(&parser).text, format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
+    }
+
+    #[test]
+    fn keeps_the_space_when_a_row_one_short_continues_with_a_narrow_word() {
+        let short = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
+        let parser = screen("", &[&short, "  bc"], "");
+        assert_eq!(prompt(&parser).text, format!("{} bc", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
     }
 
     #[test]

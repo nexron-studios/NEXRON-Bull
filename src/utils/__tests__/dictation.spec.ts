@@ -119,7 +119,21 @@ describe('withoutInserted', () => {
     })
   })
 
-  it('should leave a text alone that no longer holds them there', () => {
+  it('should find them where a change in front moved them, caret there', () => {
+    expect(withoutInserted('> Frage\n\nIch bin sehr müde', { at: 7, text: ' sehr' })).toEqual({
+      text: '> Frage\n\nIch bin müde',
+      caret: 16
+    })
+  })
+
+  it('should take the copy nearest to where they were put', () => {
+    expect(withoutInserted('sehr sehr gut sehr', { at: 14, text: 'sehr' })).toEqual({
+      text: 'sehr sehr gut ',
+      caret: 14
+    })
+  })
+
+  it('should leave a text alone that no longer holds them', () => {
     expect(withoutInserted('Ich bin müde', { at: 7, text: ' sehr' })).toEqual({
       text: 'Ich bin müde',
       caret: 7

@@ -17,26 +17,30 @@ import type { Highlight } from '@/utils/textPieces'
 export const useDictationInterim = (draft: Ref<string>, apply: (edit: TextEdit) => void) => {
   const shown = ref<Inserted | null>(null)
 
-  const isShown = computed(() => shown.value !== null)
   const highlights = computed<Highlight[]>(() =>
     shown.value ? [{ ...interimRangeOf(shown.value), kind: 'interim' }] : []
   )
 
-  /** The draft as it was before the interim text, caret where that text started. */
-  const takeOut = () => {
-    if (!shown.value) return
-    apply(withoutInserted(draft.value, shown.value))
+  /**
+   * The draft as it was before the interim text. Returns where that text started, which is
+   * where dictated words belong now even if the draft changed around them; null if none shown.
+   */
+  const takeOut = (): number | null => {
+    if (!shown.value) return null
+    const edit = withoutInserted(draft.value, shown.value)
+    apply(edit)
     shown.value = null
+    return edit.caret
   }
 
-  /** `transcript` at `at` in place of the interim text shown before; empty shows nothing. */
+  /** `transcript` in place of the interim text shown before, else at `at`; empty shows nothing. */
   const show = (at: number, transcript: string) => {
-    takeOut()
-    const { inserted, ...edit } = withInterim(draft.value, at, transcript)
+    const from = takeOut() ?? at
+    const { inserted, ...edit } = withInterim(draft.value, from, transcript)
     if (!inserted.text) return
     apply(edit)
     shown.value = inserted
   }
 
-  return { isShown, highlights, show, takeOut }
+  return { highlights, show, takeOut }
 }

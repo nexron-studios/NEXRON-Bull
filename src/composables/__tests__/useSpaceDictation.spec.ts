@@ -423,6 +423,21 @@ describe('useSpaceDictation', () => {
       expect(composer.setCaret).toHaveBeenLastCalledWith(18)
     })
 
+    it('should land the transcript where the interim moved when a quote went in front', async () => {
+      const composer = await mountComposer('Ich bin müde')
+      service.stop.mockResolvedValue('sehr, sehr')
+      composer.caretAt(7)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.say('sehr')
+      composer.draft.value = `> Frage\n\n${composer.draft.value}`
+      composer.keyup(' ')
+      await flushPromises()
+
+      expect(composer.draft.value).toBe('> Frage\n\nIch bin sehr, sehr müde')
+    })
+
     it('should give text and selection back when the recording is thrown away', async () => {
       const composer = await mountComposer('Hallo Welt')
       composer.select(6, 10)

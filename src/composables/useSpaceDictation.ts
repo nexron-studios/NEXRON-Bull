@@ -160,8 +160,8 @@ export const useSpaceDictation = ({
 
   const insert = (press: SpacePress, transcript: string) => {
     if (!isCurrent(press)) return
-    interim.takeOut()
-    apply(withTranscript(draft.value, press.anchor, transcript))
+    const at = interim.takeOut() ?? press.anchor
+    apply(withTranscript(draft.value, at, transcript))
     state.value = { kind: 'idle' }
   }
 

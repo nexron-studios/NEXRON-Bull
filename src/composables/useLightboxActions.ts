@@ -1,5 +1,5 @@
 import { ref, watch, type Ref } from 'vue'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import type { useMarkup } from '@/composables/useMarkup'
 import type { MarkupHandoff, useMarkupTarget } from '@/composables/useMarkupTarget'

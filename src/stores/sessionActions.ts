@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { agentdService } from '@/api/services/agentd.service'
 import { useIsPhone } from '@/composables/useViewport'
 import i18n from '@/i18n'

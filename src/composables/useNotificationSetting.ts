@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { createGlobalState, useStorage } from '@vueuse/core'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import { handleError } from '@/lib/error'
 import {

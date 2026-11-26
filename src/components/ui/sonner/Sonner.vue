@@ -1,15 +1,9 @@
 <script lang="ts" setup>
 import type { ToasterProps } from 'vue-sonner'
 
-import {
-  CircleCheckIcon,
-  InfoIcon,
-  Loader2Icon,
-  OctagonXIcon,
-  TriangleAlertIcon,
-  XIcon
-} from '@lucide/vue'
+import { XIcon } from '@lucide/vue'
 import { reactiveOmit } from '@vueuse/core'
+import BrandToastIcon from '@/components/brand/BrandToastIcon.vue'
 import { cn } from '@/lib/utils'
 import { Toaster as Sonner } from 'vue-sonner'
 
@@ -37,28 +31,28 @@ const delegatedProps = reactiveOmit(props, 'class', 'toastOptions')
           toast: 'rounded-2xl',
           // Sonner paints the description #3f3f3f unless its own theme is dark, which ours never
           // sets: grey on the dark popover. Its sheet is unlayered, so only `!` beats it.
-          description: 'text-muted-foreground!'
+          description: 'text-muted-foreground!',
+          // Room for the bull tile; Sonner's sheet fixes the icon at 16 px, unlayered.
+          icon: 'size-8! me-1!'
         }
       }
     "
     v-bind="delegatedProps"
   >
     <template #success-icon>
-      <CircleCheckIcon class="size-4" />
+      <BrandToastIcon status="success" />
     </template>
     <template #info-icon>
-      <InfoIcon class="size-4" />
+      <BrandToastIcon status="info" />
     </template>
     <template #warning-icon>
-      <TriangleAlertIcon class="size-4" />
+      <BrandToastIcon status="warning" />
     </template>
     <template #error-icon>
-      <OctagonXIcon class="size-4" />
+      <BrandToastIcon status="error" />
     </template>
     <template #loading-icon>
-      <div>
-        <Loader2Icon class="size-4 animate-spin" />
-      </div>
+      <BrandToastIcon status="loading" />
     </template>
     <template #close-icon>
       <XIcon class="size-4" />

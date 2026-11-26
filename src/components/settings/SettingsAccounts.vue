@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { isDesktopApp } from '@/lib/platform'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { Monitor, Plus, Server, ServerOff, UserRound } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useMachineNames } from '@/composables/useMachineNames'

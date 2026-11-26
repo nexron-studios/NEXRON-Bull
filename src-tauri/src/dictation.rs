@@ -107,12 +107,23 @@ impl Serialize for DictationError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum DictationEvent {
+pub enum HoldEvent {
     /// Claude records now: the composer may say so.
     Listening,
-    /// Recording never started; the composer stops waiting for it.
+    /// The hold failed; the composer stops waiting for it.
     Failed { code: &'static str, detail: String },
 }
+
+/// What happened to one hold. `hold` is the composer's id for its press, so an event of an
+/// earlier press that arrives late never drives a newer one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DictationEvent {
+    pub hold: u64,
+    #[serde(flatten)]
+    pub event: HoldEvent,
+}
+
+type Report<'a> = dyn Fn(HoldEvent) + Send + Sync + 'a;
 
 type Sink = Arc<dyn Fn(DictationEvent) + Send + Sync>;
 
@@ -158,8 +169,8 @@ impl DictationHost {
         Self { sink: Arc::new(sink), inner }
     }
 
-    /// Starts holding Space in a ready Claude; `Listening` follows once it records.
-    pub fn start(&self, language: &str) -> Result<(), DictationError> {
+    /// Starts holding Space in a ready Claude; `Listening` for `hold` follows once it records.
+    pub fn start(&self, language: &str, hold: u64) -> Result<(), DictationError> {
         let _op = lock(&self.inner.op);
         *lock(&self.inner.last_used) = Instant::now();
         if let Some(previous) = lock(&self.inner.hold).take() {
@@ -172,7 +183,8 @@ impl DictationHost {
         let baseline = prompt_of(&claude).map(|prompt| prompt.notice).unwrap_or_default();
         let stop = Arc::new(AtomicBool::new(false));
         let (held, should_stop, sink) = (Arc::clone(&claude), Arc::clone(&stop), Arc::clone(&self.sink));
-        let thread = thread::spawn(move || hold_space(&held, &should_stop, &*sink));
+        let report = move |event| sink(DictationEvent { hold, event });
+        let thread = thread::spawn(move || hold_space(&held, &should_stop, &report));
         *lock(&self.inner.hold) = Some(Hold { stop, thread, baseline });
         Ok(())
     }
@@ -307,18 +319,18 @@ fn wait_ready(claude: &HiddenClaude) -> Result<(), DictationError> {
 
 /// Spaces at key-repeat speed until told to stop. `Ok(true)` once Claude recorded. Every failure
 /// is also an event: the composer waits for `Listening` while Space is still down.
-fn hold_space(claude: &HiddenClaude, stop: &AtomicBool, sink: &(dyn Fn(DictationEvent) + Send + Sync)) -> Result<bool, DictationError> {
-    reported(hold_until_stopped(claude, stop, sink), sink)
+fn hold_space(claude: &HiddenClaude, stop: &AtomicBool, report: &Report<'_>) -> Result<bool, DictationError> {
+    reported(hold_until_stopped(claude, stop, report), report)
 }
 
-fn reported<T>(result: Result<T, DictationError>, sink: &(dyn Fn(DictationEvent) + Send + Sync)) -> Result<T, DictationError> {
+fn reported<T>(result: Result<T, DictationError>, report: &Report<'_>) -> Result<T, DictationError> {
     if let Err(err) = &result {
-        sink(DictationEvent::Failed { code: err.code(), detail: err.detail() });
+        report(HoldEvent::Failed { code: err.code(), detail: err.detail() });
     }
     result
 }
 
-fn hold_until_stopped(claude: &HiddenClaude, stop: &AtomicBool, sink: &(dyn Fn(DictationEvent) + Send + Sync)) -> Result<bool, DictationError> {
+fn hold_until_stopped(claude: &HiddenClaude, stop: &AtomicBool, report: &Report<'_>) -> Result<bool, DictationError> {
     let started = Instant::now();
     let mut is_listening = false;
     while !stop.load(Ordering::Relaxed) {
@@ -329,7 +341,7 @@ fn hold_until_stopped(claude: &HiddenClaude, stop: &AtomicBool, sink: &(dyn Fn(D
         }
         if !is_listening && prompt_of(claude).is_some_and(|prompt| prompt.phase == VoicePhase::Listening) {
             is_listening = true;
-            sink(DictationEvent::Listening);
+            report(HoldEvent::Listening);
         }
         if !is_listening && started.elapsed() >= LISTEN_TIMEOUT {
             let detail = prompt_of(claude).map(|prompt| prompt.notice).unwrap_or_default();
@@ -423,8 +435,8 @@ fn wait_for(claude: &HiddenClaude, timeout: Duration, is_done: impl Fn(&Prompt) 
 }
 
 #[tauri::command(async)]
-pub fn dictation_start(host: State<'_, DictationHost>, language: String) -> Result<(), DictationError> {
-    host.start(&language)
+pub fn dictation_start(host: State<'_, DictationHost>, language: String, hold: u64) -> Result<(), DictationError> {
+    host.start(&language, hold)
 }
 
 #[tauri::command(async)]
@@ -451,9 +463,10 @@ mod tests {
 
     #[test]
     fn events_serialize_tagged() {
-        assert_eq!(serde_json::to_string(&DictationEvent::Listening).unwrap(), r#"{"type":"listening"}"#);
-        let failed = DictationEvent::Failed { code: "not_listening", detail: "x".into() };
-        assert_eq!(serde_json::to_string(&failed).unwrap(), r#"{"type":"failed","code":"not_listening","detail":"x"}"#);
+        let listening = DictationEvent { hold: 7, event: HoldEvent::Listening };
+        assert_eq!(serde_json::to_string(&listening).unwrap(), r#"{"hold":7,"type":"listening"}"#);
+        let failed = DictationEvent { hold: 8, event: HoldEvent::Failed { code: "not_listening", detail: "x".into() } };
+        assert_eq!(serde_json::to_string(&failed).unwrap(), r#"{"hold":8,"type":"failed","code":"not_listening","detail":"x"}"#);
     }
 
     #[test]
@@ -478,7 +491,7 @@ mod tests {
         let result: Result<bool, _> = reported(Err(DictationError::Exited), &sink);
         assert!(matches!(result, Err(DictationError::Exited)));
         assert!(reported(Ok(true), &sink).is_ok());
-        assert_eq!(*lock(&events), vec![DictationEvent::Failed { code: "exited", detail: String::new() }]);
+        assert_eq!(*lock(&events), vec![HoldEvent::Failed { code: "exited", detail: String::new() }]);
     }
 
     #[test]
@@ -506,15 +519,16 @@ mod tests {
             // The test may be over already.
             let _ = lock(&sender).send(event);
         });
-        host.start("de").unwrap();
-        assert_eq!(events.recv_timeout(Duration::from_secs(10)).unwrap(), DictationEvent::Listening);
+        host.start("de", 1).unwrap();
+        let listening = DictationEvent { hold: 1, event: HoldEvent::Listening };
+        assert_eq!(events.recv_timeout(Duration::from_secs(10)).unwrap(), listening);
         thread::sleep(HOLD);
         let result = host.stop();
         eprintln!("stop: {result:?}");
         assert!(matches!(result, Ok(_) | Err(DictationError::NothingHeard(_))));
         let claude = host.current().unwrap();
         assert_eq!(prompt_of(&claude).unwrap().text, "");
-        host.start("de").unwrap();
+        host.start("de", 2).unwrap();
         thread::sleep(HOLD);
         host.cancel().unwrap();
         assert_eq!(prompt_of(&claude).unwrap().text, "");

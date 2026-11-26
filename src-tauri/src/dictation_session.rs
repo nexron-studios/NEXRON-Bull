@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -66,8 +67,11 @@ impl HiddenClaude {
         let is_alive = Arc::new(AtomicBool::new(true));
         let killer = Mutex::new(child.clone_killer());
         let writer: Writer = Arc::new(Mutex::new(writer));
-        let (to_screen, answers) = (Arc::clone(&parser), Arc::clone(&writer));
+        let (answers, to_answer) = mpsc::channel();
+        let to_screen = Arc::clone(&parser);
         thread::spawn(move || read_into(reader, &to_screen, &answers));
+        let answering = Arc::clone(&writer);
+        thread::spawn(move || answer_all(&to_answer, &answering));
         let alive = Arc::clone(&is_alive);
         thread::spawn(move || {
             // The exit code says nothing the screen does not; only that it ended counts.
@@ -118,7 +122,9 @@ impl HiddenClaude {
     }
 }
 
-fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>, writer: &Mutex<Box<dyn Write + Send>>) {
+/// Never waits on input: answers go to `answer_all`, so the output is drained even while a key
+/// is stuck on its way in, and Claude never blocks on a full console.
+fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>, answers: &Sender<String>) {
     let mut buffer = vec![0; READ_BUFFER_BYTES];
     let mut carry = Vec::new();
     loop {
@@ -126,29 +132,51 @@ fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>, wr
             Ok(0) | Err(_) => return,
             Ok(read) => read,
         };
-        let chunk = &buffer[..read];
-        let report = {
-            let mut parser = lock(parser);
-            parser.process(chunk);
-            cursor_report(parser.screen())
-        };
-        for _ in 0..cursor_requests(&mut carry, chunk) {
-            let mut writer = lock(writer);
-            if let Err(err) = writer.write_all(report.as_bytes()).and_then(|()| writer.flush()) {
-                eprintln!("dictation: cannot answer the cursor request: {err}");
-            }
+        for answer in feed(&mut lock(parser), &mut carry, &buffer[..read]) {
+            // The answering thread only ends with this one.
+            let _ = answers.send(answer);
         }
     }
 }
 
-/// How many complete cursor requests `chunk` holds. A read can end inside one, so the start of
-/// a request at the end stays in `carry` for the next chunk.
-fn cursor_requests(carry: &mut Vec<u8>, chunk: &[u8]) -> usize {
+fn answer_all(answers: &Receiver<String>, writer: &Mutex<Box<dyn Write + Send>>) {
+    for answer in answers {
+        let mut writer = lock(writer);
+        if let Err(err) = writer.write_all(answer.as_bytes()).and_then(|()| writer.flush()) {
+            eprintln!("dictation: cannot answer the cursor request: {err}");
+        }
+    }
+}
+
+/// Puts `chunk` on the screen and answers each cursor request where it stands in the output,
+/// with the cursor as it was right there.
+fn feed(parser: &mut vt100::Parser, carry: &mut Vec<u8>, chunk: &[u8]) -> Vec<String> {
+    let mut answers = Vec::new();
+    let mut start = 0;
+    for end in request_ends(carry, chunk) {
+        parser.process(&chunk[start..end]);
+        answers.push(cursor_report(parser.screen()));
+        start = end;
+    }
+    parser.process(&chunk[start..]);
+    answers
+}
+
+/// Where in `chunk` each complete cursor request ends. A read can end inside one, so the start
+/// of a request at the end stays in `carry` for the next chunk.
+fn request_ends(carry: &mut Vec<u8>, chunk: &[u8]) -> Vec<usize> {
+    let carried = carry.len();
     carry.extend_from_slice(chunk);
-    let count = carry.windows(CURSOR_REQUEST.len()).filter(|window| *window == CURSOR_REQUEST).count();
+    let ends = carry
+        .windows(CURSOR_REQUEST.len())
+        .enumerate()
+        .filter(|(_, window)| *window == CURSOR_REQUEST)
+        // `carry` holds less than a request, so each one ends inside `chunk`.
+        .map(|(at, _)| at + CURSOR_REQUEST.len() - carried)
+        .collect();
     let kept = (1..CURSOR_REQUEST.len()).rev().find(|&len| carry.ends_with(&CURSOR_REQUEST[..len])).unwrap_or(0);
     carry.drain(..carry.len() - kept);
-    count
+    ends
 }
 
 /// The answer to a cursor request: row and column, counted from 1.
@@ -191,20 +219,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn counts_cursor_requests_also_when_a_read_cuts_one() {
+    fn finds_cursor_requests_also_when_a_read_cuts_one() {
         let mut carry = Vec::new();
-        assert_eq!(cursor_requests(&mut carry, b"\x1b[?25l\x1b[6n"), 1);
+        assert_eq!(request_ends(&mut carry, b"\x1b[?25l\x1b[6n"), vec![10]);
         assert!(carry.is_empty());
-        assert_eq!(cursor_requests(&mut carry, b"text\x1b["), 0);
+        assert_eq!(request_ends(&mut carry, b"text\x1b["), Vec::<usize>::new());
         assert_eq!(carry, b"\x1b[");
-        assert_eq!(cursor_requests(&mut carry, b"6nmore\x1b[6n"), 2);
+        assert_eq!(request_ends(&mut carry, b"6nmore\x1b[6n"), vec![2, 10]);
         assert!(carry.is_empty());
     }
 
     #[test]
     fn other_sequences_are_no_cursor_request() {
         let mut carry = Vec::new();
-        assert_eq!(cursor_requests(&mut carry, b"\x1b[6;1H\x1b[5n"), 0);
+        assert_eq!(request_ends(&mut carry, b"\x1b[6;1H\x1b[5n"), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn answers_with_the_cursor_where_the_request_stood() {
+        let mut parser = vt100::Parser::new(ROWS, COLS, 0);
+        let answers = feed(&mut parser, &mut Vec::new(), b"ab\x1b[6n\r\ncde\x1b[6n");
+        assert_eq!(answers, vec!["\x1b[1;3R".to_string(), "\x1b[2;4R".to_string()]);
+        assert_eq!(parser.screen().contents(), "ab\ncde");
+    }
+
+    #[test]
+    fn answers_a_request_cut_by_a_read_once_it_is_complete() {
+        let mut parser = vt100::Parser::new(ROWS, COLS, 0);
+        let mut carry = Vec::new();
+        assert!(feed(&mut parser, &mut carry, b"ab\x1b[6").is_empty());
+        assert_eq!(feed(&mut parser, &mut carry, b"n"), vec!["\x1b[1;3R".to_string()]);
     }
 
     #[test]

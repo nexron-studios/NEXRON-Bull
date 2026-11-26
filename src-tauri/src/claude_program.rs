@@ -167,7 +167,8 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn the_account_names_its_login_shell() {
-        let shell = ask::account_shell().unwrap();
+        // A container may run the tests for a user without a passwd entry; nothing to check then.
+        let Some(shell) = ask::account_shell() else { return };
         assert!(Path::new(&shell).is_file(), "{shell}");
     }
 

@@ -58,7 +58,7 @@ struct Row {
     plain: String,
     edge: Edge,
     /// The first character after the input indent takes two columns
-    starts_wide: bool,
+    has_wide_start: bool,
 }
 
 /// How a row ends at the right edge, which says whether a long input was cut there mid-word.
@@ -66,9 +66,11 @@ struct Row {
 enum Edge {
     /// The last column holds a character, or the second half of a wide one.
     Full,
-    /// The last column is empty after a character: cut there if the next row starts with a wide
-    /// character, which did not fit into the one column left.
-    OneShort,
+    /// The last column is empty after a wide character: cut there if the next row starts with a
+    /// wide character too, which did not fit into the one column left. After a narrow character
+    /// the gap counts as a space: a Latin word followed by a CJK one is far more likely than a
+    /// word mixing both.
+    OneShortAfterWide,
     Open,
 }
 
@@ -101,17 +103,20 @@ fn row_of(screen: &vt100::Screen, row: u16, width: u16) -> Row {
         // Indent and gaps stay, so the column of a character is still where it was.
         plain.push_str(if cell.dim() { " " } else { contents });
     }
-    let starts_wide = screen.cell(row, INPUT_INDENT).is_some_and(vt100::Cell::is_wide);
-    Row { text, plain, edge: edge_of(screen, row, width), starts_wide }
+    let has_wide_start = screen.cell(row, INPUT_INDENT).is_some_and(vt100::Cell::is_wide);
+    Row { text, plain, edge: edge_of(screen, row, width), has_wide_start }
 }
 
+/// A written space counts as empty: a row whose last column is a space ended at a word.
 fn edge_of(screen: &vt100::Screen, row: u16, width: u16) -> Edge {
-    let is_taken = |col: u16| screen.cell(row, col).is_some_and(|cell| cell.has_contents() || cell.is_wide_continuation());
-    let is_letter = |col: u16| screen.cell(row, col).is_some_and(|cell| cell.has_contents() && cell.contents() != " ");
+    let is_taken = |col: u16| {
+        screen.cell(row, col).is_some_and(|cell| cell.is_wide_continuation() || (cell.has_contents() && cell.contents() != " "))
+    };
+    let is_wide_end = |col: u16| screen.cell(row, col).is_some_and(vt100::Cell::is_wide_continuation);
     if is_taken(width - 1) {
         Edge::Full
-    } else if width >= 2 && is_letter(width - 2) {
-        Edge::OneShort
+    } else if width >= 2 && is_wide_end(width - 2) {
+        Edge::OneShortAfterWide
     } else {
         Edge::Open
     }
@@ -159,7 +164,7 @@ fn input_text(input: &[Row]) -> String {
 fn is_cut_before(previous: &Row, row: &Row) -> bool {
     match previous.edge {
         Edge::Full => true,
-        Edge::OneShort => row.starts_wide,
+        Edge::OneShortAfterWide => row.has_wide_start,
         Edge::Open => false,
     }
 }
@@ -256,10 +261,17 @@ mod tests {
     }
 
     #[test]
-    fn joins_a_row_wrapped_early_for_a_wide_character_without_a_space() {
+    fn joins_a_row_wrapped_early_between_wide_characters_without_a_space() {
+        let short = format!("❯\u{a0}{}漢", "a".repeat(usize::from(COLS - INPUT_INDENT - 3)));
+        let parser = screen("", &[&short, "  字"], "");
+        assert_eq!(prompt(&parser).text, format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 3))));
+    }
+
+    #[test]
+    fn keeps_the_space_between_a_latin_word_and_a_wide_one_after_an_early_wrap() {
         let short = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
         let parser = screen("", &[&short, "  漢字"], "");
-        assert_eq!(prompt(&parser).text, format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
+        assert_eq!(prompt(&parser).text, format!("{} 漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
     }
 
     #[test]
@@ -267,6 +279,13 @@ mod tests {
         let short = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
         let parser = screen("", &[&short, "  bc"], "");
         assert_eq!(prompt(&parser).text, format!("{} bc", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
+    }
+
+    #[test]
+    fn a_space_in_the_last_column_ends_a_word() {
+        let spaced = format!("❯\u{a0}{} ", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
+        let parser = screen("", &[&spaced, "  bar"], "");
+        assert_eq!(prompt(&parser).text, format!("{} bar", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
     }
 
     #[test]

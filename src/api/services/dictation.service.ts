@@ -34,6 +34,8 @@ export class DictationError extends Error {
 /** `hold` is the id `start` was given, so an event of an earlier press is told apart. */
 export type DictationEvent =
   | { hold: number; type: 'listening' }
+  /** What Claude shows while it records, not final yet; empty when it went again */
+  | { hold: number; type: 'interim'; text: string }
   | { hold: number; type: 'failed'; code: DictationErrorCode; detail: string }
 
 type Listener = (event: DictationEvent) => void

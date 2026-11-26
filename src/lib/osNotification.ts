@@ -8,6 +8,7 @@ import {
   sendNotification
 } from '@tauri-apps/plugin-notification'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import type { SystemQuiet } from '@/utils/notifications'
 import { permissionOf, type OsNotificationSetting, type OsPermission } from '@/utils/osPermission'
 
 /** The page "System › Notifications"; allowed in `capabilities/default.json` and nothing else. */
@@ -18,7 +19,7 @@ const TAP_ACTION = 'tap'
 const OPEN_ACTION = 'open'
 /** Notifications about a tab carry one button, "Open"; approving stays in the chat, by design. */
 const TAB_ACTION_TYPE = 'bull-tab'
-/** Windows' own notification sound; without one the plugin sends the toast silent. */
+/** The system's own sound; only when Bull could not play its own. */
 const SYSTEM_SOUND = 'Default'
 
 /** System notifications exist only in the Tauri window; the browser tab uses in-app toasts. */
@@ -34,6 +35,20 @@ const readSystemSetting = async (): Promise<OsNotificationSetting> => {
   } catch (error) {
     console.warn('notifications.setting_failed', { error })
     return 'unknown'
+  }
+}
+
+/**
+ * Whether the system wants quiet (Windows only; elsewhere never). Asked before every sound, the
+ * same way as the setting above: a failed ask counts as not quiet.
+ */
+export const readSystemQuiet = async (): Promise<SystemQuiet> => {
+  if (!isTauri()) return 'none'
+  try {
+    return await invoke<SystemQuiet>('notification_quiet')
+  } catch (error) {
+    console.warn('notifications.quiet_failed', { error })
+    return 'none'
   }
 }
 
@@ -86,7 +101,8 @@ export interface OsNotification {
   id: number
   title: string
   body: string
-  hasSound: boolean
+  /** The system's sound, as a fallback when Bull could not play its own */
+  hasSystemSound: boolean
   /** Shows the "Open" button; a click on the toast itself opens it as well. */
   hasOpenAction: boolean
 }
@@ -95,14 +111,15 @@ export const showOsNotification = ({
   id,
   title,
   body,
-  hasSound,
+  hasSystemSound,
   hasOpenAction
 }: OsNotification): void =>
+  // Bull plays its own sound (`soundPlayer`); the system's would come on top of it.
   sendNotification({
     id,
     title,
     body,
-    sound: hasSound ? SYSTEM_SOUND : undefined,
+    sound: hasSystemSound ? SYSTEM_SOUND : undefined,
     actionTypeId: hasOpenAction ? TAB_ACTION_TYPE : undefined
   })
 

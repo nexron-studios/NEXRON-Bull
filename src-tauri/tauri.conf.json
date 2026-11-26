@@ -28,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": ["binaries/agentd"],
     "icon": [
       "icons/32x32.png",
@@ -41,6 +42,13 @@
     },
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ0OUIwNUIyNzI4Rjc0QjAKUldTd2RJOXlzZ1diUkZwVzVrdjQzdk5NWDlvai9WUHhSNVpDVlZhWHZ0R2N5dThDWTRyMXZwYzUK",
+      "endpoints": ["https://github.com/nexron-studios/NEXRON-Bull/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
     }
   }
 }

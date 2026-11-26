@@ -17,6 +17,8 @@ import SessionMachinePicker from '@/components/session/SessionMachinePicker.vue'
 import SessionMachineTab from '@/components/session/SessionMachineTab.vue'
 import SessionPhoneHeader from '@/components/session/SessionPhoneHeader.vue'
 import SessionQuotaFooter from '@/components/session/SessionQuotaFooter.vue'
+import UpdateSidebarCard from '@/components/update/UpdateSidebarCard.vue'
+import { isDesktopApp } from '@/lib/platform'
 import SessionSearchField from '@/components/session/SessionSearchField.vue'
 import SettingsLink from '@/components/settings/SettingsLink.vue'
 import { useChatNavigation } from '@/composables/useChatNavigation'
@@ -211,6 +213,7 @@ onMounted(() => {
         />
       </TabsContent>
     </Tabs>
+    <UpdateSidebarCard v-if="!isPhone && isDesktopApp()" />
     <SessionQuotaFooter v-if="!isPhone" />
   </div>
 </template>

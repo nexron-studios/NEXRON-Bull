@@ -22,6 +22,12 @@ const emit = defineEmits<{ open: [n: number] }>()
     <span v-if="piece.mark?.kind === 'mention'" class="rounded-sm bg-brand/25">{{
       piece.text
     }}</span>
+    <!-- The decoration has its own colour: the mirror's text is transparent without a chip. -->
+    <span
+      v-else-if="piece.mark?.kind === 'interim'"
+      class="underline decoration-muted-foreground decoration-dotted underline-offset-4"
+      >{{ piece.text }}</span
+    >
     <span v-else-if="piece.mark?.kind === 'image'" class="relative" :data-image-ref="piece.mark.n"
       ><span class="text-transparent">{{ unbreakable(piece.text) }}</span
       ><ChatImageRefChip

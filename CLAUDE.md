@@ -83,9 +83,12 @@ Linux; the app installs the release). It lands in `%USERPROFILE%\.nexron-chat\ag
 
 ## Releases
 
-The Windows installer is built here (`npm run app:build`) and uploaded by hand.
+The Windows installer is built here: `npm run release:windows` (`-- --dry-run` only lists) builds it
+signed and attaches `Bull_<v>_x64-setup.exe` and its `.sig` to the release of `v<version>` (the
+tag must be pushed). `npm run app:build` alone builds without uploading.
 `.github/workflows/release-unix.yml` runs on every pushed tag `v*` (or by hand with a tag): it
-builds the universal macOS `.dmg` (ad-hoc signed, not notarised) and `agentd-<target>` for Linux
+builds the universal macOS `.dmg` (ad-hoc signed, not notarised), the signed updater tarball
+`Bull_<v>_universal.app.tar.gz` and `agentd-<target>` for Linux
 (musl, x86_64 and aarch64), macOS and Windows, and attaches them to that tag's release, drafting
 one if there is none. The tag must equal the version in `tauri.conf.json`. It runs `tauri build`
 itself, not `app:build`: the LaunchServices clean-up is for a Mac that keeps its build, and a
@@ -94,6 +97,15 @@ Unix machines download `agentd-<target>` of their app's version, so only tags fr
 macOS/Linux support build a usable one, and Mac/Linux installs fail until that release exists
 and is **published**: GitHub serves no files of a draft under `releases/download/<tag>/`, so the
 workflow's draft 404s for every machine until it is published.
+
+App updates: installed copies read `latest.json` from the newest **published** release
+(`releases/latest/download/`), so publishing is what ships an update; a draft stays invisible.
+`scripts/write-update-manifest.mjs <tag>` writes it from the release's signed assets; both release
+paths run it, and `update-manifest.yml` rewrites it when a release is published, so it always
+lists both systems. Tauri signs with the key in `~/.tauri/bull-updater.key` (no password;
+`BULL_UPDATER_KEY_PATH` picks another file), on GitHub the secret `TAURI_SIGNING_PRIVATE_KEY`.
+Keep a backup of that key: without it no installed copy can ever update again; the public half is
+in `tauri.conf.json`.
 
 ## Deviations from the house rules
 

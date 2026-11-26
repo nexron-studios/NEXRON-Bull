@@ -4,17 +4,20 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/lib/toast'
 import { agentdService } from '@/api/services/agentd.service'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useNotificationSetting } from '@/composables/useNotificationSetting'
 import { useQuota } from '@/composables/useQuota'
 import { handleError } from '@/lib/error'
 import {
   canShowOsNotification,
   focusWindow,
+  readSystemQuiet,
   isWindowFocused,
   onOsNotificationClick,
   registerOpenAction,
   showOsNotification
 } from '@/lib/osNotification'
+import { playSound, unlockSounds } from '@/lib/soundPlayer'
 import { useChatStore } from '@/stores/chat'
 import { useLimitPolicyStore } from '@/stores/limitPolicy'
 import type { AgentdEvent } from '@/types/agentd.type'
@@ -23,6 +26,7 @@ import {
   deliveryOf,
   isEventWanted,
   isRepeat,
+  isQuietFor,
   isSameSnapshots,
   notifyKeyOf,
   quotaAlertsOf,
@@ -32,6 +36,7 @@ import {
   type QuotaAlert,
   type TabSnapshot
 } from '@/utils/notifications'
+import { soundGroupOf, type SoundGroup } from '@/utils/notifySounds'
 
 // Store actions after which the end of a turn is the user's own doing, and the one that starts anew.
 // `stopAndWait` stops a tab the user removes or deletes; `clearChat` interrupts the running turn.
@@ -51,6 +56,8 @@ interface Message {
   tabId: string | null
   title: string
   body: string
+  /** Which of the two picked sounds goes with it */
+  sound: SoundGroup
 }
 
 /** What to tell about a tab: the reason, a line instead of the reason's own, and a fallback. */
@@ -68,6 +75,7 @@ export const useTabNotifications = () => {
   const { tabs, activeId } = storeToRefs(chat)
   const { settings } = useNotificationSetting()
   const { t, locale } = useI18n()
+  const { plainOf: plainTitleOf } = useChatTitle()
   const isQuotaWanted = computed(() => isEventWanted(settings.value, 'quota_low', false))
   // Polls only while the switch is on; the sidebar footer may poll the same query anyway.
   const { accounts } = useQuota(isQuotaWanted)
@@ -100,16 +108,19 @@ export const useTabNotifications = () => {
   })
 
   const titleOf = (id: string) =>
-    tabs.value.find((tab) => tab.id === id)?.title || t('chat.new_chat')
+    plainTitleOf(tabs.value.find((tab) => tab.id === id)?.title ?? '') || t('chat.new_chat')
 
   const openTab = (id: string) => {
     if (tabs.value.some((tab) => tab.id === id)) activeId.value = id
   }
 
-  const deliver = async ({ tabId, title, body }: Message): Promise<boolean> => {
-    const canUseOs = await canShowOsNotification()
-    const isFocused = await isWindowFocused()
-    const { background, hasSound } = settings.value
+  const deliver = async ({ tabId, title, body, sound }: Message): Promise<boolean> => {
+    const [canUseOs, isFocused, quiet] = await Promise.all([
+      canShowOsNotification(),
+      isWindowFocused(),
+      readSystemQuiet()
+    ])
+    const { background, hasSound, sounds } = settings.value
     const delivery = deliveryOf({
       tabId,
       activeId: activeId.value,
@@ -118,13 +129,17 @@ export const useTabNotifications = () => {
       background
     })
     if (!delivery) return false
+    // Under "Do not disturb" no sound at all, not even the system's fallback below.
+    const isSounding = hasSound && !isQuietFor(quiet, isFocused)
+    const isPlayed = isSounding ? playSound(sounds[sound]) : Promise.resolve(false)
     if (delivery === 'os') {
       const id = nextNotificationId++
       if (tabId) tabOfNotification.set(id, tabId)
-      showOsNotification({ id, title, body, hasSound, hasOpenAction: tabId !== null })
+      // A background webview whose audio is held back still gets a sound, the system's.
+      const hasSystemSound = isSounding && !(await isPlayed)
+      showOsNotification({ id, title, body, hasSystemSound, hasOpenAction: tabId !== null })
       return true
     }
-    // shortcut: in-window toasts play no sound; add one if the user misses it there.
     toast(title, {
       description: body,
       // The system notification shows the app icon this large; its stand-in in the window too.
@@ -157,7 +172,8 @@ export const useTabNotifications = () => {
     const message = {
       tabId,
       title: titleOf(tabId),
-      body: body ?? t(`notifications.reason.${reason}`)
+      body: body ?? t(`notifications.reason.${reason}`),
+      sound: soundGroupOf(reason)
     }
     if (await deliver(message)) return
     if (previous === undefined) lastSentAt.delete(key)
@@ -214,7 +230,8 @@ export const useTabNotifications = () => {
       await deliver({
         tabId: null,
         title: t('notifications.quota_low.title', { account: alert.label }),
-        body: t('notifications.quota_low.body', { percent: alert.percent })
+        body: t('notifications.quota_low.body', { percent: alert.percent }),
+        sound: 'attention'
       })
     } catch (error) {
       // Not told after all: the next poll tries again.
@@ -233,9 +250,12 @@ export const useTabNotifications = () => {
   const tellQueueSent = (tabId: string) => {
     const isMuted = tabs.value.find((tab) => tab.id === tabId)?.isMuted ?? false
     if (!limitPolicy.notifyQueueSent || !settings.value.isOn || isMuted) return
-    deliver({ tabId, title: titleOf(tabId), body: t('notifications.queue_sent') }).catch(
-      handleError
-    )
+    deliver({
+      tabId,
+      title: titleOf(tabId),
+      body: t('notifications.queue_sent'),
+      sound: 'done'
+    }).catch(handleError)
   }
 
   const onLimit = (event: Extract<AgentdEvent, { type: 'limit' }>) => {
@@ -256,6 +276,7 @@ export const useTabNotifications = () => {
     replayedAsks.set(String(event.event.request_id), event.tab)
   }
 
+  unlockSounds(() => settings.value.isOn && settings.value.hasSound)
   const stopAgentd = agentdService.onEvent(onAgentdEvent)
   const stopActions = chat.$onAction(({ name, args }) => {
     const id = String(args[0])

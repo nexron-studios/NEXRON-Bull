@@ -5,6 +5,7 @@ import {
   deliveryOf,
   isAllOff,
   isEventWanted,
+  isQuietFor,
   isRepeat,
   isSameSnapshots,
   notifyKeyOf,
@@ -284,7 +285,8 @@ describe('settingsOfLegacy', () => {
         quota_low: false
       },
       background: 'os',
-      hasSound: false
+      hasSound: false,
+      sounds: { done: 'harp', attention: 'ping' }
     })
   })
 
@@ -311,7 +313,8 @@ describe('withSettingDefaults', () => {
         quota_low: false
       },
       background: 'toast',
-      hasSound: false
+      hasSound: false,
+      sounds: { done: 'harp', attention: 'ping' }
     })
   })
 
@@ -319,6 +322,14 @@ describe('withSettingDefaults', () => {
     expect(withSettingDefaults(null, DEFAULT_NOTIFICATION_SETTINGS)).toEqual(
       DEFAULT_NOTIFICATION_SETTINGS
     )
+  })
+
+  it('should keep picked sounds and replace one that is not of its group', () => {
+    const stored = { sounds: { done: 'bell', attention: 'drop' } } as never
+    expect(withSettingDefaults(stored, DEFAULT_NOTIFICATION_SETTINGS).sounds).toEqual({
+      done: 'bell',
+      attention: 'ping'
+    })
   })
 
   it('should drop values of the wrong kind', () => {
@@ -426,5 +437,23 @@ describe('quotaAlertsOf', () => {
 
   it('should skip a window without a reset time', () => {
     expect(quotaAlertsOf([account(90, null)], {}, NOW)).toEqual([])
+  })
+})
+
+describe('isQuietFor', () => {
+  it('should keep still under do not disturb, also with Bull in front', () => {
+    expect(isQuietFor('do_not_disturb', true)).toBe(true)
+  })
+
+  it('should keep still while another full-screen app is in front', () => {
+    expect(isQuietFor('busy', false)).toBe(true)
+  })
+
+  it('should sound while the full-screen app is Bull itself', () => {
+    expect(isQuietFor('busy', true)).toBe(false)
+  })
+
+  it('should sound when the system wants no quiet', () => {
+    expect(isQuietFor('none', false)).toBe(false)
   })
 })

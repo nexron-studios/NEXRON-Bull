@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import NchIconButton from '@/components/common/NchIconButton.vue'
 import ChatMutedMark from '@/components/chat/ChatMutedMark.vue'
 import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
 import TerminalNewMenu from '@/components/terminal/TerminalNewMenu.vue'
 import TerminalTabList from '@/components/terminal/TerminalTabList.vue'
@@ -172,7 +173,7 @@ onMounted(() => void document.fonts.ready.then(measureUnderline))
             :has-question="openQuestionOf(tab) !== null"
           />
           <span class="truncate" :class="tab.id === activeId ? 'text-foreground' : 'text-subtle'">
-            {{ tab.title || t('chat.new_chat') }}
+            <ChatTitleText :title="tab.title || t('chat.new_chat')" :tab />
           </span>
           <ChatMutedMark v-if="tab.isMuted" />
         </button>

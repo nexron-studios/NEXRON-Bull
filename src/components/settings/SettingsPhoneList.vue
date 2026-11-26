@@ -10,6 +10,7 @@ import { useTerminalPreferences } from '@/composables/useTerminalPreferences'
 import { useThemeChoice } from '@/composables/useThemeToggle'
 import SettingsAboutCard from '@/components/settings/SettingsAboutCard.vue'
 import { useLimitPolicyStore } from '@/stores/limitPolicy'
+import { useAppUpdateStore } from '@/stores/appUpdate'
 import { useWorktreeSettingsStore } from '@/stores/worktreeSettings'
 import { SETTINGS_SECTION_ICON, type SettingsSection } from '@/utils/settings'
 
@@ -23,6 +24,7 @@ const { shownShell } = useTerminalPreferences()
 const { choice } = useThemeChoice()
 const { policy } = storeToRefs(useLimitPolicyStore())
 const worktrees = useWorktreeSettingsStore()
+const appUpdate = useAppUpdateStore()
 
 const values = computed<Record<SettingsSection, string>>(() => ({
   accounts: t('settings.summary.accounts', offeredCount.value),
@@ -33,7 +35,10 @@ const values = computed<Record<SettingsSection, string>>(() => ({
   worktrees: worktrees.hasOwnRoot
     ? t('settings.worktrees.summary_own')
     : t('settings.worktrees.summary_default'),
-  appearance: t(`settings.appearance.themes.${choice.value}`)
+  appearance: t(`settings.appearance.themes.${choice.value}`),
+  updates: appUpdate.isAutomatic
+    ? t('settings.updates.summary_on')
+    : t('settings.updates.summary_off')
 }))
 </script>
 

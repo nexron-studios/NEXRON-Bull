@@ -6,6 +6,7 @@ import {
   dictationService,
   type DictationEvent
 } from '@/api/services/dictation.service'
+import { useDictationInterim } from '@/composables/useDictationInterim'
 import { handleError } from '@/lib/error'
 import {
   isSpaceKey,
@@ -48,7 +49,8 @@ const isNothingHeard = (error: unknown): error is DictationError =>
 /**
  * Hold Space in the composer to dictate with Claude Code's own dictation (`dictation.service`).
  * A tap types its space as always; held for `HOLD_MS` that space goes again, and on release the
- * transcript lands where the caret was, ready to edit. Nothing is sent.
+ * transcript lands where the caret was, ready to edit. While Claude records, what it recognised
+ * so far shows there already (`useDictationInterim`). Nothing is sent.
  */
 export const useSpaceDictation = ({
   textarea,
@@ -65,6 +67,11 @@ export const useSpaceDictation = ({
   const indicator = computed<DictationIndicator | null>(() => {
     const { kind } = state.value
     return kind === 'idle' || kind === 'pressed' || kind === 'engaged' ? null : kind
+  })
+  /** The draft may hold interim words now, or will get the transcript: nothing may send it. */
+  const isDictating = computed(() => {
+    const { kind } = state.value
+    return kind === 'arming' || kind === 'recording' || kind === 'transcribing'
   })
 
   // One call at a time: a release waits until its press reached Claude.
@@ -85,10 +92,12 @@ export const useSpaceDictation = ({
     draft.value = text
     if (document.activeElement === textarea()) setCaret(caret)
   }
+  const interim = useDictationInterim(draft, apply)
 
-  /** The dictation yielded nothing: the selection its space replaced comes back. */
+  /** The dictation yielded nothing: the interim words go, the selection its space replaced comes back. */
   const giveBack = (press: SpacePress) => {
-    if (press.replaced) apply(withRestored(draft.value, press.anchor, press.replaced))
+    const at = interim.takeOut() ?? press.anchor
+    if (press.replaced) apply(withRestored(draft.value, at, press.replaced))
   }
 
   const errorTimer = useTimeoutFn(
@@ -151,7 +160,8 @@ export const useSpaceDictation = ({
 
   const insert = (press: SpacePress, transcript: string) => {
     if (!isCurrent(press)) return
-    apply(withTranscript(draft.value, press.anchor, transcript))
+    const at = interim.takeOut() ?? press.anchor
+    apply(withTranscript(draft.value, at, transcript))
     state.value = { kind: 'idle' }
   }
 
@@ -214,6 +224,9 @@ export const useSpaceDictation = ({
     }
     if (kind === 'engaged') commit()
     if (state.value.kind === 'arming') state.value = { kind: 'recording', press: state.value.press }
+    if (event.type === 'interim' && state.value.kind === 'recording') {
+      interim.show(state.value.press.anchor, event.text)
+    }
   }
 
   /** `true` when the key was the dictation's; the composer then leaves it alone. */
@@ -256,5 +269,5 @@ export const useSpaceDictation = ({
     if (current.kind === 'arming' || current.kind === 'recording') discard(current.press)
   })
 
-  return { state, indicator, handleKeydown }
+  return { state, indicator, isDictating, highlights: interim.highlights, handleKeydown }
 }

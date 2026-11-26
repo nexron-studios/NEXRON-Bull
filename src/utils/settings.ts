@@ -6,6 +6,7 @@ import {
   GitFork,
   Globe,
   Monitor,
+  RefreshCw,
   SquareTerminal,
   Sun,
   UserRound
@@ -28,7 +29,8 @@ export const settingsSectionList = [
   'notifications',
   'terminal',
   'worktrees',
-  'appearance'
+  'appearance',
+  'updates'
 ] as const
 export type SettingsSection = (typeof settingsSectionList)[number]
 
@@ -39,14 +41,16 @@ export const SETTINGS_SECTION_ICON: Record<SettingsSection, Component> = {
   notifications: Bell,
   terminal: SquareTerminal,
   worktrees: GitFork,
-  appearance: Sun
+  appearance: Sun,
+  updates: RefreshCw
 }
 
 /**
  * Sections only the app window can serve: the machine checks run ssh from it, and terminals are
- * its own processes. A browser reaches agentd through the bridge and has neither.
+ * its own processes. A browser reaches agentd through the bridge and has neither, and nothing
+ * installed to update.
  */
-const DESKTOP_ONLY_SECTIONS: readonly SettingsSection[] = ['machines', 'terminal']
+const DESKTOP_ONLY_SECTIONS: readonly SettingsSection[] = ['machines', 'terminal', 'updates']
 
 /** The sections this window offers, in their order. */
 export const offeredSettingsSectionsOf = (isDesktopApp: boolean): SettingsSection[] =>

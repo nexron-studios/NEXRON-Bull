@@ -23,16 +23,23 @@ tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 serde_json = "1"
 tauri-plugin-notification = "2"
+# Restarts the app once an update is installed.
+tauri-plugin-process = "2"
 portable-pty = "0.9"
 # Reads the screen of the hidden Claude that Bull dictates through (dictation_screen.rs).
 vt100 = "0.18"
+
+# Updates come as signed installers from the GitHub release (`latest.json`); mobile has none.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
 
 # The account's login shell when $SHELL is missing, as for an app launchd started
 # (claude_program.rs); already in the tree.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# Already in the tree through the notification plugin and tao; asked for the real toast setting and
-# to set the big window icon (taskbar), which Tauri's set_icon leaves alone.
+# Already in the tree through the notification plugin and tao; asked for the real toast setting,
+# whether Windows wants quiet (notification_quiet.rs), and to set the big window icon (taskbar),
+# which Tauri's set_icon leaves alone.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["UI_Notifications", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_Console", "Win32_System_Variant", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["UI_Notifications", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_Console", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }

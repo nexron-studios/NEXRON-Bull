@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toast } from '@/lib/toast'
 import { agentdService } from '@/api/services/agentd.service'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useIsPhone } from '@/composables/useViewport'
 import i18n from '@/i18n'
 import { copyText } from '@/lib/clipboard'
@@ -62,9 +63,10 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
   const hidden = useHiddenSessionsStore()
   const isPhone = useIsPhone()
   const { t } = i18n.global
+  const { plainOf: plainTitleOf } = useChatTitle()
 
   /** What a session is called in menus, dialogs and toasts; a chat with no prompt yet has no title. */
-  const titleOf = (target: SessionTarget) => target.title || t('chat.new_chat')
+  const titleOf = (target: SessionTarget) => plainTitleOf(target.title) || t('chat.new_chat')
 
   /** The target with its tab as it is now: the dialog stays open while Claude goes on. */
   const liveTargetOf = (target: SessionTarget): SessionTarget => {

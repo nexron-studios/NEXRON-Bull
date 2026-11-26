@@ -15,6 +15,13 @@ export interface ImageRefFormat {
   render: (n: number, name: string) => string
   /** Global, with the named groups `n` and `name` */
   pattern: RegExp
+  /**
+   * A reference cut off at the end of a text, with the group `n`: a chat title is the first prompt
+   * shortened to a fixed length. Something must follow the number, so a title that merely ends in
+   * `[Bild 3` stays text. `null` when the template starts with the number, since a bare
+   * trailing number is no reference.
+   */
+  cutAtEnd: RegExp | null
 }
 
 /** What a reference needs to know of an attachment. */
@@ -52,22 +59,26 @@ export const unbreakable = (text: string) =>
 const nameLabelOf = (name: string) =>
   unbreakable(truncateName(name.replaceAll('[', '(').replaceAll(']', ')'), IMAGE_REF_NAME_MAX))
 
+const NUMBER_GROUP = '(?<n>\\d+)'
+
 /** The format for a template rendered with `IMAGE_REF_SLOTS` in place of number and name. */
 export const imageRefFormatOf = (template: string): ImageRefFormat => {
   // A group may be named once; a slot used again repeats it by backreference.
   const source = escapeRegExp(template)
     .replaceAll(' ', `[ ${NO_BREAK_SPACE}]`)
     .replaceAll('-', `[-${NO_BREAK_HYPHEN}]`)
-    .replace(IMAGE_REF_SLOTS.n, '(?<n>\\d+)')
+    .replace(IMAGE_REF_SLOTS.n, NUMBER_GROUP)
     .replaceAll(IMAGE_REF_SLOTS.n, '\\k<n>')
     .replace(IMAGE_REF_SLOTS.name, '(?<name>[^\\n\\[\\]]+?)')
     .replaceAll(IMAGE_REF_SLOTS.name, '\\k<name>')
+  const [head = ''] = source.split(NUMBER_GROUP)
   return {
     render: (n, name) =>
       unbreakable(template)
         .replaceAll(IMAGE_REF_SLOTS.n, () => String(n))
         .replaceAll(IMAGE_REF_SLOTS.name, () => nameLabelOf(name)),
-    pattern: new RegExp(source, 'g')
+    pattern: new RegExp(source, 'g'),
+    cutAtEnd: head ? new RegExp(`${head}${NUMBER_GROUP}[^\\[\\]\\n]+$`) : null
   }
 }
 

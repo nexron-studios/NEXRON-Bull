@@ -1,5 +1,6 @@
 import { openQuestionOf } from '@/utils/answerCallouts'
 import { isBusyStatus, type ChatTabState, type TabStatus } from '@/utils/chatTab'
+import { DEFAULT_SOUNDS, soundOfGroup, type PickedSounds } from '@/utils/notifySounds'
 import { leftPercentOf } from '@/utils/percent'
 import { accountKeyOf, windowOf, type MachineQuota } from '@/utils/quota'
 
@@ -19,7 +20,10 @@ export interface NotificationSettings {
   events: Record<NotifyEvent, boolean>
   /** How to tell while Bull is in the background; in front it is always a toast. */
   background: NotifyDelivery
+  /** Bull plays its own sound, for system notifications and toasts in the window alike. */
   hasSound: boolean
+  /** The sound picked for a finished chat and for one that needs the user */
+  sounds: PickedSounds
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -33,7 +37,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     quota_low: false
   },
   background: 'os',
-  hasSound: false
+  hasSound: false,
+  sounds: DEFAULT_SOUNDS
 }
 
 /** The settings before there were any: the one on/off switch, saved as `"true"` or `"false"`. */
@@ -60,7 +65,34 @@ export const withSettingDefaults = (
     background: notifyDeliveryList.includes(stored.background as NotifyDelivery)
       ? (stored.background as NotifyDelivery)
       : defaults.background,
-    hasSound: typeof stored.hasSound === 'boolean' ? stored.hasSound : defaults.hasSound
+    hasSound: typeof stored.hasSound === 'boolean' ? stored.hasSound : defaults.hasSound,
+    sounds: {
+      done: soundOfGroup('done', stored.sounds?.done, defaults.sounds.done),
+      attention: soundOfGroup('attention', stored.sounds?.attention, defaults.sounds.attention)
+    }
+  }
+}
+
+/** What `notification_quiet` reports: Windows' "Do not disturb", or a full-screen app. */
+export const systemQuietList = ['none', 'do_not_disturb', 'busy'] as const
+export type SystemQuiet = (typeof systemQuietList)[number]
+
+/**
+ * Whether Bull's sound keeps still. A full-screen app that is in front while Bull's own window has
+ * the focus is Bull itself, and the user is looking at it; "Do not disturb" always means quiet.
+ */
+export const isQuietFor = (quiet: SystemQuiet, isFocused: boolean): boolean => {
+  switch (quiet) {
+    case 'none':
+      return false
+    case 'do_not_disturb':
+      return true
+    case 'busy':
+      return !isFocused
+    default: {
+      const unhandled: never = quiet
+      throw new Error(`Unhandled system quiet: ${unhandled}`)
+    }
   }
 }
 

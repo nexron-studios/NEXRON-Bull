@@ -13,6 +13,7 @@ import SettingsNav from '@/components/settings/SettingsNav.vue'
 import SettingsNotifications from '@/components/settings/SettingsNotifications.vue'
 import SettingsPhoneList from '@/components/settings/SettingsPhoneList.vue'
 import SettingsTerminal from '@/components/settings/SettingsTerminal.vue'
+import SettingsUpdates from '@/components/settings/SettingsUpdates.vue'
 import SettingsWorktrees from '@/components/settings/SettingsWorktrees.vue'
 import { useScrollEdges } from '@/composables/useScrollEdges'
 import { useIsPhone } from '@/composables/useViewport'
@@ -35,7 +36,8 @@ const SECTION_COMPONENT: Record<SettingsSection, Component> = {
   notifications: SettingsNotifications,
   terminal: SettingsTerminal,
   worktrees: SettingsWorktrees,
-  appearance: SettingsAppearance
+  appearance: SettingsAppearance,
+  updates: SettingsUpdates
 }
 
 // A browser has no machine checks and no terminals; their links lead to the first section there.

@@ -1,0 +1,33 @@
+# Rewrites `latest.json` of a release once it is published. Installed copies read it from the
+# newest published release, and by then the Windows installer (uploaded by hand) and the macOS
+# tarball (release-unix.yml) are both attached, whichever came first.
+# Publishing by hand triggers this; a release the workflow token publishes would not.
+name: Update manifest
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to rewrite latest.json for, e.g. v0.7.28
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  manifest:
+    name: latest.json
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/write-update-manifest.mjs "$TAG"

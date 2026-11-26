@@ -5,13 +5,17 @@
 //!
 //! The prompt box is the last pair of rows drawn only with `─`, the input between them starts
 //! with `❯`. Claude draws its placeholder ("Try …") and a transcript that is not final yet in
-//! SGR 2 (dim), typed and finished text plainly, so only the plain cells count as text.
+//! SGR 2 (dim), typed and finished text plainly, so only the plain cells count as text. The live
+//! text takes the dim cells too, except for the placeholder.
 
 const RULE: char = '─';
 const PROMPT_MARK: char = '❯';
 /// Prompt mark and the space after it, also on every following input row.
 const INPUT_INDENT: u16 = 2;
 const TRUST_YES: &str = "Yes, I trust this folder";
+/// How each of Claude's placeholders starts (`Try "fix lint errors"`), dim like an interim
+/// transcript. Speech hardly ever begins with a straight quote right after "Try".
+const PLACEHOLDER_START: &str = "Try \"";
 /// Footer words of hold-to-talk. Claude Code's interface is English only.
 const WARMUP_MARK: &str = "keep holding";
 const LISTENING_MARK: &str = "listening…";
@@ -39,6 +43,9 @@ pub enum TrustChoice {
 pub struct Prompt {
     /// The input's plain text: neither the placeholder nor a transcript still being recognised
     pub text: String,
+    /// Everything the input shows, a transcript still being recognised included; empty while
+    /// only the placeholder is there
+    pub live: String,
     pub phase: VoicePhase,
     /// The row above the box, where Claude puts notices like "No speech detected"
     pub notice: String,
@@ -184,19 +191,21 @@ fn prompt_of(rows: &[Row]) -> Option<Prompt> {
         .iter()
         .map(|row| row.text.as_str())
         .collect();
+    let text = input_text(input, |row| &row.plain);
     Some(Prompt {
-        text: input_text(input),
+        live: live_text(input, &text),
+        text,
         phase: phase_of(&notice, &footer),
         notice,
     })
 }
 
 /// The input rows as one line: a row filled to the edge was cut mid-word, any other one at a
-/// space that the wrap swallowed.
-fn input_text(input: &[Row]) -> String {
+/// space that the wrap swallowed. `cells` picks which of a row's cells count.
+fn input_text(input: &[Row], cells: impl Fn(&Row) -> &str) -> String {
     let mut text = String::new();
     for (i, row) in input.iter().enumerate() {
-        let line: String = row.plain.chars().skip(usize::from(INPUT_INDENT)).collect();
+        let line: String = cells(row).chars().skip(usize::from(INPUT_INDENT)).collect();
         let line = line.replace('\u{a0}', " ");
         let is_cut = i > 0 && is_cut_before(&input[i - 1], row);
         if !text.is_empty() && !is_cut {
@@ -205,6 +214,16 @@ fn input_text(input: &[Row]) -> String {
         text.push_str(if is_cut { line.trim_end() } else { line.trim() });
     }
     text.trim().to_string()
+}
+
+/// The placeholder only shows in an input without plain text.
+fn live_text(input: &[Row], text: &str) -> String {
+    let live = input_text(input, |row| &row.text);
+    if text.is_empty() && live.starts_with(PLACEHOLDER_START) {
+        String::new()
+    } else {
+        live
+    }
 }
 
 fn is_cut_before(previous: &Row, row: &Row) -> bool {
@@ -281,6 +300,7 @@ mod tests {
             "  ⏵⏵ auto mode on",
         );
         assert_eq!(prompt(&parser).text, "");
+        assert_eq!(prompt(&parser).live, "");
     }
 
     #[test]
@@ -304,6 +324,51 @@ mod tests {
             "",
         );
         assert_eq!(prompt(&parser).text, "fertig");
+    }
+
+    #[test]
+    fn the_live_text_takes_the_dim_interim_transcript() {
+        let parser = screen(
+            "listening…",
+            &[&format!("❯\u{a0}{DIM}Hallo Welt{PLAIN}")],
+            "",
+        );
+        let prompt = prompt(&parser);
+        assert_eq!(prompt.text, "");
+        assert_eq!(prompt.live, "Hallo Welt");
+    }
+
+    #[test]
+    fn the_live_text_joins_finished_and_interim_words() {
+        let parser = screen(
+            "listening…",
+            &[&format!("❯\u{a0}fertig {DIM}noch nicht{PLAIN}")],
+            "",
+        );
+        assert_eq!(prompt(&parser).live, "fertig noch nicht");
+    }
+
+    #[test]
+    fn the_live_text_joins_a_dim_transcript_wrapped_at_a_space() {
+        let parser = screen(
+            "listening…",
+            &[
+                &format!("❯\u{a0}{DIM}erste Zeile{PLAIN}"),
+                &format!("  {DIM}zweite Zeile{PLAIN}"),
+            ],
+            "",
+        );
+        assert_eq!(prompt(&parser).live, "erste Zeile zweite Zeile");
+    }
+
+    #[test]
+    fn a_dictated_try_without_a_quote_is_no_placeholder() {
+        let parser = screen(
+            "listening…",
+            &[&format!("❯\u{a0}{DIM}Try this one{PLAIN}")],
+            "",
+        );
+        assert_eq!(prompt(&parser).live, "Try this one");
     }
 
     #[test]

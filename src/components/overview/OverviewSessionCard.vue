@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { MessageSquareText } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import OverviewSessionCardContext from '@/components/overview/OverviewSessionCardContext.vue'
 import OverviewSessionCardFooter from '@/components/overview/OverviewSessionCardFooter.vue'
 import OverviewSessionCardHeader from '@/components/overview/OverviewSessionCardHeader.vue'
@@ -59,7 +60,9 @@ const openCard = (event: MouseEvent) => {
   >
     <OverviewSessionCardHeader :tab :status />
 
-    <h3 class="mt-4 truncate text-title font-semibold tracking-tight">{{ title }}</h3>
+    <h3 class="mt-4 truncate text-title font-semibold tracking-tight">
+      <ChatTitleText :title />
+    </h3>
     <OverviewSessionCardMeta class="mt-1" :tab :now :prompt-count="prompts.count" />
     <OverviewSessionCardContext :tab-id="tab.id" :model="tab.model" />
     <p class="mt-1 h-5 truncate text-small text-muted-foreground">

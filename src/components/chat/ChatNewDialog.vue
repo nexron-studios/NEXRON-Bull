@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { FolderOpen, History, Monitor, Play, Plus, Sparkles, UserRound, Zap } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import BrandClawdMark from '@/components/brand/BrandClawdMark.vue'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import NchEmpty from '@/components/common/NchEmpty.vue'
 import NchResponsiveDialog from '@/components/common/NchResponsiveDialog.vue'
 import SettingsSwitchRow from '@/components/settings/SettingsSwitchRow.vue'
@@ -330,9 +331,9 @@ watch([offeredProfiles, folders], fillDefaults)
             class="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-muted"
             @click="resume(session)"
           >
-            <span class="w-full truncate text-small font-medium">{{
-              session.title || session.session_id
-            }}</span>
+            <span class="w-full truncate text-small font-medium"
+              ><ChatTitleText :title="session.title || session.session_id"
+            /></span>
             <span class="flex w-full items-center gap-1.5 truncate text-meta text-muted-foreground">
               <FolderOpen class="size-3.5 shrink-0" aria-hidden="true" />
               {{ t('chat.resume_meta', { account: session.account, folder: session.cwd }) }}

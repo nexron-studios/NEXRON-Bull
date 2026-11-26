@@ -20,6 +20,7 @@ import NchResponsiveDialog from '@/components/common/NchResponsiveDialog.vue'
 import NchThemeToggle from '@/components/common/NchThemeToggle.vue'
 import { Button } from '@/components/ui/button'
 import ChatNotifyToggle from '@/components/chat/ChatNotifyToggle.vue'
+import { useChatTitle } from '@/composables/useChatTitle'
 import { useSessionMenuItems } from '@/composables/useSessionMenuItems'
 import { useContextUsageStore } from '@/stores/contextUsage'
 import { usePreviewStore } from '@/stores/preview'
@@ -42,6 +43,7 @@ const emit = defineEmits<{ close: [] }>()
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
+const { plainOf: plainTitleOf } = useChatTitle()
 const { items, run } = useSessionMenuItems(() => targetOfTab(tab))
 const terminals = useTerminalStore()
 const rewind = useRewindStore()
@@ -94,7 +96,7 @@ const act = (action: SessionAction) => {
 <template>
   <NchResponsiveDialog
     v-model:open="open"
-    :title="tab.title || t('chat.new_chat')"
+    :title="plainTitleOf(tab.title) || t('chat.new_chat')"
     :description="t('chat.phone.menu_hint')"
   >
     <dl class="flex flex-col gap-3 text-small">

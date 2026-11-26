@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import ChatMutedMark from '@/components/chat/ChatMutedMark.vue'
 import ChatStatusIcon from '@/components/chat/ChatStatusIcon.vue'
+import ChatTitleText from '@/components/chat/ChatTitleText.vue'
 import SessionActionsMenu from '@/components/session/SessionActionsMenu.vue'
 import SessionChatName from '@/components/session/SessionChatName.vue'
 import SessionContextMenu from '@/components/session/SessionContextMenu.vue'
@@ -107,7 +108,7 @@ const background = computed(() => (isEmpty.value ? [] : backgroundWorkOf(row.tab
         <span v-if="isWide" class="flex min-w-0 flex-1 items-center gap-4 text-small">
           <span class="flex w-64 min-w-0 shrink-0 items-center gap-1.5">
             <span class="truncate font-medium text-foreground" :class="{ 'opacity-72': isSeen }">
-              {{ row.title || t('chat.new_chat') }}
+              <ChatTitleText :title="row.title || t('chat.new_chat')" />
             </span>
             <ChatMutedMark v-if="row.tab.isMuted" />
           </span>
@@ -142,7 +143,7 @@ const background = computed(() => (isEmpty.value ? [] : backgroundWorkOf(row.tab
               class="truncate text-small font-medium text-foreground"
               :class="{ 'opacity-72': isSeen }"
             >
-              {{ row.title || t('chat.new_chat') }}
+              <ChatTitleText :title="row.title || t('chat.new_chat')" />
             </span>
             <ChatMutedMark v-if="row.tab.isMuted" />
           </span>

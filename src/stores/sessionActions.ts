@@ -11,7 +11,9 @@ import { useHiddenSessionsStore } from '@/stores/hiddenSessions'
 import { useRememberedSettingsStore } from '@/stores/rememberedSettings'
 import { useWorktreeActionsStore } from '@/stores/worktreeActions'
 import { savedTabOf, type ChatTabState } from '@/utils/chatTab'
+import { plainTitleOf } from '@/utils/chatTitle'
 import { hiddenKeyOf } from '@/utils/hiddenSessions'
+import { IMAGE_REF_SLOTS, imageRefFormatOf } from '@/utils/imageRefs'
 import {
   hiddenKeysOf,
   needsStop,
@@ -64,7 +66,10 @@ export const useSessionActionsStore = defineStore('sessionActions', () => {
   const { t } = i18n.global
 
   /** What a session is called in menus, dialogs and toasts; a chat with no prompt yet has no title. */
-  const titleOf = (target: SessionTarget) => target.title || t('chat.new_chat')
+  const titleOf = (target: SessionTarget) =>
+    plainTitleOf(target.title, imageRefFormatOf(t('images.reference', IMAGE_REF_SLOTS)), (n) =>
+      t('chat.image_n', { n })
+    ) || t('chat.new_chat')
 
   /** The target with its tab as it is now: the dialog stays open while Claude goes on. */
   const liveTargetOf = (target: SessionTarget): SessionTarget => {

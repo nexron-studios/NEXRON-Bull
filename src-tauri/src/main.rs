@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  nexron_chat_lib::run();
+    nexron_chat_lib::run();
 }

@@ -2,7 +2,7 @@
 
 use tauri::State;
 
-use crate::connections::{Connections, ConnectionError, Machine};
+use crate::connections::{ConnectionError, Connections, Machine};
 
 /// Window event carrying one agentd event as a JSON string.
 pub const AGENTD_EVENT: &str = "agentd";

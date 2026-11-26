@@ -27,7 +27,8 @@ const GIT_SERVICES: [&str; 7] = [
 ];
 
 pub fn ssh_config_hosts() -> Vec<String> {
-    let config = home_folder().and_then(|home| fs::read_to_string(home.join(".ssh").join("config")).ok());
+    let config =
+        home_folder().and_then(|home| fs::read_to_string(home.join(".ssh").join("config")).ok());
     config.map(|text| hosts_in(&text)).unwrap_or_default()
 }
 
@@ -43,7 +44,9 @@ impl HostBlock {
     /// Logs in as `git` or reaches a known Git service. Only the section's own options count; a
     /// `User git` in `Host *` or above the first section is not read.
     fn is_git_host(&self) -> bool {
-        self.user.as_deref().is_some_and(|user| user.eq_ignore_ascii_case(GIT_USER))
+        self.user
+            .as_deref()
+            .is_some_and(|user| user.eq_ignore_ascii_case(GIT_USER))
             || self.host_name.as_deref().is_some_and(is_git_service)
     }
 }
@@ -66,11 +69,20 @@ fn host_blocks(config: &str) -> Vec<HostBlock> {
     for (key, value) in config.lines().filter_map(keyword_of) {
         let value = value.trim_matches('"');
         if key.eq_ignore_ascii_case("host") || key.eq_ignore_ascii_case("match") {
-            let aliases = if key.eq_ignore_ascii_case("host") { aliases_in(value) } else { Vec::new() };
-            blocks.push(HostBlock { aliases, ..HostBlock::default() });
+            let aliases = if key.eq_ignore_ascii_case("host") {
+                aliases_in(value)
+            } else {
+                Vec::new()
+            };
+            blocks.push(HostBlock {
+                aliases,
+                ..HostBlock::default()
+            });
             continue;
         }
-        let Some(block) = blocks.last_mut() else { continue };
+        let Some(block) = blocks.last_mut() else {
+            continue;
+        };
         let option = match key.to_ascii_lowercase().as_str() {
             "user" => &mut block.user,
             "hostname" => &mut block.host_name,
@@ -82,7 +94,9 @@ fn host_blocks(config: &str) -> Vec<HostBlock> {
 }
 
 fn is_git_service(host: &str) -> bool {
-    GIT_SERVICES.iter().any(|service| host.eq_ignore_ascii_case(service))
+    GIT_SERVICES
+        .iter()
+        .any(|service| host.eq_ignore_ascii_case(service))
 }
 
 /// `Keyword value` or `Keyword=value`, as ssh reads it; `None` for blank lines and comments.
@@ -92,7 +106,10 @@ fn keyword_of(line: &str) -> Option<(&str, &str)> {
         return None;
     }
     let (key, value) = line.split_once(|c: char| c.is_whitespace() || c == '=')?;
-    Some((key, value.trim_start_matches(|c: char| c.is_whitespace() || c == '=')))
+    Some((
+        key,
+        value.trim_start_matches(|c: char| c.is_whitespace() || c == '='),
+    ))
 }
 
 fn aliases_in(patterns: &str) -> Vec<String> {
@@ -115,7 +132,8 @@ fn resolved_of(entry: &MachineEntry) -> Option<String> {
 fn resolved_value(resolved: &str, key: &str) -> Option<String> {
     resolved.lines().find_map(|line| {
         let (name, value) = line.split_once(' ')?;
-        name.eq_ignore_ascii_case(key).then(|| value.trim().to_string())
+        name.eq_ignore_ascii_case(key)
+            .then(|| value.trim().to_string())
     })
 }
 
@@ -127,7 +145,9 @@ pub(crate) fn known_host_of(entry: &MachineEntry) -> Option<String> {
 /// `hostkeyalias` wins over `hostname`; a port other than 22 is stored as `[host]:port`.
 fn known_host_in(resolved: &str) -> Option<String> {
     let value = |key: &str| resolved_value(resolved, key);
-    let host = value("hostkeyalias").filter(|alias| alias != "none").or_else(|| value("hostname"))?;
+    let host = value("hostkeyalias")
+        .filter(|alias| alias != "none")
+        .or_else(|| value("hostname"))?;
     match value("port").filter(|port| port != DEFAULT_SSH_PORT) {
         Some(port) => Some(format!("[{host}]:{port}")),
         None => Some(host),
@@ -191,23 +211,42 @@ mod tests {
 
     #[test]
     fn reads_the_first_user_like_ssh() {
-        let config = "Host shared\n  User git\n  User admin\nHost server\n  User admin\n  User git\n";
+        let config =
+            "Host shared\n  User git\n  User admin\nHost server\n  User admin\n  User git\n";
         assert_eq!(hosts_in(config), vec!["server"]);
     }
 
     #[test]
     fn names_the_machine_as_known_hosts_stores_it() {
-        assert_eq!(known_host_in("user nexron\nhostname 100.64.0.10\nport 22\n").as_deref(), Some("100.64.0.10"));
-        assert_eq!(known_host_in("hostname box\nport 2222\n").as_deref(), Some("[box]:2222"));
-        assert_eq!(known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(), Some("pc"));
-        assert_eq!(known_host_in("hostname box\nhostkeyalias none\n").as_deref(), Some("box"));
+        assert_eq!(
+            known_host_in("user nexron\nhostname 100.64.0.10\nport 22\n").as_deref(),
+            Some("100.64.0.10")
+        );
+        assert_eq!(
+            known_host_in("hostname box\nport 2222\n").as_deref(),
+            Some("[box]:2222")
+        );
+        assert_eq!(
+            known_host_in("hostname box\nhostkeyalias pc\nport 22\n").as_deref(),
+            Some("pc")
+        );
+        assert_eq!(
+            known_host_in("hostname box\nhostkeyalias none\n").as_deref(),
+            Some("box")
+        );
     }
 
     #[test]
     fn reads_one_option_of_ssh_g() {
         let resolved = "user dev\nhostname devbox.example\nport 22\n";
-        assert_eq!(resolved_value(resolved, "hostname").as_deref(), Some("devbox.example"));
-        assert_eq!(resolved_value(resolved, "HostName").as_deref(), Some("devbox.example"));
+        assert_eq!(
+            resolved_value(resolved, "hostname").as_deref(),
+            Some("devbox.example")
+        );
+        assert_eq!(
+            resolved_value(resolved, "HostName").as_deref(),
+            Some("devbox.example")
+        );
         assert_eq!(resolved_value(resolved, "proxyjump"), None);
     }
 
@@ -219,14 +258,32 @@ mod tests {
 
     #[test]
     fn refuses_a_host_behind_a_proxy() {
-        assert_eq!(direct_host_in("hostname devbox.example\nproxyjump gate.example\n"), None);
-        assert_eq!(direct_host_in("hostname devbox.example\nproxycommand nc %h %p\n"), None);
+        assert_eq!(
+            direct_host_in("hostname devbox.example\nproxyjump gate.example\n"),
+            None
+        );
+        assert_eq!(
+            direct_host_in("hostname devbox.example\nproxycommand nc %h %p\n"),
+            None
+        );
     }
 
     #[test]
     fn refuses_a_loopback_host_name() {
-        for host in ["localhost", "127.0.0.1", "127.0.1.1", "::1", "[::1]", "0.0.0.0", "vm.localhost"] {
-            assert_eq!(direct_host_in(&format!("hostname {host}\nport 2222\n")), None, "{host}");
+        for host in [
+            "localhost",
+            "127.0.0.1",
+            "127.0.1.1",
+            "::1",
+            "[::1]",
+            "0.0.0.0",
+            "vm.localhost",
+        ] {
+            assert_eq!(
+                direct_host_in(&format!("hostname {host}\nport 2222\n")),
+                None,
+                "{host}"
+            );
         }
     }
 }

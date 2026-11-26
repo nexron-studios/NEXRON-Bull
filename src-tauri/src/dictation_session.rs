@@ -57,12 +57,28 @@ pub struct HiddenClaude {
 impl HiddenClaude {
     pub fn spawn(language: &str) -> Result<Self, DictationError> {
         let command = command_of(language)?;
-        let size = PtySize { rows: ROWS.get(), cols: COLS.get(), pixel_width: 0, pixel_height: 0 };
-        let pair = native_pty_system().openpty(size).map_err(|err| DictationError::Spawn(err.to_string()))?;
-        let mut child = pair.slave.spawn_command(command).map_err(|err| DictationError::Spawn(err.to_string()))?;
+        let size = PtySize {
+            rows: ROWS.get(),
+            cols: COLS.get(),
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let pair = native_pty_system()
+            .openpty(size)
+            .map_err(|err| DictationError::Spawn(err.to_string()))?;
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|err| DictationError::Spawn(err.to_string()))?;
         drop(pair.slave);
-        let reader = pair.master.try_clone_reader().map_err(|err| DictationError::Spawn(err.to_string()))?;
-        let writer = pair.master.take_writer().map_err(|err| DictationError::Spawn(err.to_string()))?;
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|err| DictationError::Spawn(err.to_string()))?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|err| DictationError::Spawn(err.to_string()))?;
         let parser = Arc::new(Mutex::new(vt100::Parser::new(ROWS, COLS, 0)));
         let is_alive = Arc::new(AtomicBool::new(true));
         let killer = Mutex::new(child.clone_killer());
@@ -79,7 +95,14 @@ impl HiddenClaude {
             alive.store(false, Ordering::Relaxed);
         });
         let language = language.to_string();
-        Ok(Self { language, parser, writer, killer, is_alive, _master: Mutex::new(pair.master) })
+        Ok(Self {
+            language,
+            parser,
+            writer,
+            killer,
+            is_alive,
+            _master: Mutex::new(pair.master),
+        })
     }
 
     pub fn view(&self) -> ScreenView {
@@ -92,7 +115,10 @@ impl HiddenClaude {
 
     pub fn send(&self, keys: &str) -> Result<(), DictationError> {
         let mut writer = lock(&self.writer);
-        writer.write_all(keys.as_bytes()).and_then(|()| writer.flush()).map_err(DictationError::Io)
+        writer
+            .write_all(keys.as_bytes())
+            .and_then(|()| writer.flush())
+            .map_err(DictationError::Io)
     }
 
     /// The one Enter this Claude ever gets: on its own folder-trust dialog, with Yes selected.
@@ -102,14 +128,20 @@ impl HiddenClaude {
 
     /// Ends Claude in the background: the keys first, a kill if it is still there afterwards.
     pub fn shut_down(self: Arc<Self>) {
+        // The keys on their own thread: a write stuck on a Claude that stopped reading must not
+        // keep the kill below from running. The kill then ends the stuck write as well.
+        let keys = Arc::clone(&self);
         thread::spawn(move || {
             for key in EXIT_KEYS {
-                if self.send(key).is_err() {
+                if keys.send(key).is_err() {
                     break;
                 }
                 thread::sleep(EXIT_KEY_GAP);
             }
-            let deadline = Instant::now() + EXIT_GRACE;
+        });
+        thread::spawn(move || {
+            let key_time = EXIT_KEY_GAP * u32::try_from(EXIT_KEYS.len()).unwrap_or(u32::MAX);
+            let deadline = Instant::now() + key_time + EXIT_GRACE;
             while self.is_alive() && Instant::now() < deadline {
                 thread::sleep(EXIT_POLL);
             }
@@ -124,7 +156,11 @@ impl HiddenClaude {
 
 /// Never waits on input: answers go to `answer_all`, so the output is drained even while a key
 /// is stuck on its way in, and Claude never blocks on a full console.
-fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>, answers: &Sender<String>) {
+fn read_into(
+    mut reader: Box<dyn Read + Send>,
+    parser: &Mutex<vt100::Parser>,
+    answers: &Sender<String>,
+) {
     let mut buffer = vec![0; READ_BUFFER_BYTES];
     let mut carry = Vec::new();
     loop {
@@ -142,7 +178,10 @@ fn read_into(mut reader: Box<dyn Read + Send>, parser: &Mutex<vt100::Parser>, an
 fn answer_all(answers: &Receiver<String>, writer: &Mutex<Box<dyn Write + Send>>) {
     for answer in answers {
         let mut writer = lock(writer);
-        if let Err(err) = writer.write_all(answer.as_bytes()).and_then(|()| writer.flush()) {
+        if let Err(err) = writer
+            .write_all(answer.as_bytes())
+            .and_then(|()| writer.flush())
+        {
             eprintln!("dictation: cannot answer the cursor request: {err}");
         }
     }
@@ -174,7 +213,10 @@ fn request_ends(carry: &mut Vec<u8>, chunk: &[u8]) -> Vec<usize> {
         // `carry` holds less than a request, so each one ends inside `chunk`.
         .map(|(at, _)| at + CURSOR_REQUEST.len() - carried)
         .collect();
-    let kept = (1..CURSOR_REQUEST.len()).rev().find(|&len| carry.ends_with(&CURSOR_REQUEST[..len])).unwrap_or(0);
+    let kept = (1..CURSOR_REQUEST.len())
+        .rev()
+        .find(|&len| carry.ends_with(&CURSOR_REQUEST[..len]))
+        .unwrap_or(0);
     carry.drain(..carry.len() - kept);
     ends
 }
@@ -208,7 +250,8 @@ fn command_of(language: &str) -> Result<CommandBuilder, DictationError> {
 }
 
 fn work_folder() -> Result<PathBuf, DictationError> {
-    let home = crate::connections::home_folder().ok_or_else(|| DictationError::Spawn("no home folder".into()))?;
+    let home = crate::connections::home_folder()
+        .ok_or_else(|| DictationError::Spawn("no home folder".into()))?;
     let folder = home.join(".nexron-chat").join(WORK_FOLDER);
     std::fs::create_dir_all(&folder).map_err(DictationError::Io)?;
     Ok(folder)
@@ -232,14 +275,20 @@ mod tests {
     #[test]
     fn other_sequences_are_no_cursor_request() {
         let mut carry = Vec::new();
-        assert_eq!(request_ends(&mut carry, b"\x1b[6;1H\x1b[5n"), Vec::<usize>::new());
+        assert_eq!(
+            request_ends(&mut carry, b"\x1b[6;1H\x1b[5n"),
+            Vec::<usize>::new()
+        );
     }
 
     #[test]
     fn answers_with_the_cursor_where_the_request_stood() {
         let mut parser = vt100::Parser::new(ROWS, COLS, 0);
         let answers = feed(&mut parser, &mut Vec::new(), b"ab\x1b[6n\r\ncde\x1b[6n");
-        assert_eq!(answers, vec!["\x1b[1;3R".to_string(), "\x1b[2;4R".to_string()]);
+        assert_eq!(
+            answers,
+            vec!["\x1b[1;3R".to_string(), "\x1b[2;4R".to_string()]
+        );
         assert_eq!(parser.screen().contents(), "ab\ncde");
     }
 
@@ -248,7 +297,10 @@ mod tests {
         let mut parser = vt100::Parser::new(ROWS, COLS, 0);
         let mut carry = Vec::new();
         assert!(feed(&mut parser, &mut carry, b"ab\x1b[6").is_empty());
-        assert_eq!(feed(&mut parser, &mut carry, b"n"), vec!["\x1b[1;3R".to_string()]);
+        assert_eq!(
+            feed(&mut parser, &mut carry, b"n"),
+            vec!["\x1b[1;3R".to_string()]
+        );
     }
 
     #[test]

@@ -27,7 +27,11 @@ pub fn find() -> Option<ClaudeProgram> {
 /// The npm install on Windows puts a `claude.cmd` shim on PATH; the real exe sits in
 /// node_modules next to it, and running it directly keeps `cmd` out of the PTY.
 fn claude_in(dir: &Path) -> Option<PathBuf> {
-    let exe = dir.join(if cfg!(windows) { "claude.exe" } else { "claude" });
+    let exe = dir.join(if cfg!(windows) {
+        "claude.exe"
+    } else {
+        "claude"
+    });
     if exe.is_file() {
         return Some(exe);
     }
@@ -90,7 +94,10 @@ mod ask {
     /// `$SHELL`, else the login shell of the account: an app started by launchd may lack the
     /// variable, and `/bin/sh` reads none of the profiles where installers put their PATH.
     fn user_shell() -> String {
-        if let Some(shell) = std::env::var("SHELL").ok().filter(|shell| !shell.is_empty()) {
+        if let Some(shell) = std::env::var("SHELL")
+            .ok()
+            .filter(|shell| !shell.is_empty())
+        {
             return shell;
         }
         account_shell().unwrap_or_else(|| FALLBACK_SHELL.into())
@@ -102,8 +109,11 @@ mod ask {
         // shell name, and Bull calls it nowhere else.
         let shell = unsafe {
             let entry = libc::getpwuid(libc::getuid());
-            (!entry.is_null() && !(*entry).pw_shell.is_null())
-                .then(|| std::ffi::CStr::from_ptr((*entry).pw_shell).to_string_lossy().into_owned())
+            (!entry.is_null() && !(*entry).pw_shell.is_null()).then(|| {
+                std::ffi::CStr::from_ptr((*entry).pw_shell)
+                    .to_string_lossy()
+                    .into_owned()
+            })
         };
         shell.filter(|shell| !shell.is_empty())
     }
@@ -136,7 +146,11 @@ fn path_in(output: &str) -> Option<&str> {
 /// Each folder once, in the order of `login`, `current` and the install folders.
 #[cfg_attr(windows, allow(dead_code))]
 fn merged(login: Option<&str>, current: &str, home: Option<&str>) -> String {
-    let in_home = home.into_iter().flat_map(|home| HOME_INSTALL_DIRS.iter().map(move |dir| format!("{home}/{dir}")));
+    let in_home = home.into_iter().flat_map(|home| {
+        HOME_INSTALL_DIRS
+            .iter()
+            .map(move |dir| format!("{home}/{dir}"))
+    });
     let candidates = login
         .into_iter()
         .flat_map(|path| path.split(':'))
@@ -159,7 +173,8 @@ mod tests {
 
     #[test]
     fn takes_the_path_between_the_markers_only() {
-        let noisy = format!("Welcome back\n{MARKER}\n/opt/homebrew/bin:/usr/bin\n{MARKER}\nlogout\n");
+        let noisy =
+            format!("Welcome back\n{MARKER}\n/opt/homebrew/bin:/usr/bin\n{MARKER}\nlogout\n");
         assert_eq!(path_in(&noisy), Some("/opt/homebrew/bin:/usr/bin"));
         assert_eq!(path_in(&format!("{MARKER}\n/usr/bin\n")), None);
     }
@@ -168,13 +183,22 @@ mod tests {
     #[test]
     fn the_account_names_its_login_shell() {
         // A container may run the tests for a user without a passwd entry; nothing to check then.
-        let Some(shell) = ask::account_shell() else { return };
+        let Some(shell) = ask::account_shell() else {
+            return;
+        };
         assert!(Path::new(&shell).is_file(), "{shell}");
     }
 
     #[test]
     fn puts_the_login_path_first_and_keeps_each_folder_once() {
-        let path = merged(Some("/home/me/.local/bin:/usr/bin"), "/usr/bin:/bin", Some("/home/me"));
-        assert_eq!(path, "/home/me/.local/bin:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin");
+        let path = merged(
+            Some("/home/me/.local/bin:/usr/bin"),
+            "/usr/bin:/bin",
+            Some("/home/me"),
+        );
+        assert_eq!(
+            path,
+            "/home/me/.local/bin:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"
+        );
     }
 }

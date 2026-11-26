@@ -49,7 +49,13 @@ pub struct Probe {
 impl Probe {
     /// A probe that got as far as `reason`, explained by the last lines of `stderr`.
     pub(crate) fn of(reason: ProbeReason, stderr: &str) -> Self {
-        Self { reason, version: None, detail: detail_of(stderr), known_host: None, os: None }
+        Self {
+            reason,
+            version: None,
+            detail: detail_of(stderr),
+            known_host: None,
+            os: None,
+        }
     }
 }
 
@@ -64,38 +70,64 @@ pub fn probe(entry: &MachineEntry, should_accept_new_key: bool) -> Probe {
 
 /// What `uname` says about the machine. `Err` when ssh got nowhere or the machine runs a system
 /// Bull does not run on.
-pub(crate) fn platform(entry: &MachineEntry, should_accept_new_key: bool) -> Result<Platform, Probe> {
+pub(crate) fn platform(
+    entry: &MachineEntry,
+    should_accept_new_key: bool,
+) -> Result<Platform, Probe> {
     let asked = ask(ssh(entry, should_accept_new_key, UNAME_COMMAND), "", "")
         .map_err(|err| Probe::of(ProbeReason::Offline, &err.to_string()))?;
     if asked.code == Some(SSH_FAILED) {
         return Err(ssh_failed(entry, &asked.stderr));
     }
-    machine_os::platform_of(asked.code, &asked.stdout).ok_or_else(|| Probe::of(ProbeReason::UnsupportedSystem, ""))
+    machine_os::platform_of(asked.code, &asked.stdout)
+        .ok_or_else(|| Probe::of(ProbeReason::UnsupportedSystem, ""))
 }
 
 /// Asks agentd on a machine whose system is known for `hello`, after an install or as the rest
 /// of a check.
-pub(crate) fn probe_agentd(entry: &MachineEntry, should_accept_new_key: bool, os: MachineOs) -> Probe {
-    Probe { os: Some(os), ..agentd_answer(entry, should_accept_new_key, os) }
+pub(crate) fn probe_agentd(
+    entry: &MachineEntry,
+    should_accept_new_key: bool,
+    os: MachineOs,
+) -> Probe {
+    Probe {
+        os: Some(os),
+        ..agentd_answer(entry, should_accept_new_key, os)
+    }
 }
 
 fn agentd_answer(entry: &MachineEntry, should_accept_new_key: bool, os: MachineOs) -> Probe {
-    let asked = match ask(ssh(entry, should_accept_new_key, os.probe_command()), HELLO_LINE, "hello") {
+    let asked = match ask(
+        ssh(entry, should_accept_new_key, os.probe_command()),
+        HELLO_LINE,
+        "hello",
+    ) {
         Ok(asked) => asked,
         Err(err) => return Probe::of(ProbeReason::Offline, &err.to_string()),
     };
     if let Some(hello) = &asked.answer {
         let version = hello["version"].as_str().map(str::to_string);
-        return Probe { version, ..Probe::of(ProbeReason::Ok, "") };
+        return Probe {
+            version,
+            ..Probe::of(ProbeReason::Ok, "")
+        };
     }
     if asked.code == Some(SSH_FAILED) {
         return ssh_failed(entry, &asked.stderr);
     }
-    match ask(ssh(entry, should_accept_new_key, os.presence_command()), "", "") {
+    match ask(
+        ssh(entry, should_accept_new_key, os.presence_command()),
+        "",
+        "",
+    ) {
         Ok(presence) => {
             let reason = presence_reason(&presence);
             // A blocked agentd is explained by what starting it said, not by the presence check.
-            let stderr = if reason == ProbeReason::AgentdBlocked { &asked.stderr } else { &presence.stderr };
+            let stderr = if reason == ProbeReason::AgentdBlocked {
+                &asked.stderr
+            } else {
+                &presence.stderr
+            };
             Probe::of(reason, stderr)
         }
         Err(err) => Probe::of(ProbeReason::Offline, &err.to_string()),
@@ -104,8 +136,13 @@ fn agentd_answer(entry: &MachineEntry, should_accept_new_key: bool, os: MachineO
 
 fn ssh_failed(entry: &MachineEntry, stderr: &str) -> Probe {
     let reason = ssh_failure(stderr);
-    let known_host = (reason == ProbeReason::HostKeyChanged).then(|| ssh_config::known_host_of(entry)).flatten();
-    Probe { known_host, ..Probe::of(reason, stderr) }
+    let known_host = (reason == ProbeReason::HostKeyChanged)
+        .then(|| ssh_config::known_host_of(entry))
+        .flatten();
+    Probe {
+        known_host,
+        ..Probe::of(reason, stderr)
+    }
 }
 
 /// ssh failed before the remote command ran: refused key, a changed host key, or no way there.
@@ -118,7 +155,11 @@ pub(crate) fn ssh_failure(stderr: &str) -> ProbeReason {
     if text.contains("host key verification failed") {
         return ProbeReason::HostKeyUnknown;
     }
-    let refused = ["permission denied", "too many authentication failures", "no more authentication methods"];
+    let refused = [
+        "permission denied",
+        "too many authentication failures",
+        "no more authentication methods",
+    ];
     if refused.iter().any(|phrase| text.contains(phrase)) {
         return ProbeReason::AuthFailed;
     }
@@ -134,15 +175,26 @@ fn presence_reason(presence: &Asked) -> ProbeReason {
         return ProbeReason::AgentdBlocked;
     }
     let text = presence.stderr.to_lowercase();
-    let no_cmd = ["command not found", "cmd: not found", "unknown command", "does not provide shell access"];
-    if presence.code == Some(SHELL_COMMAND_MISSING) || no_cmd.iter().any(|phrase| text.contains(phrase)) {
+    let no_cmd = [
+        "command not found",
+        "cmd: not found",
+        "unknown command",
+        "does not provide shell access",
+    ];
+    if presence.code == Some(SHELL_COMMAND_MISSING)
+        || no_cmd.iter().any(|phrase| text.contains(phrase))
+    {
         return ProbeReason::UnsupportedSystem;
     }
     ProbeReason::NoAgentd
 }
 
 pub(crate) fn detail_of(stderr: &str) -> Option<String> {
-    let lines: Vec<&str> = stderr.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+    let lines: Vec<&str> = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
     let tail = lines[lines.len().saturating_sub(3)..].join("\n");
     (!tail.is_empty()).then(|| tail.chars().take(MAX_DETAIL_CHARS).collect())
 }
@@ -150,7 +202,10 @@ pub(crate) fn detail_of(stderr: &str) -> Option<String> {
 /// Checks a machine the user typed in or picked; it need not be in the list yet. A listed one
 /// remembers the system found: its next connection speaks that system's shell.
 #[tauri::command(async)]
-pub fn test_machine(store: State<'_, MachineStore>, entry: MachineEntry) -> Result<Probe, machines::MachinesError> {
+pub fn test_machine(
+    store: State<'_, MachineStore>,
+    entry: MachineEntry,
+) -> Result<Probe, machines::MachinesError> {
     let entry = machines::validated(entry)?;
     let probe = probe(&entry, true);
     if let Some(os) = probe.os {
@@ -164,33 +219,62 @@ mod tests {
     use super::*;
 
     fn asked(code: i32, stderr: &str) -> Asked {
-        Asked { answer: None, stdout: String::new(), code: Some(code), stderr: stderr.into(), is_timed_out: false }
+        Asked {
+            answer: None,
+            stdout: String::new(),
+            code: Some(code),
+            stderr: stderr.into(),
+            is_timed_out: false,
+        }
     }
 
     #[test]
     fn tells_ssh_failures_apart() {
-        assert_eq!(ssh_failure("ssh: connect to host 192.0.2.10 port 22: Connection timed out"), ProbeReason::Offline);
-        assert_eq!(ssh_failure("ssh: Could not resolve hostname box: Der angegebene Host ist unbekannt."), ProbeReason::Offline);
         assert_eq!(
-            ssh_failure("user@100.64.0.10: Permission denied (publickey,password,keyboard-interactive)."),
+            ssh_failure("ssh: connect to host 192.0.2.10 port 22: Connection timed out"),
+            ProbeReason::Offline
+        );
+        assert_eq!(
+            ssh_failure("ssh: Could not resolve hostname box: Der angegebene Host ist unbekannt."),
+            ProbeReason::Offline
+        );
+        assert_eq!(
+            ssh_failure(
+                "user@100.64.0.10: Permission denied (publickey,password,keyboard-interactive)."
+            ),
             ProbeReason::AuthFailed
         );
         let changed = "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\nHost key verification failed.";
         assert_eq!(ssh_failure(changed), ProbeReason::HostKeyChanged);
-        let unknown =
-            "No ED25519 host key is known for github.com and you have requested strict checking.\r\nHost key verification failed.";
+        let unknown = "No ED25519 host key is known for github.com and you have requested strict checking.\r\nHost key verification failed.";
         assert_eq!(ssh_failure(unknown), ProbeReason::HostKeyUnknown);
     }
 
     #[test]
     fn tells_a_missing_agentd_from_a_blocked_one_and_from_other_systems() {
         assert_eq!(presence_reason(&asked(0, "")), ProbeReason::AgentdBlocked);
-        assert_eq!(presence_reason(&asked(1, "Datei nicht gefunden")), ProbeReason::NoAgentd);
-        assert_eq!(presence_reason(&asked(1, "File Not Found")), ProbeReason::NoAgentd);
-        assert_eq!(presence_reason(&asked(127, "bash: line 1: cmd: command not found")), ProbeReason::UnsupportedSystem);
-        let github = "Hi alex! You've successfully authenticated, but GitHub does not provide shell access.";
-        assert_eq!(presence_reason(&asked(1, github)), ProbeReason::UnsupportedSystem);
-        assert_eq!(presence_reason(&asked(255, "Connection closed by 10.0.0.2 port 22")), ProbeReason::Offline);
+        assert_eq!(
+            presence_reason(&asked(1, "Datei nicht gefunden")),
+            ProbeReason::NoAgentd
+        );
+        assert_eq!(
+            presence_reason(&asked(1, "File Not Found")),
+            ProbeReason::NoAgentd
+        );
+        assert_eq!(
+            presence_reason(&asked(127, "bash: line 1: cmd: command not found")),
+            ProbeReason::UnsupportedSystem
+        );
+        let github =
+            "Hi alex! You've successfully authenticated, but GitHub does not provide shell access.";
+        assert_eq!(
+            presence_reason(&asked(1, github)),
+            ProbeReason::UnsupportedSystem
+        );
+        assert_eq!(
+            presence_reason(&asked(255, "Connection closed by 10.0.0.2 port 22")),
+            ProbeReason::Offline
+        );
     }
 
     #[test]

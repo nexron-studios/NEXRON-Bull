@@ -25,6 +25,11 @@ const HOLD_MS = 500
 const ERROR_SHOW_MS = 2500
 const SPACE_CODE = 'Space'
 
+// The physical key, or the character where an input source sends no code (on-screen keyboards,
+// remote desktops): a press must end the way it started.
+const isSpaceEvent = (event: KeyboardEvent): boolean =>
+  event.code === SPACE_CODE || event.key === ' '
+
 // Shared by every composer, so a press id names one press in the whole window: the hidden
 // Claude's events come back with it and must not reach another composer's press.
 let pressCount = 0
@@ -215,7 +220,7 @@ export const useSpaceDictation = ({
   const handleKeydown = (event: KeyboardEvent): boolean => {
     // Space while a press is running or its key is still down: the auto-repeat, which must not
     // type a row of spaces, whatever became of the dictation.
-    if (event.code === SPACE_CODE && (isSpaceDown || currentPress())) {
+    if (isSpaceEvent(event) && (isSpaceDown || currentPress())) {
       event.preventDefault()
       return true
     }
@@ -239,7 +244,7 @@ export const useSpaceDictation = ({
   // On the window, by the physical key: a keyup with Option held reports another character, and
   // a textarea rendered anew while Space is down never gets the keyup nor a blur.
   useEventListener(window, 'keyup', (event: KeyboardEvent) => {
-    if (event.code === SPACE_CODE) release()
+    if (isSpaceEvent(event)) release()
   })
   useEventListener(window, 'blur', release)
   useEventListener(textarea, 'blur', release)

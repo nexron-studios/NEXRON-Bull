@@ -34,7 +34,10 @@ pub(crate) fn bundled_exe() -> io::Result<PathBuf> {
 /// `hello` reports; it exits once idle and the next connect starts the new one. Upgrade it
 /// actively once the protocol changes in a way an older server cannot answer.
 pub fn installed_exe() -> Result<PathBuf, LocalAgentdError> {
-    let installed = home_folder().ok_or(LocalAgentdError::NoHome)?.join(DATA_FOLDER).join(exe_name());
+    let installed = home_folder()
+        .ok_or(LocalAgentdError::NoHome)?
+        .join(DATA_FOLDER)
+        .join(exe_name());
     match bundled_exe().and_then(|bundled| install(&bundled, &installed)) {
         Ok(()) => Ok(installed),
         Err(err) if installed.is_file() => {
@@ -89,7 +92,8 @@ mod tests {
     use super::*;
 
     fn temp_folder(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("nexron-chat-install-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("nexron-chat-install-{name}-{}", std::process::id()));
         // A leftover from an earlier run would change what the test sees.
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
@@ -120,9 +124,18 @@ mod tests {
         let dir = temp_folder("equal");
         fs::write(dir.join("bundled"), "v1").unwrap();
         fs::write(dir.join("agentd.exe"), "v1").unwrap();
-        let before = fs::metadata(dir.join("agentd.exe")).unwrap().modified().unwrap();
+        let before = fs::metadata(dir.join("agentd.exe"))
+            .unwrap()
+            .modified()
+            .unwrap();
         install(&dir.join("bundled"), &dir.join("agentd.exe")).unwrap();
-        assert_eq!(fs::metadata(dir.join("agentd.exe")).unwrap().modified().unwrap(), before);
+        assert_eq!(
+            fs::metadata(dir.join("agentd.exe"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            before
+        );
     }
 
     /// Stands in for a running `agentd serve`: Windows lets nobody replace an exe in use.
@@ -134,7 +147,11 @@ mod tests {
         let dir = temp_folder("locked");
         fs::write(dir.join("bundled"), "v2").unwrap();
         fs::write(dir.join("agentd.exe"), "v1").unwrap();
-        let _running = fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ).open(dir.join("agentd.exe")).unwrap();
+        let _running = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(dir.join("agentd.exe"))
+            .unwrap();
         assert!(install(&dir.join("bundled"), &dir.join("agentd.exe")).is_err());
         assert_eq!(fs::read_to_string(dir.join("agentd.exe")).unwrap(), "v1");
         assert!(!dir.join("agentd.new").exists());

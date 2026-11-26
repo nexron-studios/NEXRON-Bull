@@ -30,7 +30,13 @@ pub(crate) struct Asked {
 
 pub(crate) fn ssh(entry: &MachineEntry, should_accept_new_key: bool, remote: &str) -> Command {
     let mut command = Command::new(connections::ssh_program());
-    command.args(["-T", "-o", "BatchMode=yes", "-o", connections::SSH_CONNECT_TIMEOUT]);
+    command.args([
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        connections::SSH_CONNECT_TIMEOUT,
+    ]);
     if should_accept_new_key {
         command.args(["-o", "StrictHostKeyChecking=accept-new"]);
     }
@@ -46,8 +52,16 @@ pub(crate) fn ask(command: Command, line: &str, wanted: &str) -> io::Result<Aske
 }
 
 /// `ask` with its own deadline, for calls that take longer than a check, such as a download.
-pub(crate) fn ask_within(mut command: Command, line: &str, wanted: &str, timeout: Duration) -> io::Result<Asked> {
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+pub(crate) fn ask_within(
+    mut command: Command,
+    line: &str,
+    wanted: &str,
+    timeout: Duration,
+) -> io::Result<Asked> {
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     connections::hide_console(&mut command);
     let mut child = command.spawn()?;
     let mut stdin = child.stdin.take();
@@ -80,14 +94,26 @@ pub(crate) fn ask_within(mut command: Command, line: &str, wanted: &str, timeout
     }
     drop(stdin);
     let code = child.wait()?.code();
-    let stderr = stderr.and_then(|reader| reader.join().ok()).unwrap_or_default();
+    let stderr = stderr
+        .and_then(|reader| reader.join().ok())
+        .unwrap_or_default();
     let is_timed_out = !has_ended && answer.is_none();
-    Ok(Asked { answer, stdout, code, stderr, is_timed_out })
+    Ok(Asked {
+        answer,
+        stdout,
+        code,
+        stderr,
+        is_timed_out,
+    })
 }
 
 /// The wanted answer (an empty `wanted` reads to the end), the lines before it, and whether
 /// stdout ended on its own.
-fn read_until(lines: &mpsc::Receiver<String>, wanted: &str, timeout: Duration) -> (Option<Value>, String, bool) {
+fn read_until(
+    lines: &mpsc::Receiver<String>,
+    wanted: &str,
+    timeout: Duration,
+) -> (Option<Value>, String, bool) {
     let deadline = Instant::now() + timeout;
     let mut stdout = String::new();
     loop {
@@ -117,7 +143,9 @@ mod tests {
 
         const HELLO_LINE: &str = r#"{"op":"hello","id":1}"#;
         let mut hello = Command::new("cmd");
-        hello.raw_arg(r#"/d /c "echo noise& echo {"type":"hello","id":1,"version":"0.1.0","os":"windows"}""#);
+        hello.raw_arg(
+            r#"/d /c "echo noise& echo {"type":"hello","id":1,"version":"0.1.0","os":"windows"}""#,
+        );
         let answered = ask(hello, HELLO_LINE, "hello").unwrap();
         assert_eq!(answered.answer.unwrap()["version"], "0.1.0");
 

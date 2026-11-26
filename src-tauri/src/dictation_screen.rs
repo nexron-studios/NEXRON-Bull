@@ -47,7 +47,9 @@ pub struct Prompt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScreenView {
     /// Still starting, or a screen this file does not know
-    Unknown { text: String },
+    Unknown {
+        text: String,
+    },
     Trust(TrustChoice),
     Prompt(Prompt),
 }
@@ -81,38 +83,61 @@ pub fn view_of(screen: &vt100::Screen) -> ScreenView {
     }
     match prompt_of(&rows) {
         Some(prompt) => ScreenView::Prompt(prompt),
-        None => ScreenView::Unknown { text: summary_of(&rows) },
+        None => ScreenView::Unknown {
+            text: summary_of(&rows),
+        },
     }
 }
 
 fn rows_of(screen: &vt100::Screen) -> Vec<Row> {
     let (height, width) = screen.size();
-    (0..height.get()).map(|row| row_of(screen, row, width.get())).collect()
+    (0..height.get())
+        .map(|row| row_of(screen, row, width.get()))
+        .collect()
 }
 
 fn row_of(screen: &vt100::Screen, row: u16, width: u16) -> Row {
     let mut text = String::new();
     let mut plain = String::new();
     for col in 0..width {
-        let Some(cell) = screen.cell(row, col) else { continue };
+        let Some(cell) = screen.cell(row, col) else {
+            continue;
+        };
         if cell.is_wide_continuation() {
             continue;
         }
-        let contents = if cell.has_contents() { cell.contents() } else { " " };
+        let contents = if cell.has_contents() {
+            cell.contents()
+        } else {
+            " "
+        };
         text.push_str(contents);
         // Indent and gaps stay, so the column of a character is still where it was.
         plain.push_str(if cell.dim() { " " } else { contents });
     }
-    let has_wide_start = screen.cell(row, INPUT_INDENT).is_some_and(vt100::Cell::is_wide);
-    Row { text, plain, edge: edge_of(screen, row, width), has_wide_start }
+    let has_wide_start = screen
+        .cell(row, INPUT_INDENT)
+        .is_some_and(vt100::Cell::is_wide);
+    Row {
+        text,
+        plain,
+        edge: edge_of(screen, row, width),
+        has_wide_start,
+    }
 }
 
 /// A written space counts as empty: a row whose last column is a space ended at a word.
 fn edge_of(screen: &vt100::Screen, row: u16, width: u16) -> Edge {
     let is_taken = |col: u16| {
-        screen.cell(row, col).is_some_and(|cell| cell.is_wide_continuation() || (cell.has_contents() && cell.contents() != " "))
+        screen.cell(row, col).is_some_and(|cell| {
+            cell.is_wide_continuation() || (cell.has_contents() && cell.contents() != " ")
+        })
     };
-    let is_wide_end = |col: u16| screen.cell(row, col).is_some_and(vt100::Cell::is_wide_continuation);
+    let is_wide_end = |col: u16| {
+        screen
+            .cell(row, col)
+            .is_some_and(vt100::Cell::is_wide_continuation)
+    };
     if is_taken(width - 1) {
         Edge::Full
     } else if width >= 2 && is_wide_end(width - 2) {
@@ -125,7 +150,11 @@ fn edge_of(screen: &vt100::Screen, row: u16, width: u16) -> Edge {
 fn trust_choice(rows: &[Row]) -> Option<TrustChoice> {
     let yes = rows.iter().find(|row| row.text.contains(TRUST_YES))?;
     let is_selected = yes.text.trim_start().starts_with(PROMPT_MARK);
-    Some(if is_selected { TrustChoice::Yes } else { TrustChoice::No })
+    Some(if is_selected {
+        TrustChoice::Yes
+    } else {
+        TrustChoice::No
+    })
 }
 
 fn is_rule(row: &Row) -> bool {
@@ -134,15 +163,32 @@ fn is_rule(row: &Row) -> bool {
 }
 
 fn prompt_of(rows: &[Row]) -> Option<Prompt> {
-    let rules: Vec<usize> = rows.iter().enumerate().filter(|(_, row)| is_rule(row)).map(|(i, _)| i).collect();
-    let [.., top, bottom] = rules[..] else { return None };
+    let rules: Vec<usize> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| is_rule(row))
+        .map(|(i, _)| i)
+        .collect();
+    let [.., top, bottom] = rules[..] else {
+        return None;
+    };
     let input = &rows[top + 1..bottom];
     if !input.first()?.text.trim_start().starts_with(PROMPT_MARK) {
         return None;
     }
-    let notice = top.checked_sub(1).map(|above| rows[above].text.trim().to_string()).unwrap_or_default();
-    let footer: Vec<&str> = rows[bottom + 1..].iter().map(|row| row.text.as_str()).collect();
-    Some(Prompt { text: input_text(input), phase: phase_of(&notice, &footer), notice })
+    let notice = top
+        .checked_sub(1)
+        .map(|above| rows[above].text.trim().to_string())
+        .unwrap_or_default();
+    let footer: Vec<&str> = rows[bottom + 1..]
+        .iter()
+        .map(|row| row.text.as_str())
+        .collect();
+    Some(Prompt {
+        text: input_text(input),
+        phase: phase_of(&notice, &footer),
+        notice,
+    })
 }
 
 /// The input rows as one line: a row filled to the edge was cut mid-word, any other one at a
@@ -185,7 +231,11 @@ fn phase_of(notice: &str, footer: &[&str]) -> VoicePhase {
 /// What a screen without a prompt says, for an error: its non-empty rows, shortened.
 fn summary_of(rows: &[Row]) -> String {
     const MAX_CHARS: usize = 400;
-    let lines: Vec<&str> = rows.iter().map(|row| row.text.trim()).filter(|line| !line.is_empty()).collect();
+    let lines: Vec<&str> = rows
+        .iter()
+        .map(|row| row.text.trim())
+        .filter(|line| !line.is_empty())
+        .collect();
     lines.join(" / ").chars().take(MAX_CHARS).collect()
 }
 
@@ -205,7 +255,11 @@ mod tests {
     /// A screen like Claude draws it: banner, notice, box, footer.
     fn screen(notice: &str, input: &[&str], footer: &str) -> vt100::Parser {
         let mut parser = vt100::Parser::new(ROWS.try_into().unwrap(), COLS.try_into().unwrap(), 0);
-        let mut lines = vec![" ▐▛███▛█   Claude Code v2.1.332".to_string(), notice.to_string(), rule()];
+        let mut lines = vec![
+            " ▐▛███▛█   Claude Code v2.1.332".to_string(),
+            notice.to_string(),
+            rule(),
+        ];
         lines.extend(input.iter().map(|line| line.to_string()));
         lines.extend([rule(), footer.to_string()]);
         parser.process(lines.join("\r\n").as_bytes());
@@ -221,13 +275,21 @@ mod tests {
 
     #[test]
     fn the_dim_placeholder_is_no_text() {
-        let parser = screen("", &[&format!("❯\u{a0}{DIM}Try \"fix lint errors\"{PLAIN}")], "  ⏵⏵ auto mode on");
+        let parser = screen(
+            "",
+            &[&format!("❯\u{a0}{DIM}Try \"fix lint errors\"{PLAIN}")],
+            "  ⏵⏵ auto mode on",
+        );
         assert_eq!(prompt(&parser).text, "");
     }
 
     #[test]
     fn reads_the_finished_transcript() {
-        let parser = screen("◐ medium · /effort", &["❯\u{a0}Hallo Welt, das ist ein Test"], "  ⏵⏵ auto mode on");
+        let parser = screen(
+            "◐ medium · /effort",
+            &["❯\u{a0}Hallo Welt, das ist ein Test"],
+            "  ⏵⏵ auto mode on",
+        );
         let prompt = prompt(&parser);
         assert_eq!(prompt.text, "Hallo Welt, das ist ein Test");
         assert_eq!(prompt.phase, VoicePhase::Idle);
@@ -236,7 +298,11 @@ mod tests {
 
     #[test]
     fn leaves_out_a_transcript_that_is_still_dim() {
-        let parser = screen("listening…", &[&format!("❯\u{a0}fertig {DIM}noch nicht{PLAIN}")], "");
+        let parser = screen(
+            "listening…",
+            &[&format!("❯\u{a0}fertig {DIM}noch nicht{PLAIN}")],
+            "",
+        );
         assert_eq!(prompt(&parser).text, "fertig");
     }
 
@@ -250,54 +316,103 @@ mod tests {
     fn joins_a_row_cut_mid_word_without_a_space() {
         let full = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT)));
         let parser = screen("", &[&full, "  bc"], "");
-        assert_eq!(prompt(&parser).text, format!("{}bc", "a".repeat(usize::from(COLS - INPUT_INDENT))));
+        assert_eq!(
+            prompt(&parser).text,
+            format!("{}bc", "a".repeat(usize::from(COLS - INPUT_INDENT)))
+        );
     }
 
     #[test]
     fn joins_a_row_that_ends_in_a_wide_character_without_a_space() {
-        let full = format!("❯\u{a0}{}漢", "a".repeat(usize::from(COLS - INPUT_INDENT - 2)));
+        let full = format!(
+            "❯\u{a0}{}漢",
+            "a".repeat(usize::from(COLS - INPUT_INDENT - 2))
+        );
         let parser = screen("", &[&full, "  字"], "");
-        assert_eq!(prompt(&parser).text, format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 2))));
+        assert_eq!(
+            prompt(&parser).text,
+            format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 2)))
+        );
     }
 
     #[test]
     fn joins_a_row_wrapped_early_between_wide_characters_without_a_space() {
-        let short = format!("❯\u{a0}{}漢", "a".repeat(usize::from(COLS - INPUT_INDENT - 3)));
+        let short = format!(
+            "❯\u{a0}{}漢",
+            "a".repeat(usize::from(COLS - INPUT_INDENT - 3))
+        );
         let parser = screen("", &[&short, "  字"], "");
-        assert_eq!(prompt(&parser).text, format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 3))));
+        assert_eq!(
+            prompt(&parser).text,
+            format!("{}漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 3)))
+        );
     }
 
     #[test]
     fn keeps_the_space_between_a_latin_word_and_a_wide_one_after_an_early_wrap() {
-        let short = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
+        let short = format!(
+            "❯\u{a0}{}",
+            "a".repeat(usize::from(COLS - INPUT_INDENT - 1))
+        );
         let parser = screen("", &[&short, "  漢字"], "");
-        assert_eq!(prompt(&parser).text, format!("{} 漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
+        assert_eq!(
+            prompt(&parser).text,
+            format!("{} 漢字", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)))
+        );
     }
 
     #[test]
     fn keeps_the_space_when_a_row_one_short_continues_with_a_narrow_word() {
-        let short = format!("❯\u{a0}{}", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
+        let short = format!(
+            "❯\u{a0}{}",
+            "a".repeat(usize::from(COLS - INPUT_INDENT - 1))
+        );
         let parser = screen("", &[&short, "  bc"], "");
-        assert_eq!(prompt(&parser).text, format!("{} bc", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
+        assert_eq!(
+            prompt(&parser).text,
+            format!("{} bc", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)))
+        );
     }
 
     #[test]
     fn a_space_in_the_last_column_ends_a_word() {
-        let spaced = format!("❯\u{a0}{} ", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)));
+        let spaced = format!(
+            "❯\u{a0}{} ",
+            "a".repeat(usize::from(COLS - INPUT_INDENT - 1))
+        );
         let parser = screen("", &[&spaced, "  bar"], "");
-        assert_eq!(prompt(&parser).text, format!("{} bar", "a".repeat(usize::from(COLS - INPUT_INDENT - 1))));
+        assert_eq!(
+            prompt(&parser).text,
+            format!("{} bar", "a".repeat(usize::from(COLS - INPUT_INDENT - 1)))
+        );
     }
 
     #[test]
     fn tells_the_voice_phases_apart() {
         let cases = [
-            ("◐ medium · /effort", "  ⏵⏵ auto mode on · keep holding…", VoicePhase::Warmup),
+            (
+                "◐ medium · /effort",
+                "  ⏵⏵ auto mode on · keep holding…",
+                VoicePhase::Warmup,
+            ),
             ("listening…", "  ⏵⏵ auto mode on", VoicePhase::Listening),
-            ("Transcribing…", "  ⏵⏵ auto mode on", VoicePhase::Transcribing),
-            ("  No speech detected", "  ⏵⏵ auto mode on", VoicePhase::Idle),
+            (
+                "Transcribing…",
+                "  ⏵⏵ auto mode on",
+                VoicePhase::Transcribing,
+            ),
+            (
+                "  No speech detected",
+                "  ⏵⏵ auto mode on",
+                VoicePhase::Idle,
+            ),
         ];
         for (notice, footer, phase) in cases {
-            assert_eq!(prompt(&screen(notice, &["❯\u{a0}"], footer)).phase, phase, "{notice} / {footer}");
+            assert_eq!(
+                prompt(&screen(notice, &["❯\u{a0}"], footer)).phase,
+                phase,
+                "{notice} / {footer}"
+            );
         }
     }
 
@@ -310,16 +425,26 @@ mod tests {
     #[test]
     fn sees_which_trust_answer_is_selected() {
         let mut parser = vt100::Parser::new(ROWS.try_into().unwrap(), COLS.try_into().unwrap(), 0);
-        parser.process("Accessing workspace:\r\n\r\n❯ No, exit\r\n  Yes, I trust this folder".as_bytes());
+        parser.process(
+            "Accessing workspace:\r\n\r\n❯ No, exit\r\n  Yes, I trust this folder".as_bytes(),
+        );
         assert_eq!(view_of(parser.screen()), ScreenView::Trust(TrustChoice::No));
         parser.process("\x1b[3;1H  No, exit\r\n❯ Yes, I trust this folder".as_bytes());
-        assert_eq!(view_of(parser.screen()), ScreenView::Trust(TrustChoice::Yes));
+        assert_eq!(
+            view_of(parser.screen()),
+            ScreenView::Trust(TrustChoice::Yes)
+        );
     }
 
     #[test]
     fn a_screen_without_a_box_is_unknown() {
         let mut parser = vt100::Parser::new(ROWS.try_into().unwrap(), COLS.try_into().unwrap(), 0);
         parser.process(b"Welcome\r\n\r\nPlease log in");
-        assert_eq!(view_of(parser.screen()), ScreenView::Unknown { text: "Welcome / Please log in".into() });
+        assert_eq!(
+            view_of(parser.screen()),
+            ScreenView::Unknown {
+                text: "Welcome / Please log in".into()
+            }
+        );
     }
 }

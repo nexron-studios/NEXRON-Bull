@@ -45,14 +45,37 @@ macro_rules! unix_agentd {
 /// away. A running exe cannot be overwritten but can be renamed: the new one never waits for a
 /// lock, and the previous one stays beside it to go back to.
 pub mod windows_install {
-    pub const FOLDER_COMMAND: &str = concat!("cmd /d /c if not exist ", windows_dir!(), " mkdir ", windows_dir!());
+    pub const FOLDER_COMMAND: &str = concat!(
+        "cmd /d /c if not exist ",
+        windows_dir!(),
+        " mkdir ",
+        windows_dir!()
+    );
     /// Where the new exe arrives, as scp names it.
     pub const STAGED_PATH: &str = concat!(windows_dir!(), "/agentd.new.exe");
-    pub const BACKUP_COMMAND: &str =
-        concat!("cmd /d /c if exist ", windows_agentd!(), " move /y ", windows_agentd!(), " ", windows_dir!(), r"\agentd.old.exe");
-    pub const SWAP_COMMAND: &str = concat!("cmd /d /c move /y ", windows_dir!(), r"\agentd.new.exe ", windows_agentd!());
-    pub const RESTORE_COMMAND: &str =
-        concat!("cmd /d /c if not exist ", windows_agentd!(), " move /y ", windows_dir!(), r"\agentd.old.exe ", windows_agentd!());
+    pub const BACKUP_COMMAND: &str = concat!(
+        "cmd /d /c if exist ",
+        windows_agentd!(),
+        " move /y ",
+        windows_agentd!(),
+        " ",
+        windows_dir!(),
+        r"\agentd.old.exe"
+    );
+    pub const SWAP_COMMAND: &str = concat!(
+        "cmd /d /c move /y ",
+        windows_dir!(),
+        r"\agentd.new.exe ",
+        windows_agentd!()
+    );
+    pub const RESTORE_COMMAND: &str = concat!(
+        "cmd /d /c if not exist ",
+        windows_agentd!(),
+        " move /y ",
+        windows_dir!(),
+        r"\agentd.old.exe ",
+        windows_agentd!()
+    );
 }
 
 /// The system a machine runs; it decides which shell lines Bull sends there.
@@ -77,7 +100,8 @@ impl Platform {
     /// The agentd of Bull `version` for this machine on GitHub; `None` without a build for it.
     pub fn release_url(&self, version: &str) -> Option<String> {
         let suffix = if self.os.is_windows() { ".exe" } else { "" };
-        self.release_target.map(|target| format!("{RELEASE_DOWNLOADS}/v{version}/agentd-{target}{suffix}"))
+        self.release_target
+            .map(|target| format!("{RELEASE_DOWNLOADS}/v{version}/agentd-{target}{suffix}"))
     }
 }
 
@@ -86,7 +110,10 @@ impl Platform {
 /// shell access) fails the Windows check that follows. Lines a shell profile prints before the
 /// answer (conda, nvm, a greeting) are skipped.
 pub fn platform_of(code: Option<i32>, stdout: &str) -> Option<Platform> {
-    let windows = Platform { os: MachineOs::Windows, release_target: Some(WINDOWS_TARGET) };
+    let windows = Platform {
+        os: MachineOs::Windows,
+        release_target: Some(WINDOWS_TARGET),
+    };
     if code != Some(0) {
         return Some(windows);
     }
@@ -95,7 +122,11 @@ pub fn platform_of(code: Option<i32>, stdout: &str) -> Option<Platform> {
     match kernel {
         "Darwin" => Some(Platform {
             os: MachineOs::Macos,
-            release_target: Some(if is_arm { "aarch64-apple-darwin" } else { "x86_64-apple-darwin" }),
+            release_target: Some(if is_arm {
+                "aarch64-apple-darwin"
+            } else {
+                "x86_64-apple-darwin"
+            }),
         }),
         "Linux" => Some(Platform {
             os: MachineOs::Linux,
@@ -111,7 +142,9 @@ pub fn platform_of(code: Option<i32>, stdout: &str) -> Option<Platform> {
 }
 
 fn is_windows_kernel(kernel: &str) -> bool {
-    WINDOWS_KERNEL_PREFIXES.iter().any(|prefix| kernel.starts_with(prefix))
+    WINDOWS_KERNEL_PREFIXES
+        .iter()
+        .any(|prefix| kernel.starts_with(prefix))
 }
 
 /// Kernel and processor of a line `uname -sm` printed; `None` for any other line.
@@ -189,7 +222,14 @@ impl MachineOs {
     /// argument, so fish reads it the same.
     pub fn install_command(self, url: &str) -> String {
         match self {
-            Self::Windows => format!(concat!("cmd /d /c curl.exe -fsSL -o ", windows_dir!(), r"\agentd.new.exe {}"), url),
+            Self::Windows => format!(
+                concat!(
+                    "cmd /d /c curl.exe -fsSL -o ",
+                    windows_dir!(),
+                    r"\agentd.new.exe {}"
+                ),
+                url
+            ),
             Self::Macos | Self::Linux => format!(
                 concat!(
                     r#"sh -c 'set -e; dir=""#,
@@ -216,26 +256,53 @@ mod tests {
 
     #[test]
     fn reads_the_system_and_processor_from_uname() {
-        assert_eq!(target_of(0, "Darwin arm64\n"), Some((MachineOs::Macos, Some("aarch64-apple-darwin"))));
-        assert_eq!(target_of(0, "Darwin x86_64\n"), Some((MachineOs::Macos, Some("x86_64-apple-darwin"))));
-        assert_eq!(target_of(0, "Linux x86_64\n"), Some((MachineOs::Linux, Some("x86_64-unknown-linux-musl"))));
-        assert_eq!(target_of(0, "Linux aarch64\n"), Some((MachineOs::Linux, Some("aarch64-unknown-linux-musl"))));
-        assert_eq!(target_of(0, "Linux armv7l\n"), Some((MachineOs::Linux, None)));
+        assert_eq!(
+            target_of(0, "Darwin arm64\n"),
+            Some((MachineOs::Macos, Some("aarch64-apple-darwin")))
+        );
+        assert_eq!(
+            target_of(0, "Darwin x86_64\n"),
+            Some((MachineOs::Macos, Some("x86_64-apple-darwin")))
+        );
+        assert_eq!(
+            target_of(0, "Linux x86_64\n"),
+            Some((MachineOs::Linux, Some("x86_64-unknown-linux-musl")))
+        );
+        assert_eq!(
+            target_of(0, "Linux aarch64\n"),
+            Some((MachineOs::Linux, Some("aarch64-unknown-linux-musl")))
+        );
+        assert_eq!(
+            target_of(0, "Linux armv7l\n"),
+            Some((MachineOs::Linux, None))
+        );
     }
 
     #[test]
     fn a_shell_without_uname_is_windows() {
         let cmd = "'uname' is not recognized as an internal or external command";
-        assert_eq!(target_of(1, cmd), Some((MachineOs::Windows, Some("x86_64-pc-windows-msvc"))));
-        assert_eq!(target_of(0, "MINGW64_NT-10.0-26100 x86_64\n"), Some((MachineOs::Windows, Some("x86_64-pc-windows-msvc"))));
+        assert_eq!(
+            target_of(1, cmd),
+            Some((MachineOs::Windows, Some("x86_64-pc-windows-msvc")))
+        );
+        assert_eq!(
+            target_of(0, "MINGW64_NT-10.0-26100 x86_64\n"),
+            Some((MachineOs::Windows, Some("x86_64-pc-windows-msvc")))
+        );
     }
 
     #[test]
     fn skips_what_a_shell_profile_prints_first() {
         let noisy = "(base) conda activated\nnvm: using node v22\nLinux x86_64\n";
-        assert_eq!(target_of(0, noisy), Some((MachineOs::Linux, Some("x86_64-unknown-linux-musl"))));
+        assert_eq!(
+            target_of(0, noisy),
+            Some((MachineOs::Linux, Some("x86_64-unknown-linux-musl")))
+        );
         let greeting = "Welcome, Linux user\nDarwin arm64\n";
-        assert_eq!(target_of(0, greeting), Some((MachineOs::Macos, Some("aarch64-apple-darwin"))));
+        assert_eq!(
+            target_of(0, greeting),
+            Some((MachineOs::Macos, Some("aarch64-apple-darwin")))
+        );
     }
 
     #[test]
@@ -246,31 +313,58 @@ mod tests {
 
     #[test]
     fn stores_the_system_in_lower_case() {
-        assert_eq!(serde_json::to_string(&MachineOs::Macos).unwrap(), r#""macos""#);
-        assert_eq!(serde_json::from_str::<MachineOs>(r#""linux""#).unwrap(), MachineOs::Linux);
+        assert_eq!(
+            serde_json::to_string(&MachineOs::Macos).unwrap(),
+            r#""macos""#
+        );
+        assert_eq!(
+            serde_json::from_str::<MachineOs>(r#""linux""#).unwrap(),
+            MachineOs::Linux
+        );
     }
 
     #[test]
     fn unix_lines_run_agentd_from_the_home_folder() {
-        assert_eq!(MachineOs::Linux.connect_command(), r#"sh -c '"$HOME/.nexron-chat/agentd" connect'"#);
-        assert_eq!(MachineOs::Macos.probe_command(), r#"sh -c '"$HOME/.nexron-chat/agentd" stdio'"#);
-        assert_eq!(MachineOs::Linux.presence_command(), r#"sh -c 'test -f "$HOME/.nexron-chat/agentd"'"#);
+        assert_eq!(
+            MachineOs::Linux.connect_command(),
+            r#"sh -c '"$HOME/.nexron-chat/agentd" connect'"#
+        );
+        assert_eq!(
+            MachineOs::Macos.probe_command(),
+            r#"sh -c '"$HOME/.nexron-chat/agentd" stdio'"#
+        );
+        assert_eq!(
+            MachineOs::Linux.presence_command(),
+            r#"sh -c 'test -f "$HOME/.nexron-chat/agentd"'"#
+        );
     }
 
     #[test]
     fn windows_lines_run_agentd_from_the_login_folder() {
-        assert_eq!(MachineOs::Windows.connect_command(), r"cmd /d /c .nexron-chat\agentd.exe connect");
-        assert_eq!(MachineOs::Windows.presence_command(), r"cmd /d /c dir /b .nexron-chat\agentd.exe");
+        assert_eq!(
+            MachineOs::Windows.connect_command(),
+            r"cmd /d /c .nexron-chat\agentd.exe connect"
+        );
+        assert_eq!(
+            MachineOs::Windows.presence_command(),
+            r"cmd /d /c dir /b .nexron-chat\agentd.exe"
+        );
         assert_eq!(
             windows_install::BACKUP_COMMAND,
             r"cmd /d /c if exist .nexron-chat\agentd.exe move /y .nexron-chat\agentd.exe .nexron-chat\agentd.old.exe"
         );
-        assert_eq!(windows_install::SWAP_COMMAND, r"cmd /d /c move /y .nexron-chat\agentd.new.exe .nexron-chat\agentd.exe");
+        assert_eq!(
+            windows_install::SWAP_COMMAND,
+            r"cmd /d /c move /y .nexron-chat\agentd.new.exe .nexron-chat\agentd.exe"
+        );
         assert_eq!(
             windows_install::RESTORE_COMMAND,
             r"cmd /d /c if not exist .nexron-chat\agentd.exe move /y .nexron-chat\agentd.old.exe .nexron-chat\agentd.exe"
         );
-        assert_eq!(windows_install::FOLDER_COMMAND, r"cmd /d /c if not exist .nexron-chat mkdir .nexron-chat");
+        assert_eq!(
+            windows_install::FOLDER_COMMAND,
+            r"cmd /d /c if not exist .nexron-chat mkdir .nexron-chat"
+        );
         assert_eq!(
             MachineOs::Windows.install_command("https://example.org/a.exe"),
             r"cmd /d /c curl.exe -fsSL -o .nexron-chat\agentd.new.exe https://example.org/a.exe"
@@ -279,17 +373,34 @@ mod tests {
 
     #[test]
     fn names_the_release_asset_of_the_app_version() {
-        let mac = Platform { os: MachineOs::Macos, release_target: Some("aarch64-apple-darwin") };
+        let mac = Platform {
+            os: MachineOs::Macos,
+            release_target: Some("aarch64-apple-darwin"),
+        };
         assert_eq!(
             mac.release_url("0.8.0").as_deref(),
-            Some("https://github.com/nexron-studios/NEXRON-Bull/releases/download/v0.8.0/agentd-aarch64-apple-darwin")
+            Some(
+                "https://github.com/nexron-studios/NEXRON-Bull/releases/download/v0.8.0/agentd-aarch64-apple-darwin"
+            )
         );
-        let windows = Platform { os: MachineOs::Windows, release_target: Some(WINDOWS_TARGET) };
+        let windows = Platform {
+            os: MachineOs::Windows,
+            release_target: Some(WINDOWS_TARGET),
+        };
         assert_eq!(
             windows.release_url("0.8.0").as_deref(),
-            Some("https://github.com/nexron-studios/NEXRON-Bull/releases/download/v0.8.0/agentd-x86_64-pc-windows-msvc.exe")
+            Some(
+                "https://github.com/nexron-studios/NEXRON-Bull/releases/download/v0.8.0/agentd-x86_64-pc-windows-msvc.exe"
+            )
         );
-        assert_eq!(Platform { os: MachineOs::Linux, release_target: None }.release_url("0.8.0"), None);
+        assert_eq!(
+            Platform {
+                os: MachineOs::Linux,
+                release_target: None
+            }
+            .release_url("0.8.0"),
+            None
+        );
     }
 
     #[test]
@@ -306,8 +417,12 @@ mod tests {
     fn the_unix_install_line_downloads_beside_and_renames_over() {
         let line = MachineOs::Linux.install_command("https://example.org/agentd-x");
         assert!(line.starts_with(r#"sh -c 'set -e; dir="$HOME/.nexron-chat"; "#));
-        assert!(line.contains(r#"curl -fsSL -o "$staged" "https://example.org/agentd-x" || exit 3;"#));
-        assert!(line.ends_with(r#"cp -pf "$dir/agentd" "$dir/agentd.old"; fi; mv -f "$staged" "$dir/agentd"'"#));
+        assert!(
+            line.contains(r#"curl -fsSL -o "$staged" "https://example.org/agentd-x" || exit 3;"#)
+        );
+        assert!(line.ends_with(
+            r#"cp -pf "$dir/agentd" "$dir/agentd.old"; fi; mv -f "$staged" "$dir/agentd"'"#
+        ));
         // One single-quoted argument for the login shell, whatever shell that is.
         assert_eq!(line.matches('\'').count(), 2);
         let whole = r#"sh -c 'set -e; dir="$HOME/.nexron-chat"; staged="$dir/agentd.download"; trap "rm -f \"$staged\"" EXIT; mkdir -p "$dir"; if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$staged" "https://example.org/agentd-x" || exit 3; else wget -q -O "$staged" "https://example.org/agentd-x" || exit 3; fi; chmod 755 "$staged"; if [ -f "$dir/agentd" ]; then cp -pf "$dir/agentd" "$dir/agentd.old"; fi; mv -f "$staged" "$dir/agentd"'"#;
@@ -318,18 +433,33 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn the_unix_install_line_keeps_the_old_agentd() {
-        let home = std::env::temp_dir().join(format!("nexron-chat-unix-install-{}", std::process::id()));
+        let home =
+            std::env::temp_dir().join(format!("nexron-chat-unix-install-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(home.join(".nexron-chat")).unwrap();
         std::fs::write(home.join(".nexron-chat/agentd"), "old").unwrap();
         std::fs::write(home.join("new-build"), "new").unwrap();
         let url = format!("file://{}", home.join("new-build").display());
         let line = MachineOs::Linux.install_command(&url);
-        let script = line.strip_prefix("sh -c '").unwrap().strip_suffix('\'').unwrap();
-        let status = std::process::Command::new("sh").args(["-c", script]).env("HOME", &home).status().unwrap();
+        let script = line
+            .strip_prefix("sh -c '")
+            .unwrap()
+            .strip_suffix('\'')
+            .unwrap();
+        let status = std::process::Command::new("sh")
+            .args(["-c", script])
+            .env("HOME", &home)
+            .status()
+            .unwrap();
         assert!(status.success());
-        assert_eq!(std::fs::read_to_string(home.join(".nexron-chat/agentd")).unwrap(), "new");
-        assert_eq!(std::fs::read_to_string(home.join(".nexron-chat/agentd.old")).unwrap(), "old");
+        assert_eq!(
+            std::fs::read_to_string(home.join(".nexron-chat/agentd")).unwrap(),
+            "new"
+        );
+        assert_eq!(
+            std::fs::read_to_string(home.join(".nexron-chat/agentd.old")).unwrap(),
+            "old"
+        );
         assert!(!home.join(".nexron-chat/agentd.download").exists());
     }
 }

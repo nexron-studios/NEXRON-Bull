@@ -27,10 +27,19 @@ const BATCH_MAX_BYTES: usize = 64 * 1024;
 const READ_BUFFER_BYTES: usize = 16 * 1024;
 /// Variables that tie a process to the Claude session or herdr pane Bull was started from. Claude
 /// settings a user set on purpose (`CLAUDE_CODE_GIT_BASH_PATH`, `CLAUDE_CODE_USE_BEDROCK` …) pass.
-const SESSION_VARS: [&str; 5] =
-    ["CLAUDECODE", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CLAUDE_PID"];
-const SESSION_VAR_PREFIXES: [&str; 4] =
-    ["CLAUDE_CODE_SESSION_", "CLAUDE_CODE_CHILD_", "CLAUDE_CODE_MESSAGING_", "HERDR_"];
+const SESSION_VARS: [&str; 5] = [
+    "CLAUDECODE",
+    "CLAUDE_CONFIG_DIR",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SSE_PORT",
+    "CLAUDE_PID",
+];
+const SESSION_VAR_PREFIXES: [&str; 4] = [
+    "CLAUDE_CODE_SESSION_",
+    "CLAUDE_CODE_CHILD_",
+    "CLAUDE_CODE_MESSAGING_",
+    "HERDR_",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -124,7 +133,11 @@ enum Chunk {
 impl TerminalHost {
     pub fn new(sink: impl Fn(TerminalEvent) + Send + Sync + 'static) -> Self {
         restore_ctrl_c();
-        Self { sink: Arc::new(sink), ptys: Arc::new(Mutex::new(HashMap::new())), next_id: AtomicU32::new(1) }
+        Self {
+            sink: Arc::new(sink),
+            ptys: Arc::new(Mutex::new(HashMap::new())),
+            next_id: AtomicU32::new(1),
+        }
     }
 
     pub fn spawn(&self, request: &SpawnRequest) -> Result<u32, TerminalError> {
@@ -132,17 +145,46 @@ impl TerminalHost {
         self.spawn_command(command, request.cols, request.rows)
     }
 
-    fn spawn_command(&self, command: CommandBuilder, cols: u16, rows: u16) -> Result<u32, TerminalError> {
-        let size = PtySize { rows, cols, pixel_width: 0, pixel_height: 0 };
-        let pair = native_pty_system().openpty(size).map_err(|err| TerminalError::Open(err.to_string()))?;
-        let program = command.get_argv().first().map(|arg| arg.to_string_lossy().into_owned()).unwrap_or_default();
-        let mut child = pair.slave.spawn_command(command).map_err(|err| TerminalError::Spawn(program, err.to_string()))?;
+    fn spawn_command(
+        &self,
+        command: CommandBuilder,
+        cols: u16,
+        rows: u16,
+    ) -> Result<u32, TerminalError> {
+        let size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let pair = native_pty_system()
+            .openpty(size)
+            .map_err(|err| TerminalError::Open(err.to_string()))?;
+        let program = command
+            .get_argv()
+            .first()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|err| TerminalError::Spawn(program, err.to_string()))?;
         // Only the child may hold the console's other end, or the reader never sees its end.
         drop(pair.slave);
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let reader = pair.master.try_clone_reader().map_err(|err| TerminalError::Open(err.to_string()))?;
-        let writer = pair.master.take_writer().map_err(|err| TerminalError::Open(err.to_string()))?;
-        let pty = Pty { master: Mutex::new(pair.master), writer: Mutex::new(writer), killer: Mutex::new(child.clone_killer()) };
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|err| TerminalError::Open(err.to_string()))?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|err| TerminalError::Open(err.to_string()))?;
+        let pty = Pty {
+            master: Mutex::new(pair.master),
+            writer: Mutex::new(writer),
+            killer: Mutex::new(child.clone_killer()),
+        };
         lock(&self.ptys).insert(id, Arc::new(pty));
 
         let (sender, receiver) = mpsc::channel();
@@ -152,7 +194,10 @@ impl TerminalHost {
         thread::spawn(move || read_until_end(reader, &to_pump));
         let ptys = Arc::clone(&self.ptys);
         thread::spawn(move || {
-            let code = child.wait().map(|status| status.exit_code()).unwrap_or(u32::MAX);
+            let code = child
+                .wait()
+                .map(|status| status.exit_code())
+                .unwrap_or(u32::MAX);
             // The pump only stops after the exit; a closed channel means the app is going away.
             let _ = sender.send(Chunk::Exited(code));
             // Dropping the console ends the reader on Windows, where the pipe outlives the shell.
@@ -165,14 +210,24 @@ impl TerminalHost {
         let pty = self.pty(id)?;
         // The map is not locked here: a shell that does not read its input blocks only itself.
         let mut writer = lock(&pty.writer);
-        writer.write_all(data.as_bytes()).and_then(|()| writer.flush()).map_err(|err| TerminalError::Io(id, err))
+        writer
+            .write_all(data.as_bytes())
+            .and_then(|()| writer.flush())
+            .map_err(|err| TerminalError::Io(id, err))
     }
 
     pub fn resize(&self, id: u32, cols: u16, rows: u16) -> Result<(), TerminalError> {
         let pty = self.pty(id)?;
-        let size = PtySize { rows, cols, pixel_width: 0, pixel_height: 0 };
+        let size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
         let master = lock(&pty.master);
-        master.resize(size).map_err(|err| TerminalError::Io(id, io::Error::other(err.to_string())))
+        master
+            .resize(size)
+            .map_err(|err| TerminalError::Io(id, io::Error::other(err.to_string())))
     }
 
     /// The waiting thread cleans up and reports the exit.
@@ -193,7 +248,10 @@ impl TerminalHost {
     }
 
     fn pty(&self, id: u32) -> Result<Arc<Pty>, TerminalError> {
-        lock(&self.ptys).get(&id).cloned().ok_or(TerminalError::NotFound(id))
+        lock(&self.ptys)
+            .get(&id)
+            .cloned()
+            .ok_or(TerminalError::NotFound(id))
     }
 }
 
@@ -279,14 +337,16 @@ fn command_of(request: &SpawnRequest) -> Result<CommandBuilder, TerminalError> {
     let mut command = match &request.machine {
         Some(host) => {
             let mut command = CommandBuilder::new(crate::connections::ssh_program());
-            let entry = crate::machines::resolve(host).map_err(|err| TerminalError::Spawn(host.clone(), err.to_string()))?;
+            let entry = crate::machines::resolve(host)
+                .map_err(|err| TerminalError::Spawn(host.clone(), err.to_string()))?;
             command.arg("-t");
             command.args(entry.ssh_args());
             command.cwd(home_folder());
             command
         }
         None => {
-            let program = program_of(request.shell).ok_or(TerminalError::ShellMissing(request.shell))?;
+            let program =
+                program_of(request.shell).ok_or(TerminalError::ShellMissing(request.shell))?;
             let mut command = CommandBuilder::new(program);
             command.args(shell_args(request.shell));
             command.cwd(local_folder(&request.cwd)?);
@@ -317,7 +377,10 @@ pub(crate) fn scrub_inherited_env(command: &mut CommandBuilder) {
 /// Windows variable names ignore case, so `Claude_Config_Dir` is the same variable.
 fn is_session_var(name: &str) -> bool {
     let name = name.to_ascii_uppercase();
-    SESSION_VARS.contains(&name.as_str()) || SESSION_VAR_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+    SESSION_VARS.contains(&name.as_str())
+        || SESSION_VAR_PREFIXES
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
 }
 
 fn local_folder(cwd: &str) -> Result<PathBuf, TerminalError> {
@@ -325,7 +388,11 @@ fn local_folder(cwd: &str) -> Result<PathBuf, TerminalError> {
         return Ok(home_folder());
     }
     let folder = PathBuf::from(cwd);
-    if folder.is_dir() { Ok(folder) } else { Err(TerminalError::NoFolder(cwd.to_string())) }
+    if folder.is_dir() {
+        Ok(folder)
+    } else {
+        Err(TerminalError::NoFolder(cwd.to_string()))
+    }
 }
 
 fn home_folder() -> PathBuf {
@@ -352,7 +419,10 @@ fn program_of(shell: Shell) -> Option<PathBuf> {
         Shell::Cmd => find_in(&folders, &exe_name("cmd")),
         Shell::Bash => git_bash().or_else(|| {
             // System32's bash.exe starts WSL, not the bash a Windows user means.
-            let outside_system: Vec<PathBuf> = folders.into_iter().filter(|folder| !is_system_folder(folder)).collect();
+            let outside_system: Vec<PathBuf> = folders
+                .into_iter()
+                .filter(|folder| !is_system_folder(folder))
+                .collect();
             find_in(&outside_system, &exe_name("bash"))
         }),
         Shell::Login => login_shell(),
@@ -360,16 +430,25 @@ fn program_of(shell: Shell) -> Option<PathBuf> {
 }
 
 fn exe_name(name: &str) -> String {
-    if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 fn find_in(folders: &[PathBuf], file: &str) -> Option<PathBuf> {
-    folders.iter().map(|folder| folder.join(file)).find(|candidate| candidate.is_file())
+    folders
+        .iter()
+        .map(|folder| folder.join(file))
+        .find(|candidate| candidate.is_file())
 }
 
 /// System32 (and its 32-bit views) hold the WSL launcher `bash.exe`, however PATH spells them.
 fn is_system_folder(folder: &Path) -> bool {
-    let name = folder.file_name().map(|name| name.to_string_lossy().to_ascii_lowercase());
+    let name = folder
+        .file_name()
+        .map(|name| name.to_string_lossy().to_ascii_lowercase());
     matches!(name.as_deref(), Some("system32" | "syswow64" | "sysnative"))
 }
 
@@ -382,7 +461,6 @@ fn git_bash() -> Option<PathBuf> {
     bash.is_file().then_some(bash)
 }
 
-
 #[cfg(windows)]
 fn login_shell() -> Option<PathBuf> {
     None
@@ -391,26 +469,43 @@ fn login_shell() -> Option<PathBuf> {
 #[cfg(not(windows))]
 fn login_shell() -> Option<PathBuf> {
     let own = std::env::var_os("SHELL").map(PathBuf::from);
-    own.into_iter().chain(FALLBACK_LOGIN_SHELLS.map(PathBuf::from)).find(|shell| shell.is_file())
+    own.into_iter()
+        .chain(FALLBACK_LOGIN_SHELLS.map(PathBuf::from))
+        .find(|shell| shell.is_file())
 }
 
 #[tauri::command(async)]
 pub fn terminal_shells() -> Vec<Shell> {
-    SHELLS.into_iter().filter(|shell| program_of(*shell).is_some()).collect()
+    SHELLS
+        .into_iter()
+        .filter(|shell| program_of(*shell).is_some())
+        .collect()
 }
 
 #[tauri::command(async)]
-pub fn terminal_spawn(host: State<'_, TerminalHost>, request: SpawnRequest) -> Result<u32, TerminalError> {
+pub fn terminal_spawn(
+    host: State<'_, TerminalHost>,
+    request: SpawnRequest,
+) -> Result<u32, TerminalError> {
     host.spawn(&request)
 }
 
 #[tauri::command(async)]
-pub fn terminal_write(host: State<'_, TerminalHost>, id: u32, data: String) -> Result<(), TerminalError> {
+pub fn terminal_write(
+    host: State<'_, TerminalHost>,
+    id: u32,
+    data: String,
+) -> Result<(), TerminalError> {
     host.write(id, &data)
 }
 
 #[tauri::command(async)]
-pub fn terminal_resize(host: State<'_, TerminalHost>, id: u32, cols: u16, rows: u16) -> Result<(), TerminalError> {
+pub fn terminal_resize(
+    host: State<'_, TerminalHost>,
+    id: u32,
+    cols: u16,
+    rows: u16,
+) -> Result<(), TerminalError> {
     host.resize(id, cols, rows)
 }
 
@@ -433,10 +528,20 @@ mod tests {
 
     #[test]
     fn drops_only_the_variables_of_a_parent_session() {
-        for name in ["CLAUDECODE", "CLAUDE_CONFIG_DIR", "Claude_Config_Dir", "CLAUDE_CODE_SESSION_ID", "HERDR_PANE"] {
+        for name in [
+            "CLAUDECODE",
+            "CLAUDE_CONFIG_DIR",
+            "Claude_Config_Dir",
+            "CLAUDE_CODE_SESSION_ID",
+            "HERDR_PANE",
+        ] {
             assert!(is_session_var(name), "{name}");
         }
-        for name in ["CLAUDE_CODE_GIT_BASH_PATH", "CLAUDE_CODE_FORCE_TERMINAL_IMAGES", "PATH"] {
+        for name in [
+            "CLAUDE_CODE_GIT_BASH_PATH",
+            "CLAUDE_CODE_FORCE_TERMINAL_IMAGES",
+            "PATH",
+        ] {
             assert!(!is_session_var(name), "{name}");
         }
     }
@@ -467,15 +572,23 @@ mod tests {
     #[test]
     fn reads_the_spawn_request_in_camel_case() {
         let request: SpawnRequest =
-            serde_json::from_str(r#"{"machine":null,"cwd":"","shell":"pwsh","cols":80,"rows":24}"#).unwrap();
+            serde_json::from_str(r#"{"machine":null,"cwd":"","shell":"pwsh","cols":80,"rows":24}"#)
+                .unwrap();
         assert_eq!(request.shell, Shell::Pwsh);
         assert!(request.env.is_empty());
     }
 
     #[test]
     fn skips_system32_however_path_spells_it() {
-        let folders = [r"C:\WINDOWS\system32\", r"C:\Windows\SysWOW64", r"C:\Program Files\Gitin"];
-        let flags: Vec<bool> = folders.iter().map(|folder| is_system_folder(Path::new(folder))).collect();
+        let folders = [
+            r"C:\WINDOWS\system32\",
+            r"C:\Windows\SysWOW64",
+            r"C:\Program Files\Gitin",
+        ];
+        let flags: Vec<bool> = folders
+            .iter()
+            .map(|folder| is_system_folder(Path::new(folder)))
+            .collect();
         assert_eq!(flags, vec![cfg!(windows), cfg!(windows), false]);
     }
 
@@ -493,7 +606,10 @@ mod tests {
     #[test]
     fn unknown_terminals_are_not_found() {
         let host = TerminalHost::new(|_| {});
-        assert!(matches!(host.write(99, "x"), Err(TerminalError::NotFound(99))));
+        assert!(matches!(
+            host.write(99, "x"),
+            Err(TerminalError::NotFound(99))
+        ));
         assert!(matches!(host.kill(99), Err(TerminalError::NotFound(99))));
     }
 
@@ -511,7 +627,10 @@ mod tests {
     fn run_to_exit(receiver: &Receiver<TerminalEvent>, id: u32) -> (String, u32) {
         let mut output = String::new();
         loop {
-            match receiver.recv_timeout(WAIT).expect("terminal did not exit in time") {
+            match receiver
+                .recv_timeout(WAIT)
+                .expect("terminal did not exit in time")
+            {
                 TerminalEvent::Output { id: from, data } if from == id => output.push_str(&data),
                 TerminalEvent::Exit { id: from, code } if from == id => return (output, code),
                 _ => {}
@@ -536,16 +655,24 @@ mod tests {
     #[test]
     fn streams_output_and_reports_the_exit() {
         let (host, receiver) = collecting_host();
-        let id = host.spawn_command(echo_command("bull-pty-test"), 80, 24).unwrap();
+        let id = host
+            .spawn_command(echo_command("bull-pty-test"), 80, 24)
+            .unwrap();
         let (output, code) = run_to_exit(&receiver, id);
         assert!(output.contains("bull-pty-test"), "output was {output:?}");
         assert_eq!(code, 0);
-        assert!(matches!(host.write(id, "x"), Err(TerminalError::NotFound(_))));
+        assert!(matches!(
+            host.write(id, "x"),
+            Err(TerminalError::NotFound(_))
+        ));
     }
 
     #[test]
     fn names_the_login_shell_as_the_frontend_does() {
-        assert_eq!(serde_json::from_str::<Shell>(r#""login""#).unwrap(), Shell::Login);
+        assert_eq!(
+            serde_json::from_str::<Shell>(r#""login""#).unwrap(),
+            Shell::Login
+        );
     }
 
     #[cfg(windows)]
@@ -572,14 +699,20 @@ mod tests {
         let mut output = String::new();
         // The typed line and then its echo: the command ran.
         while output.matches("typed-into-cmd").count() < 2 {
-            match receiver.recv_timeout(WAIT).expect("cmd did not answer in time") {
+            match receiver
+                .recv_timeout(WAIT)
+                .expect("cmd did not answer in time")
+            {
                 TerminalEvent::Output { data, .. } => output.push_str(&data),
                 TerminalEvent::Exit { .. } => panic!("cmd exited early: {output:?}"),
             }
         }
         host.kill(id).unwrap();
         run_to_exit(&receiver, id);
-        assert!(matches!(host.write(id, "x"), Err(TerminalError::NotFound(_))));
+        assert!(matches!(
+            host.write(id, "x"),
+            Err(TerminalError::NotFound(_))
+        ));
     }
 
     #[cfg(windows)]

@@ -87,9 +87,10 @@ impl DictationError {
     /// What Claude or the system said, shown with the translated message.
     fn detail(&self) -> String {
         match self {
-            Self::Spawn(detail) | Self::NotReady(detail) | Self::NotListening(detail) | Self::NothingHeard(detail) => {
-                detail.clone()
-            }
+            Self::Spawn(detail)
+            | Self::NotReady(detail)
+            | Self::NotListening(detail)
+            | Self::NothingHeard(detail) => detail.clone(),
             Self::Io(err) => err.to_string(),
             Self::ClaudeMissing | Self::Exited | Self::Timeout | Self::NotHolding => String::new(),
         }
@@ -166,7 +167,10 @@ impl DictationHost {
         });
         let watched = Arc::clone(&inner);
         thread::spawn(move || end_when_idle(&watched));
-        Self { sink: Arc::new(sink), inner }
+        Self {
+            sink: Arc::new(sink),
+            inner,
+        }
     }
 
     /// Starts holding Space in a ready Claude; `Listening` for `hold` follows once it records.
@@ -180,12 +184,22 @@ impl DictationHost {
         let claude = self.ready_claude(&language_of(language))?;
         settle_to_idle(&claude)?;
         clear_input(&claude)?;
-        let baseline = prompt_of(&claude).map(|prompt| prompt.notice).unwrap_or_default();
+        let baseline = prompt_of(&claude)
+            .map(|prompt| prompt.notice)
+            .unwrap_or_default();
         let stop = Arc::new(AtomicBool::new(false));
-        let (held, should_stop, sink) = (Arc::clone(&claude), Arc::clone(&stop), Arc::clone(&self.sink));
+        let (held, should_stop, sink) = (
+            Arc::clone(&claude),
+            Arc::clone(&stop),
+            Arc::clone(&self.sink),
+        );
         let report = move |event| sink(DictationEvent { hold, event });
         let thread = thread::spawn(move || hold_space(&held, &should_stop, &report));
-        *lock(&self.inner.hold) = Some(Hold { stop, thread, baseline });
+        *lock(&self.inner.hold) = Some(Hold {
+            stop,
+            thread,
+            baseline,
+        });
         Ok(())
     }
 
@@ -193,12 +207,16 @@ impl DictationHost {
     pub fn stop(&self) -> Result<String, DictationError> {
         let _op = lock(&self.inner.op);
         *lock(&self.inner.last_used) = Instant::now();
-        let hold = lock(&self.inner.hold).take().ok_or(DictationError::NotHolding)?;
+        let hold = lock(&self.inner.hold)
+            .take()
+            .ok_or(DictationError::NotHolding)?;
         let claude = self.current().ok_or(DictationError::Exited)?;
         let baseline = hold.baseline.clone();
         let result = match hold.finish() {
             Ok(true) => await_transcript(&claude, &baseline),
-            Ok(false) => Err(DictationError::NotListening(changed_notice(&claude, &baseline))),
+            Ok(false) => Err(DictationError::NotListening(changed_notice(
+                &claude, &baseline,
+            ))),
             Err(err) => Err(err),
         };
         let is_timeout = matches!(result, Err(DictationError::Timeout));
@@ -213,10 +231,14 @@ impl DictationHost {
     /// Lets go of Space and throws away whatever Claude recorded.
     pub fn cancel(&self) -> Result<(), DictationError> {
         let _op = lock(&self.inner.op);
-        let Some(hold) = lock(&self.inner.hold).take() else { return Ok(()) };
+        let Some(hold) = lock(&self.inner.hold).take() else {
+            return Ok(());
+        };
         // Recorded or not, it is thrown away; the hold only has to have ended.
         let _ = hold.finish();
-        let Some(claude) = self.current() else { return Ok(()) };
+        let Some(claude) = self.current() else {
+            return Ok(());
+        };
         settle_to_idle(&claude)?;
         clear_input(&claude)
     }
@@ -232,7 +254,9 @@ impl DictationHost {
     }
 
     fn current(&self) -> Option<Arc<HiddenClaude>> {
-        lock(&self.inner.claude).clone().filter(|claude| claude.is_alive())
+        lock(&self.inner.claude)
+            .clone()
+            .filter(|claude| claude.is_alive())
     }
 
     /// The running Claude, or a new one when there is none or it dictates another language.
@@ -263,8 +287,11 @@ fn end_when_idle(inner: &Inner) {
     loop {
         thread::sleep(IDLE_CHECK);
         // Busy with a dictation right now: certainly not idle.
-        let Ok(_op) = inner.op.try_lock() else { continue };
-        let is_idle = lock(&inner.hold).is_none() && lock(&inner.last_used).elapsed() >= IDLE_SHUTDOWN;
+        let Ok(_op) = inner.op.try_lock() else {
+            continue;
+        };
+        let is_idle =
+            lock(&inner.hold).is_none() && lock(&inner.last_used).elapsed() >= IDLE_SHUTDOWN;
         if is_idle && let Some(claude) = lock(&inner.claude).take() {
             claude.shut_down();
         }
@@ -277,7 +304,11 @@ fn language_of(requested: &str) -> String {
     let is_code = !code.is_empty()
         && code.len() <= MAX_LANGUAGE_CHARS
         && code.chars().all(|c| c.is_ascii_alphabetic() || c == '-');
-    if is_code { code } else { FALLBACK_LANGUAGE.to_string() }
+    if is_code {
+        code
+    } else {
+        FALLBACK_LANGUAGE.to_string()
+    }
 }
 
 fn prompt_of(claude: &HiddenClaude) -> Option<Prompt> {
@@ -307,7 +338,9 @@ fn wait_ready(claude: &HiddenClaude) -> Result<(), DictationError> {
                 has_trusted = true;
             }
             ScreenView::Trust(_) => {}
-            ScreenView::Unknown { text } if Instant::now() >= deadline => return Err(DictationError::NotReady(text)),
+            ScreenView::Unknown { text } if Instant::now() >= deadline => {
+                return Err(DictationError::NotReady(text));
+            }
             ScreenView::Unknown { .. } => {}
         }
         if Instant::now() >= deadline {
@@ -319,18 +352,32 @@ fn wait_ready(claude: &HiddenClaude) -> Result<(), DictationError> {
 
 /// Spaces at key-repeat speed until told to stop. `Ok(true)` once Claude recorded. Every failure
 /// is also an event: the composer waits for `Listening` while Space is still down.
-fn hold_space(claude: &HiddenClaude, stop: &AtomicBool, report: &Report<'_>) -> Result<bool, DictationError> {
+fn hold_space(
+    claude: &HiddenClaude,
+    stop: &AtomicBool,
+    report: &Report<'_>,
+) -> Result<bool, DictationError> {
     reported(hold_until_stopped(claude, stop, report), report)
 }
 
-fn reported<T>(result: Result<T, DictationError>, report: &Report<'_>) -> Result<T, DictationError> {
+fn reported<T>(
+    result: Result<T, DictationError>,
+    report: &Report<'_>,
+) -> Result<T, DictationError> {
     if let Err(err) = &result {
-        report(HoldEvent::Failed { code: err.code(), detail: err.detail() });
+        report(HoldEvent::Failed {
+            code: err.code(),
+            detail: err.detail(),
+        });
     }
     result
 }
 
-fn hold_until_stopped(claude: &HiddenClaude, stop: &AtomicBool, report: &Report<'_>) -> Result<bool, DictationError> {
+fn hold_until_stopped(
+    claude: &HiddenClaude,
+    stop: &AtomicBool,
+    report: &Report<'_>,
+) -> Result<bool, DictationError> {
     let started = Instant::now();
     let mut is_listening = false;
     while !stop.load(Ordering::Relaxed) {
@@ -339,12 +386,16 @@ fn hold_until_stopped(claude: &HiddenClaude, stop: &AtomicBool, report: &Report<
         if !claude.is_alive() {
             return Err(DictationError::Exited);
         }
-        if !is_listening && prompt_of(claude).is_some_and(|prompt| prompt.phase == VoicePhase::Listening) {
+        if !is_listening
+            && prompt_of(claude).is_some_and(|prompt| prompt.phase == VoicePhase::Listening)
+        {
             is_listening = true;
             report(HoldEvent::Listening);
         }
         if !is_listening && started.elapsed() >= LISTEN_TIMEOUT {
-            let detail = prompt_of(claude).map(|prompt| prompt.notice).unwrap_or_default();
+            let detail = prompt_of(claude)
+                .map(|prompt| prompt.notice)
+                .unwrap_or_default();
             return Err(DictationError::NotListening(detail));
         }
     }
@@ -369,10 +420,17 @@ fn await_transcript(claude: &HiddenClaude, baseline: &str) -> Result<String, Dic
             Some((text, at)) if *text == prompt.text => *at,
             _ => seen.insert((prompt.text.clone(), Instant::now())).1,
         };
-        let settle = if prompt.text.is_empty() { EMPTY_SETTLE } else { TEXT_SETTLE };
+        let settle = if prompt.text.is_empty() {
+            EMPTY_SETTLE
+        } else {
+            TEXT_SETTLE
+        };
         if since.elapsed() >= settle {
             if prompt.text.is_empty() {
-                return Err(DictationError::NothingHeard(notice_unless(&prompt.notice, baseline)));
+                return Err(DictationError::NothingHeard(notice_unless(
+                    &prompt.notice,
+                    baseline,
+                )));
             }
             return Ok(prompt.text);
         }
@@ -383,7 +441,10 @@ fn await_transcript(claude: &HiddenClaude, baseline: &str) -> Result<String, Dic
 
 /// The clean-up after a stop only keeps the next dictation tidy (`start` clears again): its
 /// failure never costs the transcript already read.
-fn with_cleanup<T>(result: Result<T, DictationError>, cleanup: impl FnOnce() -> Result<(), DictationError>) -> Result<T, DictationError> {
+fn with_cleanup<T>(
+    result: Result<T, DictationError>,
+    cleanup: impl FnOnce() -> Result<(), DictationError>,
+) -> Result<T, DictationError> {
     if let Err(err) = cleanup() {
         eprintln!("dictation: cleaning up after the stop failed: {err}");
     }
@@ -391,21 +452,34 @@ fn with_cleanup<T>(result: Result<T, DictationError>, cleanup: impl FnOnce() -> 
 }
 
 fn notice_unless(notice: &str, baseline: &str) -> String {
-    if notice == baseline { String::new() } else { notice.to_string() }
+    if notice == baseline {
+        String::new()
+    } else {
+        notice.to_string()
+    }
 }
 
 fn changed_notice(claude: &HiddenClaude, baseline: &str) -> String {
-    prompt_of(claude).map(|prompt| notice_unless(&prompt.notice, baseline)).unwrap_or_default()
+    prompt_of(claude)
+        .map(|prompt| notice_unless(&prompt.notice, baseline))
+        .unwrap_or_default()
 }
 
 /// Ends a recording or transcription still running: Esc cancels it and keeps nothing.
 fn settle_to_idle(claude: &HiddenClaude) -> Result<(), DictationError> {
-    let is_busy = |prompt: &Prompt| matches!(prompt.phase, VoicePhase::Listening | VoicePhase::Transcribing);
+    let is_busy = |prompt: &Prompt| {
+        matches!(
+            prompt.phase,
+            VoicePhase::Listening | VoicePhase::Transcribing
+        )
+    };
     if !prompt_of(claude).is_some_and(|prompt| is_busy(&prompt)) {
         return Ok(());
     }
     claude.send(KEY_ESCAPE)?;
-    wait_for(claude, CANCEL_SETTLE, |prompt| prompt.phase == VoicePhase::Idle);
+    wait_for(claude, CANCEL_SETTLE, |prompt| {
+        prompt.phase == VoicePhase::Idle
+    });
     Ok(())
 }
 
@@ -435,7 +509,11 @@ fn wait_for(claude: &HiddenClaude, timeout: Duration, is_done: impl Fn(&Prompt) 
 }
 
 #[tauri::command(async)]
-pub fn dictation_start(host: State<'_, DictationHost>, language: String, hold: u64) -> Result<(), DictationError> {
+pub fn dictation_start(
+    host: State<'_, DictationHost>,
+    language: String,
+    hold: u64,
+) -> Result<(), DictationError> {
     host.start(&language, hold)
 }
 
@@ -456,17 +534,40 @@ mod tests {
 
     #[test]
     fn errors_serialize_as_code_and_detail() {
-        let json = serde_json::to_string(&DictationError::NothingHeard("No speech detected".into())).unwrap();
-        assert_eq!(json, r#"{"code":"nothing_heard","detail":"No speech detected"}"#);
-        assert_eq!(serde_json::to_string(&DictationError::Timeout).unwrap(), r#"{"code":"timeout","detail":""}"#);
+        let json =
+            serde_json::to_string(&DictationError::NothingHeard("No speech detected".into()))
+                .unwrap();
+        assert_eq!(
+            json,
+            r#"{"code":"nothing_heard","detail":"No speech detected"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&DictationError::Timeout).unwrap(),
+            r#"{"code":"timeout","detail":""}"#
+        );
     }
 
     #[test]
     fn events_serialize_tagged() {
-        let listening = DictationEvent { hold: 7, event: HoldEvent::Listening };
-        assert_eq!(serde_json::to_string(&listening).unwrap(), r#"{"hold":7,"type":"listening"}"#);
-        let failed = DictationEvent { hold: 8, event: HoldEvent::Failed { code: "not_listening", detail: "x".into() } };
-        assert_eq!(serde_json::to_string(&failed).unwrap(), r#"{"hold":8,"type":"failed","code":"not_listening","detail":"x"}"#);
+        let listening = DictationEvent {
+            hold: 7,
+            event: HoldEvent::Listening,
+        };
+        assert_eq!(
+            serde_json::to_string(&listening).unwrap(),
+            r#"{"hold":7,"type":"listening"}"#
+        );
+        let failed = DictationEvent {
+            hold: 8,
+            event: HoldEvent::Failed {
+                code: "not_listening",
+                detail: "x".into(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&failed).unwrap(),
+            r#"{"hold":8,"type":"failed","code":"not_listening","detail":"x"}"#
+        );
     }
 
     #[test]
@@ -480,8 +581,14 @@ mod tests {
 
     #[test]
     fn a_notice_that_was_there_before_is_no_detail() {
-        assert_eq!(notice_unless("◐ medium · /effort", "◐ medium · /effort"), "");
-        assert_eq!(notice_unless("No speech detected", "◐ medium · /effort"), "No speech detected");
+        assert_eq!(
+            notice_unless("◐ medium · /effort", "◐ medium · /effort"),
+            ""
+        );
+        assert_eq!(
+            notice_unless("No speech detected", "◐ medium · /effort"),
+            "No speech detected"
+        );
     }
 
     #[test]
@@ -491,7 +598,13 @@ mod tests {
         let result: Result<bool, _> = reported(Err(DictationError::Exited), &sink);
         assert!(matches!(result, Err(DictationError::Exited)));
         assert!(reported(Ok(true), &sink).is_ok());
-        assert_eq!(*lock(&events), vec![HoldEvent::Failed { code: "exited", detail: String::new() }]);
+        assert_eq!(
+            *lock(&events),
+            vec![HoldEvent::Failed {
+                code: "exited",
+                detail: String::new()
+            }]
+        );
     }
 
     #[test]
@@ -520,12 +633,21 @@ mod tests {
             let _ = lock(&sender).send(event);
         });
         host.start("de", 1).unwrap();
-        let listening = DictationEvent { hold: 1, event: HoldEvent::Listening };
-        assert_eq!(events.recv_timeout(Duration::from_secs(10)).unwrap(), listening);
+        let listening = DictationEvent {
+            hold: 1,
+            event: HoldEvent::Listening,
+        };
+        assert_eq!(
+            events.recv_timeout(Duration::from_secs(10)).unwrap(),
+            listening
+        );
         thread::sleep(HOLD);
         let result = host.stop();
         eprintln!("stop: {result:?}");
-        assert!(matches!(result, Ok(_) | Err(DictationError::NothingHeard(_))));
+        assert!(matches!(
+            result,
+            Ok(_) | Err(DictationError::NothingHeard(_))
+        ));
         let claude = host.current().unwrap();
         assert_eq!(prompt_of(&claude).unwrap().text, "");
         host.start("de", 2).unwrap();

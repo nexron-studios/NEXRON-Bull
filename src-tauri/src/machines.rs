@@ -45,7 +45,13 @@ impl MachineEntry {
 
     /// A `~/.ssh/config` host as a machine of the same name.
     fn for_host(host: String) -> Self {
-        Self { name: host.clone(), host, user: None, port: None, os: None }
+        Self {
+            name: host.clone(),
+            host,
+            user: None,
+            port: None,
+            os: None,
+        }
     }
 
     /// `user@host`, or the host alone so `~/.ssh/config` supplies the user.
@@ -58,7 +64,9 @@ impl MachineEntry {
 
     /// The port option for ssh (`-p`) or scp (`-P`), empty for the default.
     pub fn port_args(&self, flag: &str) -> Vec<String> {
-        self.port.map(|port| vec![flag.to_string(), port.to_string()]).unwrap_or_default()
+        self.port
+            .map(|port| vec![flag.to_string(), port.to_string()])
+            .unwrap_or_default()
     }
 
     /// Everything ssh needs after its own options to reach this machine.
@@ -90,14 +98,19 @@ impl Serialize for MachinesError {
 }
 
 fn store_path() -> Result<PathBuf, MachinesError> {
-    Ok(home_folder().ok_or(MachinesError::NoHome)?.join(DATA_FOLDER).join(STORE_FILE))
+    Ok(home_folder()
+        .ok_or(MachinesError::NoHome)?
+        .join(DATA_FOLDER)
+        .join(STORE_FILE))
 }
 
 /// `None` while the file was never written: the first list migrates then.
 fn load() -> Result<Option<Vec<MachineEntry>>, MachinesError> {
     let path = store_path()?;
     match fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).map(Some).map_err(|err| MachinesError::Corrupt(path, err)),
+        Ok(text) => serde_json::from_str(&text)
+            .map(Some)
+            .map_err(|err| MachinesError::Corrupt(path, err)),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(err) => Err(MachinesError::Store(path, err)),
     }
@@ -107,7 +120,8 @@ fn load() -> Result<Option<Vec<MachineEntry>>, MachinesError> {
 fn save(entries: &[MachineEntry]) -> Result<(), MachinesError> {
     let path = store_path()?;
     let staged = path.with_extension("json.new");
-    let text = serde_json::to_string_pretty(entries).map_err(|err| MachinesError::Corrupt(path.clone(), err))?;
+    let text = serde_json::to_string_pretty(entries)
+        .map_err(|err| MachinesError::Corrupt(path.clone(), err))?;
     let write = || {
         if let Some(folder) = path.parent() {
             fs::create_dir_all(folder)?;
@@ -130,13 +144,19 @@ impl MachineStore {
         if let Some(entries) = load()? {
             return Ok(entries);
         }
-        let entries = migrate(ssh_config_hosts(), |entry| machine_setup::probe(entry, false));
+        let entries = migrate(ssh_config_hosts(), |entry| {
+            machine_setup::probe(entry, false)
+        });
         save(&entries)?;
         Ok(entries)
     }
 
     /// Adds the machine, or puts it in the place of `replacing` (an entry the assistant corrects).
-    pub fn add(&self, entry: MachineEntry, replacing: Option<&str>) -> Result<Vec<MachineEntry>, MachinesError> {
+    pub fn add(
+        &self,
+        entry: MachineEntry,
+        replacing: Option<&str>,
+    ) -> Result<Vec<MachineEntry>, MachinesError> {
         let entry = validated(entry)?;
         let _guard = lock(&self.0);
         let entries = put(load()?.unwrap_or_default(), entry, replacing)?;
@@ -150,14 +170,20 @@ impl MachineStore {
     /// system again.
     pub fn remember_os(&self, checked: &MachineEntry, os: MachineOs) {
         if let Err(err) = self.record_os(checked, os) {
-            eprintln!("warning: cannot remember the system of {}: {err}", checked.name);
+            eprintln!(
+                "warning: cannot remember the system of {}: {err}",
+                checked.name
+            );
         }
     }
 
     fn record_os(&self, checked: &MachineEntry, os: MachineOs) -> Result<(), MachinesError> {
         let _guard = lock(&self.0);
         let mut entries = load()?.unwrap_or_default();
-        let Some(listed) = entries.iter_mut().find(|entry| entry.name == checked.name && entry.host == checked.host) else {
+        let Some(listed) = entries
+            .iter_mut()
+            .find(|entry| entry.name == checked.name && entry.host == checked.host)
+        else {
             return Ok(());
         };
         if listed.os == Some(os) {
@@ -177,17 +203,25 @@ impl MachineStore {
 }
 
 /// The list with `entry` in it: in the place of `replacing` when that is listed, else at the end.
-fn put(mut entries: Vec<MachineEntry>, entry: MachineEntry, replacing: Option<&str>) -> Result<Vec<MachineEntry>, MachinesError> {
+fn put(
+    mut entries: Vec<MachineEntry>,
+    entry: MachineEntry,
+    replacing: Option<&str>,
+) -> Result<Vec<MachineEntry>, MachinesError> {
     let at = replacing.and_then(|name| entries.iter().position(|known| known.name == name));
-    let is_taken =
-        entries.iter().enumerate().any(|(index, known)| Some(index) != at && known.name.eq_ignore_ascii_case(&entry.name));
+    let is_taken = entries
+        .iter()
+        .enumerate()
+        .any(|(index, known)| Some(index) != at && known.name.eq_ignore_ascii_case(&entry.name));
     if is_taken {
         return Err(MachinesError::Taken(entry.name));
     }
     match at {
         Some(index) => {
             // The form knows no system; the same host still runs the one checked.
-            let os = entries[index].os.filter(|_| entries[index].host == entry.host);
+            let os = entries[index]
+                .os
+                .filter(|_| entries[index].host == entry.host);
             entries[index] = MachineEntry { os, ..entry };
         }
         None => entries.push(entry),
@@ -204,17 +238,25 @@ fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> Probe + Sync) ->
     let candidates: Vec<MachineEntry> = hosts.into_iter().map(MachineEntry::for_host).collect();
     let probes: Vec<Option<Probe>> = thread::scope(|scope| {
         let probe = &probe;
-        let asks: Vec<_> = candidates.iter().map(|entry| scope.spawn(move || probe(entry))).collect();
+        let asks: Vec<_> = candidates
+            .iter()
+            .map(|entry| scope.spawn(move || probe(entry)))
+            .collect();
         asks.into_iter().map(|ask| ask.join().ok()).collect()
     });
     candidates
         .into_iter()
         .zip(probes)
         .filter_map(|(entry, probe)| {
-            let (reason, os) = probe.map_or((ProbeReason::Offline, None), |probe| (probe.reason, probe.os));
+            let (reason, os) = probe.map_or((ProbeReason::Offline, None), |probe| {
+                (probe.reason, probe.os)
+            });
             let is_kept = matches!(
                 reason,
-                ProbeReason::Ok | ProbeReason::Offline | ProbeReason::AgentdBlocked | ProbeReason::HostKeyChanged
+                ProbeReason::Ok
+                    | ProbeReason::Offline
+                    | ProbeReason::AgentdBlocked
+                    | ProbeReason::HostKeyChanged
             );
             is_kept.then_some(MachineEntry { os, ..entry })
         })
@@ -224,7 +266,10 @@ fn migrate(hosts: Vec<String>, probe: impl Fn(&MachineEntry) -> Probe + Sync) ->
 /// The machine of that name, or for a name Bull does not list (a tab from before the list) the
 /// name itself as an ssh host, as it always was.
 pub fn resolve(name: &str) -> Result<MachineEntry, MachinesError> {
-    let listed = load()?.unwrap_or_default().into_iter().find(|entry| entry.name == name);
+    let listed = load()?
+        .unwrap_or_default()
+        .into_iter()
+        .find(|entry| entry.name == name);
     match listed {
         Some(entry) => Ok(entry),
         None => {
@@ -239,7 +284,11 @@ pub fn suggestions() -> Result<Vec<String>, MachinesError> {
     let listed = load()?.unwrap_or_default();
     Ok(ssh_config_hosts()
         .into_iter()
-        .filter(|host| !listed.iter().any(|entry| entry.host.eq_ignore_ascii_case(host)))
+        .filter(|host| {
+            !listed
+                .iter()
+                .any(|entry| entry.host.eq_ignore_ascii_case(host))
+        })
         .collect())
 }
 
@@ -247,21 +296,36 @@ pub fn suggestions() -> Result<Vec<String>, MachinesError> {
 /// system is left out: only a check sets it.
 pub fn validated(entry: MachineEntry) -> Result<MachineEntry, MachinesError> {
     let name = entry.name.trim().to_string();
-    if name.is_empty() || name.chars().count() > MAX_NAME_CHARS || name.chars().any(char::is_control) {
+    if name.is_empty()
+        || name.chars().count() > MAX_NAME_CHARS
+        || name.chars().any(char::is_control)
+    {
         return Err(MachinesError::Invalid("name"));
     }
     let host = entry.host.trim().to_string();
     check_host(&host)?;
-    let user = entry.user.map(|user| user.trim().to_string()).filter(|user| !user.is_empty());
+    let user = entry
+        .user
+        .map(|user| user.trim().to_string())
+        .filter(|user| !user.is_empty());
     if let Some(user) = &user
-        && (user.starts_with('-') || !user.chars().all(|c| c.is_alphanumeric() || "._-\\".contains(c)))
+        && (user.starts_with('-')
+            || !user
+                .chars()
+                .all(|c| c.is_alphanumeric() || "._-\\".contains(c)))
     {
         return Err(MachinesError::Invalid("user"));
     }
     if entry.port == Some(0) {
         return Err(MachinesError::Invalid("port"));
     }
-    Ok(MachineEntry { name, host, user, port: entry.port, os: None })
+    Ok(MachineEntry {
+        name,
+        host,
+        user,
+        port: entry.port,
+        os: None,
+    })
 }
 
 fn check_host(host: &str) -> Result<(), MachinesError> {
@@ -288,7 +352,10 @@ pub fn machine_suggestions() -> Result<Vec<String>, MachinesError> {
 #[tauri::command(async)]
 pub fn ssh_public_key() -> Option<String> {
     let folder = home_folder()?.join(".ssh");
-    PUBLIC_KEY_FILES.iter().find_map(|file| fs::read_to_string(folder.join(file)).ok()).map(|key| key.trim().to_string())
+    PUBLIC_KEY_FILES
+        .iter()
+        .find_map(|file| fs::read_to_string(folder.join(file)).ok())
+        .map(|key| key.trim().to_string())
 }
 
 #[tauri::command(async)]
@@ -315,12 +382,28 @@ mod tests {
     use super::*;
 
     fn entry(name: &str, host: &str) -> MachineEntry {
-        MachineEntry { name: name.into(), host: host.into(), user: None, port: None, os: None }
+        MachineEntry {
+            name: name.into(),
+            host: host.into(),
+            user: None,
+            port: None,
+            os: None,
+        }
     }
 
     #[test]
     fn migration_keeps_working_and_offline_hosts_only() {
-        let hosts = ["server", "github.com", "laptop", "pi", "blocked", "reinstalled", "new"].map(String::from).to_vec();
+        let hosts = [
+            "server",
+            "github.com",
+            "laptop",
+            "pi",
+            "blocked",
+            "reinstalled",
+            "new",
+        ]
+        .map(String::from)
+        .to_vec();
         let kept = migrate(hosts, |entry| {
             let reason = match entry.host.as_str() {
                 "server" => ProbeReason::Ok,
@@ -332,7 +415,13 @@ mod tests {
                 _ => ProbeReason::AgentdBlocked,
             };
             let os = (reason == ProbeReason::Ok).then_some(MachineOs::Linux);
-            Probe { reason, version: None, detail: None, known_host: None, os }
+            Probe {
+                reason,
+                version: None,
+                detail: None,
+                known_host: None,
+                os,
+            }
         });
         let names: Vec<&str> = kept.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(names, ["server", "laptop", "blocked", "reinstalled"]);
@@ -342,36 +431,79 @@ mod tests {
 
     #[test]
     fn a_corrected_entry_keeps_the_system_of_its_host() {
-        let listed = vec![MachineEntry { os: Some(MachineOs::Macos), ..entry("mac", "mac.local") }];
-        let renamed = MachineEntry { user: Some("alex".into()), ..entry("mac", "mac.local") };
-        assert_eq!(put(listed.clone(), renamed, Some("mac")).unwrap()[0].os, Some(MachineOs::Macos));
-        assert_eq!(put(listed, entry("mac", "10.0.0.9"), Some("mac")).unwrap()[0].os, None);
+        let listed = vec![MachineEntry {
+            os: Some(MachineOs::Macos),
+            ..entry("mac", "mac.local")
+        }];
+        let renamed = MachineEntry {
+            user: Some("alex".into()),
+            ..entry("mac", "mac.local")
+        };
+        assert_eq!(
+            put(listed.clone(), renamed, Some("mac")).unwrap()[0].os,
+            Some(MachineOs::Macos)
+        );
+        assert_eq!(
+            put(listed, entry("mac", "10.0.0.9"), Some("mac")).unwrap()[0].os,
+            None
+        );
     }
 
     #[test]
     fn a_machine_listed_before_systems_were_known_is_windows() {
-        let old: MachineEntry = serde_json::from_str(r#"{"name":"server","host":"nexron-server"}"#).unwrap();
+        let old: MachineEntry =
+            serde_json::from_str(r#"{"name":"server","host":"nexron-server"}"#).unwrap();
         assert_eq!(old.system(), MachineOs::Windows);
-        let mac = MachineEntry { os: Some(MachineOs::Macos), ..entry("mac", "mac") };
-        assert_eq!(serde_json::to_string(&mac).unwrap(), r#"{"name":"mac","host":"mac","os":"macos"}"#);
+        let mac = MachineEntry {
+            os: Some(MachineOs::Macos),
+            ..entry("mac", "mac")
+        };
+        assert_eq!(
+            serde_json::to_string(&mac).unwrap(),
+            r#"{"name":"mac","host":"mac","os":"macos"}"#
+        );
     }
 
     #[test]
     fn puts_a_corrected_machine_in_the_place_of_the_old_one() {
         let listed = vec![entry("server", "nexron-server"), entry("box", "box")];
-        let corrected = MachineEntry { user: Some("alex".into()), ..entry("server", "10.0.0.2") };
-        let names = |entries: &[MachineEntry]| entries.iter().map(|known| known.host.clone()).collect::<Vec<_>>();
-        assert_eq!(names(&put(listed.clone(), corrected, Some("server")).unwrap()), ["10.0.0.2", "box"]);
-        assert_eq!(names(&put(listed.clone(), entry("pi", "pi"), None).unwrap()), ["nexron-server", "box", "pi"]);
-        assert!(matches!(put(listed.clone(), entry("Box", "other"), None), Err(MachinesError::Taken(_))));
-        assert!(matches!(put(listed, entry("box", "other"), Some("server")), Err(MachinesError::Taken(_))));
+        let corrected = MachineEntry {
+            user: Some("alex".into()),
+            ..entry("server", "10.0.0.2")
+        };
+        let names = |entries: &[MachineEntry]| {
+            entries
+                .iter()
+                .map(|known| known.host.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(&put(listed.clone(), corrected, Some("server")).unwrap()),
+            ["10.0.0.2", "box"]
+        );
+        assert_eq!(
+            names(&put(listed.clone(), entry("pi", "pi"), None).unwrap()),
+            ["nexron-server", "box", "pi"]
+        );
+        assert!(matches!(
+            put(listed.clone(), entry("Box", "other"), None),
+            Err(MachinesError::Taken(_))
+        ));
+        assert!(matches!(
+            put(listed, entry("box", "other"), Some("server")),
+            Err(MachinesError::Taken(_))
+        ));
     }
 
     #[test]
     fn builds_the_ssh_destination_with_user_and_port() {
         let plain = entry("server", "nexron-server");
         assert_eq!(plain.ssh_args(), vec!["nexron-server"]);
-        let full = MachineEntry { user: Some("alex".into()), port: Some(2222), ..entry("box", "10.0.0.5") };
+        let full = MachineEntry {
+            user: Some("alex".into()),
+            port: Some(2222),
+            ..entry("box", "10.0.0.5")
+        };
         assert_eq!(full.ssh_args(), vec!["-p", "2222", "alex@10.0.0.5"]);
         assert_eq!(full.port_args("-P"), vec!["-P", "2222"]);
     }
@@ -380,22 +512,47 @@ mod tests {
     fn refuses_what_ssh_would_read_as_an_option() {
         assert!(validated(entry("x", "-oProxyCommand=calc")).is_err());
         assert!(validated(entry("x", "host name")).is_err());
-        assert!(validated(MachineEntry { user: Some("-l".into()), ..entry("x", "box") }).is_err());
+        assert!(
+            validated(MachineEntry {
+                user: Some("-l".into()),
+                ..entry("x", "box")
+            })
+            .is_err()
+        );
         assert!(validated(entry("  ", "box")).is_err());
-        assert!(validated(MachineEntry { port: Some(0), ..entry("x", "box") }).is_err());
+        assert!(
+            validated(MachineEntry {
+                port: Some(0),
+                ..entry("x", "box")
+            })
+            .is_err()
+        );
     }
 
     #[test]
     fn takes_no_system_from_the_frontend() {
-        let claimed = MachineEntry { os: Some(MachineOs::Linux), ..entry("box", "box") };
+        let claimed = MachineEntry {
+            os: Some(MachineOs::Linux),
+            ..entry("box", "box")
+        };
         assert_eq!(validated(claimed.clone()).unwrap().os, None);
-        let listed = vec![MachineEntry { os: Some(MachineOs::Macos), ..entry("box", "box") }];
-        assert_eq!(put(listed, claimed, Some("box")).unwrap()[0].os, Some(MachineOs::Macos));
+        let listed = vec![MachineEntry {
+            os: Some(MachineOs::Macos),
+            ..entry("box", "box")
+        }];
+        assert_eq!(
+            put(listed, claimed, Some("box")).unwrap()[0].os,
+            Some(MachineOs::Macos)
+        );
     }
 
     #[test]
     fn trims_and_drops_an_empty_user() {
-        let cleaned = validated(MachineEntry { user: Some(" ".into()), ..entry(" Server ", " 10.0.0.2 ") }).unwrap();
+        let cleaned = validated(MachineEntry {
+            user: Some(" ".into()),
+            ..entry(" Server ", " 10.0.0.2 ")
+        })
+        .unwrap();
         assert_eq!(cleaned, entry("Server", "10.0.0.2"));
     }
 }

@@ -92,6 +92,7 @@ const mountComposer = async (initial: string, isEnabled = true) => {
     hear,
     caretAt,
     select,
+    textarea,
     state: () => dictation!.indicator.value
   }
 }
@@ -133,7 +134,7 @@ describe('useSpaceDictation', () => {
     composer.keyup(' ')
     await flushPromises()
 
-    expect(service.start).toHaveBeenCalledWith('de', lastHold())
+    expect(service.start.mock.calls.map(([language]) => language)).toEqual(['de'])
     expect(service.cancel).toHaveBeenCalledTimes(1)
     expect(composer.draft.value).toBe('Hallo ')
   })
@@ -333,6 +334,45 @@ describe('useSpaceDictation', () => {
     vi.advanceTimersByTime(250)
     await composer.hear()
     expect(composer.state()).toBe('recording')
+  })
+
+  it('should give each press its own hold id', async () => {
+    const composer = await mountComposer('')
+    const holdBriefly = async () => {
+      composer.keydown(' ')
+      vi.advanceTimersByTime(300)
+      composer.keyup(' ')
+      await flushPromises()
+    }
+    await holdBriefly()
+    await holdBriefly()
+
+    expect(new Set(service.start.mock.calls.map(([, hold]) => hold)).size).toBe(2)
+  })
+
+  it('should end a press from an input source that sends Space without a key code', async () => {
+    const composer = await mountComposer('a')
+    composer.caretAt(1)
+    composer.keydown(' ', { code: '' })
+    vi.advanceTimersByTime(300)
+    composer.keyup(' ', '')
+    await flushPromises()
+
+    expect([composer.state(), service.cancel.mock.calls.length]).toEqual([null, 1])
+  })
+
+  it('should insert the transcript once when the window loses focus while recording', async () => {
+    const composer = await mountComposer('')
+    service.stop.mockResolvedValue('Hallo')
+    composer.keydown(' ')
+    vi.advanceTimersByTime(500)
+    await composer.hear()
+
+    window.dispatchEvent(new FocusEvent('blur'))
+    composer.textarea().dispatchEvent(new FocusEvent('blur'))
+    await flushPromises()
+
+    expect([composer.draft.value, service.stop.mock.calls.length]).toEqual(['Hallo', 1])
   })
 
   it('should end the press by the physical key, also when Option changed the character', async () => {

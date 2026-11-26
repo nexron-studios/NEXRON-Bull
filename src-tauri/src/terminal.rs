@@ -306,7 +306,7 @@ fn command_of(request: &SpawnRequest) -> Result<CommandBuilder, TerminalError> {
 /// inherited `CLAUDE_CONFIG_DIR` would log `claude /login` of the default profile into that
 /// session's account, `CLAUDECODE` marks Claude as a nested session, and HERDR_* let herdr claim
 /// the shell. The request's env comes after.
-fn scrub_inherited_env(command: &mut CommandBuilder) {
+pub(crate) fn scrub_inherited_env(command: &mut CommandBuilder) {
     for (key, _) in std::env::vars_os() {
         if is_session_var(&key.to_string_lossy()) {
             command.env_remove(key);

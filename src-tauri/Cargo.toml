@@ -24,6 +24,8 @@ tauri-plugin-clipboard-manager = "2"
 serde_json = "1"
 tauri-plugin-notification = "2"
 portable-pty = "0.9"
+# Reads the screen of the hidden Claude that Bull dictates through (dictation_screen.rs).
+vt100 = "0.18"
 
 # Already in the tree through the notification plugin and tao; asked for the real toast setting and
 # to set the big window icon (taskbar), which Tauri's set_icon leaves alone.

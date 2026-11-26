@@ -1,5 +1,9 @@
 mod agent_host;
+mod claude_program;
 mod connections;
+mod dictation;
+mod dictation_screen;
+mod dictation_session;
 mod local_agentd;
 mod machine_install;
 mod machine_os;
@@ -28,12 +32,18 @@ pub fn run() {
                 // A closed window has nobody left to show the output to.
                 let _ = handle.emit(terminal::TERMINAL_EVENT, event);
             }));
+            let handle = app.handle().clone();
+            app.manage(dictation::DictationHost::new(move |event| {
+                // As above: a closed window has nobody left to tell.
+                let _ = handle.emit(dictation::DICTATION_EVENT, event);
+            }));
             Ok(())
         })
-        // Shells end with the window; none keeps running unseen.
+        // Shells and the dictation's Claude end with the window; none keeps running unseen.
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::Destroyed) {
                 window.state::<terminal::TerminalHost>().kill_all();
+                window.state::<dictation::DictationHost>().shut_down();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,6 +63,9 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_kill,
             terminal::terminal_kill_all,
+            dictation::dictation_start,
+            dictation::dictation_stop,
+            dictation::dictation_cancel,
             window_icon::set_window_icon
         ])
         .run(tauri::generate_context!())

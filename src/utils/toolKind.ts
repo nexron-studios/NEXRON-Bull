@@ -73,6 +73,8 @@ const isKnownSkill = (skill: string): skill is KnownSkill =>
   (knownSkillList as readonly string[]).includes(skill)
 
 // Plugin skills come as `plugin:skill` and a typed command as `/skill`; the bare name decides.
+// Only the icon looks at the bare name; the text keeps `plugin:skill`, which tells two plugins'
+// skills of the same name apart.
 const bareSkillOf = (skill: string): string => skill.replace(/^\//, '').split(':').at(-1) ?? ''
 
 /** The picture of one skill: its own for a well-known one, the generic skill icon otherwise. */
@@ -121,6 +123,8 @@ const TOOLS: Record<string, ToolInfo> = {
   TaskGet: READS_PLAN
 }
 const SKILL_TOOL = 'Skill'
+
+export const isSkillTool = (name: string): boolean => name === SKILL_TOOL
 const MCP_PREFIX = 'mcp__'
 const MCP_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'plug' }
 const UNKNOWN_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'wrench' }
@@ -130,12 +134,9 @@ const UNKNOWN_TOOL: ToolInfo = { kind: 'outside', activity: 'uses', icon: 'wrenc
  * summary (`summarizeToolInput`): for a Skill call it names the skill, which picks the icon.
  */
 export const toolInfoOf = (name: string, target = ''): ToolInfo => {
-  if (name === SKILL_TOOL)
-    return { kind: 'skill', activity: 'uses_skill', icon: skillIconOf(target) }
+  if (isSkillTool(name)) return { kind: 'skill', activity: 'uses_skill', icon: skillIconOf(target) }
   return TOOLS[name] ?? (name.startsWith(MCP_PREFIX) ? MCP_TOOL : UNKNOWN_TOOL)
 }
-
-export const isSkillTool = (name: string): boolean => name === SKILL_TOOL
 
 /** The tools Claude keeps its plan with; they feed the steps list, not the chain. */
 export const isTaskTool = (name: string): boolean => toolInfoOf(name).activity === 'plans'

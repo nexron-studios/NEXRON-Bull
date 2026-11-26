@@ -23,6 +23,7 @@ const format = useUsageFormat()
 const shown = computed(() => tools.slice(0, TOP_TOOL_COUNT))
 const biggest = computed(() => tools[0]?.calls ?? 0)
 const total = computed(() => tools.reduce((sum, tool) => sum + tool.calls, 0))
+// One row counts the calls of every skill together, so it keeps the generic skill icon.
 const lookOf = (tool: string) => {
   const info = toolInfoOf(tool)
   return { icon: TOOL_ICON[info.icon], class: TOOL_KIND_CLASS[info.kind] }

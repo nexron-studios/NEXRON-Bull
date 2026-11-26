@@ -44,7 +44,8 @@ const state = computed<ToolState>(() => {
 })
 const summary = computed(() => summarizeToolInput(input))
 const info = computed(() => toolInfoOf(name, summary.value))
-// A skill call names its skill on a tint of its own and shows the args as text, not as JSON.
+// A skill's args are prose Claude writes for the skill (Jonas, 25.11.2026: skills get their own
+// look); as JSON they would hide behind escapes and quotes.
 const isSkill = computed(() => isSkillTool(name))
 const skillArgs = computed(() => (isSkill.value ? skillArgsOf(input) : ''))
 const rowText = computed(() =>
@@ -90,9 +91,11 @@ const images = computed(() =>
         class="max-w-1/2 shrink-0 truncate rounded-sm bg-act-skill/12 px-1.5 font-medium text-act-skill"
         >{{ summary }}</span
       >
-      <span class="min-w-0 flex-1 truncate font-mono text-meta text-muted-foreground">{{
-        rowText
-      }}</span>
+      <span
+        class="min-w-0 flex-1 truncate text-meta text-muted-foreground"
+        :class="isSkill ? 'font-sans' : 'font-mono'"
+        >{{ rowText }}</span
+      >
       <span v-if="counts" class="flex shrink-0 gap-1.5 font-mono text-meta tabular-nums">
         <span class="sr-only">{{ t('chat.diff_counts', counts) }}</span>
         <span class="text-good" aria-hidden="true">+{{ counts.added }}</span>

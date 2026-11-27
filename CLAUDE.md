@@ -137,7 +137,7 @@ name and only calls itself NEXRON-Bull; installing the DMG on top would add a se
 
 `public/favicon.svg` is the one source of the bull: favicon, header mark (`BrandBullLogo`),
 README banner (`docs/brand/banner.json` points at it), Tauri icons and PWA icons (on a dark
-rounded tile like the Agent Dashboard, built by the script). After
+rounded tile like NEXRON-Manta's, built by the script). After
 changing it, run `npm run icons` and
 `uv run --with fonttools --with brotli docs/brand/generate_readme_banner.py docs/brand/banner.json`.
 Eye and cheek line are holes of one `fill-rule="evenodd"` path (masks get lost in Figma), so

@@ -10,7 +10,8 @@ import { useFoldedRows } from '@/composables/useFoldedRows'
 import { useOpenItems } from '@/composables/useOpenItems'
 import { useRowArrivals } from '@/composables/useRowArrivals'
 import { useTabInsights } from '@/composables/useTabInsights'
-import type { ChatTabState } from '@/utils/chatTab'
+import { isBusyStatus, type ChatTabState } from '@/utils/chatTab'
+import { shownStatusOf } from '@/utils/shownStatus'
 
 // What is open for this prompt. While Claude works: its plan (TaskCreate/TodoWrite) with progress.
 // Once it answered: the "Offen" points (`> [!todo]`) of that answer, in one list to tick off
@@ -28,7 +29,8 @@ const { turnPlan } = useTabInsights(tab.id)
 const fold = useFoldedRows(items, EXPANDED_STORAGE_KEY)
 const { staggerIndexOf, settle } = useRowArrivals(() => fold.shown.value.map((item) => item.text))
 
-const isRunning = computed(() => tab.status === 'working' || tab.status === 'asking')
+// A background agent still on the plan keeps it running, like everywhere else in the app.
+const isRunning = computed(() => isBusyStatus(shownStatusOf(tab)))
 const isPlanShown = computed(
   () => turnPlan.value.length > 0 && (isRunning.value || items.value.length === 0)
 )

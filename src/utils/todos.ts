@@ -1,6 +1,11 @@
 import type { ChatMessage } from '@/types/agentd.type'
 import { isTaskTool } from '@/utils/toolKind'
-import { resultTextOf, resultsByToolId, type ToolUseBlock } from '@/utils/toolPairs'
+import {
+  resultTextOf,
+  resultsByToolId,
+  type ToolResultBlock,
+  type ToolUseBlock
+} from '@/utils/toolPairs'
 
 export const todoStatusList = ['pending', 'in_progress', 'completed'] as const
 export type TodoStatus = (typeof todoStatusList)[number]
@@ -77,17 +82,25 @@ export const todosOf = (calls: TaskCall[]): Todo[] =>
     }
   }, [])
 
-/** Every task tool call in these messages, with its result where one arrived. */
-export const taskCallsIn = (messages: ChatMessage[]): TaskCall[] => {
-  const results = resultsByToolId(messages)
-  return messages
-    .flatMap((message) => message.blocks)
-    .filter((block): block is ToolUseBlock => block.type === 'tool_use' && isTaskTool(block.name))
+/** The task tool calls among these, each with the text of its result once it is there. */
+export const taskCallsOf = (
+  calls: ToolUseBlock[],
+  results: Map<string, ToolResultBlock>
+): TaskCall[] =>
+  calls
+    .filter((call) => isTaskTool(call.name))
     .map(({ id, name, input }) => {
       const result = results.get(id)
       return { id, name, input, result: result ? resultTextOf(result) : null }
     })
-}
+
+const taskCallsIn = (messages: ChatMessage[]): TaskCall[] =>
+  taskCallsOf(
+    messages
+      .flatMap((message) => message.blocks)
+      .filter((block): block is ToolUseBlock => block.type === 'tool_use'),
+    resultsByToolId(messages)
+  )
 
 /** The task tools that change the list; `TaskList` and `TaskGet` only read it. */
 const PLAN_WRITES = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate'])

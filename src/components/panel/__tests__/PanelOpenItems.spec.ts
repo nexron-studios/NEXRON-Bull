@@ -94,6 +94,16 @@ describe('PanelOpenItems', () => {
     expect(wrapper.text()).toContain('Check the dark theme')
   })
 
+  it('should keep the plan while a background agent still works on it', () => {
+    const wrapper = mountWith({
+      status: 'idle',
+      finishHold: { kind: 'agents', since: 0 },
+      messages: [PROMPT, ...PLAN, answer('Waiting.\n\n> [!todo] Offen\n> - Check the dark theme')]
+    })
+
+    expect(headingOf(wrapper)).toBe('Plan')
+  })
+
   it('should keep the finished plan when the answer left nothing open', () => {
     const wrapper = mountWith({ status: 'idle', messages: [PROMPT, ...PLAN, answer('Done.')] })
 

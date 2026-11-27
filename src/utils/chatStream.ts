@@ -2,15 +2,10 @@ import type { Block, ChatMessage } from '@/types/agentd.type'
 import { MS_PER_SECOND } from '@/utils/elapsed'
 import { sourcesOfCall, uniqueSources, type Source } from '@/utils/sources'
 import { isPromptEcho } from '@/utils/pendingPrompts'
-import { todosOf, type TaskCall, type Todo } from '@/utils/todos'
+import { taskCallsOf, todosOf, type TaskCall, type Todo } from '@/utils/todos'
 import { isReadOnlyTool, isTaskTool } from '@/utils/toolKind'
 import { hookBlockOf } from '@/utils/toolOutput'
-import {
-  resultTextOf,
-  visibleMessages,
-  type ToolResultBlock,
-  type ToolUseBlock
-} from '@/utils/toolPairs'
+import { visibleMessages, type ToolResultBlock, type ToolUseBlock } from '@/utils/toolPairs'
 import { turnStatsOf, type TurnStats } from '@/utils/turnStats'
 
 export interface Reasoning {
@@ -167,14 +162,6 @@ const toolCallsOf = (entries: Entry[]): ToolUseBlock[] =>
     entry.kind === 'block' && entry.block.type === 'tool_use' ? [entry.block] : []
   )
 
-const taskCallsOf = (entries: Entry[], results: Map<string, ToolResultBlock>): TaskCall[] =>
-  toolCallsOf(entries)
-    .filter((call) => isTaskTool(call.name))
-    .map(({ id, name, input }) => {
-      const result = results.get(id)
-      return { id, name, input, result: result ? resultTextOf(result) : null }
-    })
-
 /** The plan as it stands after this run, shown only below a run that changed it. */
 const todosItem = (
   segmentKey: string,
@@ -212,7 +199,7 @@ const segmentItems = (
   ...todosItem(
     segmentKey,
     context.earlierTaskCalls,
-    taskCallsOf(entries, context.results),
+    taskCallsOf(toolCallsOf(entries), context.results),
     isCurrent
   )
 ]
@@ -270,7 +257,7 @@ export const buildStream = (
     if (!first) return
     const context = { seconds, results, earlierTaskCalls }
     items.push(...segmentItems(keyOf(first), segment, isCurrent, context))
-    earlierTaskCalls = [...earlierTaskCalls, ...taskCallsOf(segment, results)]
+    earlierTaskCalls = [...earlierTaskCalls, ...taskCallsOf(toolCallsOf(segment), results)]
     segment = []
   }
   const closeTurn = () => withStats(items, turnStart, turnStatsOf(turn, outputs))

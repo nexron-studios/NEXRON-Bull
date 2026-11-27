@@ -104,11 +104,6 @@ impl DictationError {
             Self::ClaudeMissing | Self::Exited | Self::Timeout | Self::NotHolding => String::new(),
         }
     }
-
-    /// Whether starting Claude again right away would fail the same way.
-    fn repeats(&self) -> bool {
-        matches!(self, Self::ClaudeMissing | Self::Spawn(_) | Self::Io(_))
-    }
 }
 
 impl Serialize for DictationError {
@@ -161,32 +156,16 @@ impl Hold {
     }
 }
 
-/// The last warm-up that failed, until a Claude gets ready: it pauses the next warm-ups, and its
-/// error is for the press that waited for it.
+/// The last warm-up that failed, until a Claude gets ready: it pauses the next warm-ups. A press
+/// still tries itself; at worst one that came during a failing warm-up waits for both.
 struct WarmFailure {
     language: String,
-    started: Instant,
     at: Instant,
-    /// Gone once a press took it
-    error: Option<DictationError>,
 }
 
 impl WarmFailure {
     fn pauses(&self, language: &str, now: Instant) -> bool {
         self.language == language && now.duration_since(self.at) < WARM_PAUSE
-    }
-
-    /// The error for a press at `pressed` that waited for this warm-up, when starting again would
-    /// only fail the same way or keep it waiting about as long once more: so a press never waits
-    /// more than one `READY_TIMEOUT` beyond that. Otherwise the press tries again itself.
-    fn take_for(&mut self, language: &str, pressed: Instant) -> Option<DictationError> {
-        if self.language != language || self.at < pressed {
-            return None;
-        }
-        let error = self.error.take()?;
-        let waited = self.at.duration_since(pressed);
-        let has_waited_most = waited * 2 >= self.at.duration_since(self.started);
-        (error.repeats() || has_waited_most).then_some(error)
     }
 }
 
@@ -235,16 +214,9 @@ impl DictationHost {
 
     /// Starts holding Space in a ready Claude; `Listening` for `hold` follows once it records.
     pub fn start(&self, language: &str, hold: u64) -> Result<(), DictationError> {
-        let pressed = Instant::now();
         let _op = lock(&self.inner.op);
         *lock(&self.inner.last_used) = Instant::now();
         let language = language_of(language);
-        let waited_for = lock(&self.inner.warm_failure)
-            .as_mut()
-            .and_then(|failure| failure.take_for(&language, pressed));
-        if let Some(error) = waited_for {
-            return Err(error);
-        }
         if let Some(previous) = lock(&self.inner.hold).take() {
             // A hold nobody released is over; only the cleaning up below matters.
             let _ = previous.finish();
@@ -341,8 +313,7 @@ impl Inner {
         if self.current().is_some() || is_paused || self.is_shut_down.load(Ordering::SeqCst) {
             return;
         }
-        let started = Instant::now();
-        *lock(&self.last_used) = started;
+        *lock(&self.last_used) = Instant::now();
         let Err(error) = self.ready_claude(language) else {
             return;
         };
@@ -354,9 +325,7 @@ impl Inner {
         eprintln!("dictation: warming up Claude failed: {error}");
         *lock(&self.warm_failure) = Some(WarmFailure {
             language: language.to_string(),
-            started,
             at: Instant::now(),
-            error: Some(error),
         });
     }
 
@@ -868,51 +837,13 @@ mod tests {
         assert!(!claude.is_alive());
     }
 
-    /// When the warm-up in the failure tests below ended, counted from when it started.
-    const WARM_UP_SECS: u64 = 30;
-
-    fn failure_of(language: &str, start: Instant, error: DictationError) -> WarmFailure {
-        WarmFailure {
-            language: language.to_string(),
-            started: start,
-            at: start + Duration::from_secs(WARM_UP_SECS),
-            error: Some(error),
-        }
-    }
-
-    #[test]
-    fn a_press_takes_only_the_failure_of_the_warm_up_it_waited_for() {
-        let start = Instant::now();
-        let at = |secs| start + Duration::from_secs(secs);
-        let stuck = || DictationError::NotReady("stuck".into());
-        let code_for = |mut failure: WarmFailure, pressed| {
-            failure.take_for("de", pressed).map(|error| error.code())
-        };
-
-        let mut once = failure_of("de", start, stuck());
-        let waited_all = once.take_for("de", at(0)).map(|error| error.code());
-        let taken_already = once.take_for("de", at(0));
-        let waited_a_moment = code_for(failure_of("de", start, stuck()), at(WARM_UP_SECS - 1));
-        let missing_after_a_moment = code_for(
-            failure_of("de", start, DictationError::ClaudeMissing),
-            at(WARM_UP_SECS - 1),
-        );
-        let came_after = code_for(failure_of("de", start, stuck()), at(WARM_UP_SECS + 1));
-        let other_language = code_for(failure_of("en", start, stuck()), at(0));
-
-        assert_eq!(waited_all, Some("not_ready"));
-        assert!(taken_already.is_none());
-        assert_eq!(waited_a_moment, None);
-        assert_eq!(missing_after_a_moment, Some("claude_missing"));
-        assert_eq!(came_after, None);
-        assert_eq!(other_language, None);
-    }
-
     #[test]
     fn a_failed_warm_up_pauses_the_next_ones_for_its_language() {
-        let start = Instant::now();
-        let failure = failure_of("de", start, DictationError::ClaudeMissing);
-        let ended = failure.at;
+        let ended = Instant::now();
+        let failure = WarmFailure {
+            language: "de".to_string(),
+            at: ended,
+        };
 
         assert!(failure.pauses("de", ended));
         assert!(failure.pauses("de", ended + WARM_PAUSE - Duration::from_secs(1)));

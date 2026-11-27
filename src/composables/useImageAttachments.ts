@@ -2,7 +2,7 @@ import { computed, ref, type Ref } from 'vue'
 import { toast } from '@/lib/toast'
 import { useI18n } from 'vue-i18n'
 import { ImageTooLargeError, shrinkImage } from '@/lib/imageExport'
-import type { ImageType, PendingImage } from '@/utils/content'
+import type { PendingImage } from '@/utils/content'
 import {
   MAX_IMAGES_PER_MESSAGE,
   MAX_IMAGE_FILE_BYTES,
@@ -26,15 +26,27 @@ const readAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
-/** The file's content as an attachment; one over the API limit as a smaller copy. */
+/**
+ * The file as an attachment under its own name, which may be empty for a pasted image. One over the
+ * API limit becomes a smaller JPEG, so "shot.png" turns into "shot.jpg".
+ */
 const readAccepted = async ({
   file,
   mediaType,
   isOversized
-}: Accepted<File>): Promise<Omit<PendingImage, 'id' | 'name'>> => {
+}: Accepted<File>): Promise<Omit<PendingImage, 'id'>> => {
   const src = await readAsDataUrl(file)
-  if (isOversized) return shrinkImage(src)
-  return { mediaType, src, data: src.slice(src.indexOf(',') + 1), bytes: file.size }
+  if (!isOversized) {
+    return {
+      name: file.name,
+      mediaType,
+      src,
+      data: src.slice(src.indexOf(',') + 1),
+      bytes: file.size
+    }
+  }
+  const shrunk = await shrinkImage(src)
+  return { ...shrunk, name: file.name && renameExtension(file.name, shrunk.mediaType) }
 }
 
 const REJECT_KEYS: Record<RejectReason, string> = {
@@ -72,9 +84,6 @@ export const useImageAttachments = (
   // A pasted screenshot can arrive without a file name.
   const nameOf = (name: string) => name || t('chat.image_unnamed')
   const namesOf = (names: string[]) => names.map(nameOf).join(', ')
-  // A shrunk copy is a JPEG, so "shot.png" becomes "shot.jpg".
-  const attachedNameOf = (file: File, mediaType: ImageType) =>
-    file.name && mediaType !== file.type ? renameExtension(file.name, mediaType) : nameOf(file.name)
 
   const reportRejected = (rejected: Rejected[]) => {
     for (const { reason, names } of groupRejected(rejected)) {
@@ -110,10 +119,10 @@ export const useImageAttachments = (
     readingCount.value -= accepted.length
 
     const { done, failed } = splitSettled(accepted, results)
-    const added = done.map(({ item: { file }, value }) => ({
+    const added = done.map(({ value }) => ({
       id: crypto.randomUUID(),
-      name: attachedNameOf(file, value.mediaType),
-      ...value
+      ...value,
+      name: nameOf(value.name)
     }))
     images.value = [...images.value, ...added]
 

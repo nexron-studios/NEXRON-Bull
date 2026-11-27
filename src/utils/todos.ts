@@ -1,5 +1,5 @@
 import type { ChatMessage } from '@/types/agentd.type'
-import { isTaskTool } from '@/utils/toolKind'
+import { isTaskTool, toolInfoOf } from '@/utils/toolKind'
 import {
   resultTextOf,
   resultsByToolId,
@@ -102,12 +102,12 @@ const taskCallsIn = (messages: ChatMessage[]): TaskCall[] =>
     resultsByToolId(messages)
   )
 
-/** The task tools that change the list; `TaskList` and `TaskGet` only read it. */
-const PLAN_WRITES = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate'])
-
 /**
  * The plan of one turn: the session's task list as it stands, but only when the turn wrote to it.
  * A turn that never touched the list would otherwise show the leftovers of an older prompt.
  */
-export const turnPlanOf = (chat: ChatMessage[], turn: ChatMessage[]): Todo[] =>
-  taskCallsIn(turn).some((call) => PLAN_WRITES.has(call.name)) ? todosOf(taskCallsIn(chat)) : []
+export const turnPlanOf = (chat: ChatMessage[], turn: ChatMessage[]): Todo[] => {
+  // `TaskList` and `TaskGet` only read the list.
+  const hasWritten = taskCallsIn(turn).some((call) => toolInfoOf(call.name).kind === 'change')
+  return hasWritten ? todosOf(taskCallsIn(chat)) : []
+}

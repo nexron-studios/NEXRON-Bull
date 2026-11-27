@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, SquareTerminal } from '@lucide/vue'
+import { SquareTerminal } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import NchShimmerText from '@/components/common/NchShimmerText.vue'
 import { useAgeFormat } from '@/composables/useAgeFormat'
@@ -13,7 +13,9 @@ import { backgroundAgentsOf } from '@/utils/chatTab'
 // build or a subagent is not mistaken for done (Jonas, 25.11.2026). Each task with how long it
 // runs; it leaves the list when it ends, and for an agent Claude's reply follows. Same card, wave
 // and shimmer as the thinking bar it follows (Jonas, 25.11.2026), in the working amber and a
-// slower wave: something still runs, but Claude itself waits.
+// slower wave: something still runs, but Claude itself waits. Agents only count in the title: the
+// panel's subagent list already names each one (Jonas, 27.11.2026: listing them here too was
+// useless), so the rows are the shells.
 const { tabId } = defineProps<{ tabId: string }>()
 
 const SHOWN_TASKS = 3
@@ -44,22 +46,16 @@ const agents = computed(() =>
       agent.isBackground && agent.agentId !== null && listedAgentIds.value.has(agent.agentId)
   )
 )
-const tasks = computed(() => [
-  ...agents.value.map((agent) => ({
-    id: agent.id,
-    icon: Bot,
-    name: `${agent.agentType} · ${agent.title}`,
-    age: ageOf(agent.startedAt)
-  })),
-  ...backgroundShells.value.map((shell) => ({
+const shells = computed(() =>
+  backgroundShells.value.map((shell) => ({
     id: shell.id,
-    icon: SquareTerminal,
     name: shell.description || shell.command,
     age: ageOf(shell.startedAt)
   }))
-])
-const shown = computed(() => tasks.value.slice(0, SHOWN_TASKS))
-const hiddenCount = computed(() => tasks.value.length - shown.value.length)
+)
+const taskCount = computed(() => agents.value.length + shells.value.length)
+const shown = computed(() => shells.value.slice(0, SHOWN_TASKS))
+const hiddenCount = computed(() => shells.value.length - shown.value.length)
 </script>
 
 <template>
@@ -70,7 +66,7 @@ const hiddenCount = computed(() => tasks.value.length - shown.value.length)
     leave-to-class="opacity-0"
   >
     <section
-      v-if="tasks.length"
+      v-if="taskCount"
       class="mb-2 flex flex-col gap-1 rounded-xl border border-border bg-card py-2 pr-3 pl-4"
       :aria-label="t('activity.bar_title')"
     >
@@ -91,7 +87,7 @@ const hiddenCount = computed(() => tasks.value.length - shown.value.length)
           <NchShimmerText :text="t('activity.bar_title')" class="min-w-0 font-medium" />
           <span class="shrink-0 text-meta text-muted-foreground tabular-nums">
             <span aria-hidden="true">·</span>
-            {{ t('activity.bar_count', tasks.length) }}
+            {{ t('activity.bar_count', taskCount) }}
           </span>
           <span
             v-if="agents.length"
@@ -104,6 +100,7 @@ const hiddenCount = computed(() => tasks.value.length - shown.value.length)
       </p>
       <!-- Rows start under the title, past the wave, as the thinking bar's label does. -->
       <TransitionGroup
+        v-if="shells.length"
         tag="ul"
         class="flex flex-col pl-7.5 text-meta"
         enter-active-class="motion-stagger"
@@ -111,20 +108,16 @@ const hiddenCount = computed(() => tasks.value.length - shown.value.length)
         leave-to-class="opacity-0"
       >
         <li
-          v-for="(task, index) in shown"
-          :key="task.id"
+          v-for="(shell, index) in shown"
+          :key="shell.id"
           class="flex min-w-0 items-center gap-2 py-0.5"
           :style="{ '--stagger-index': index }"
         >
-          <component
-            :is="task.icon"
-            class="size-3.5 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span class="min-w-0 flex-1 truncate">{{ task.name }}</span>
-          <span v-if="task.age" class="shrink-0 text-muted-foreground tabular-nums">
+          <SquareTerminal class="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span class="min-w-0 flex-1 truncate">{{ shell.name }}</span>
+          <span v-if="shell.age" class="shrink-0 text-muted-foreground tabular-nums">
             <span class="sr-only">{{ t('activity.bar_running_for') }}</span>
-            {{ task.age }}
+            {{ shell.age }}
           </span>
         </li>
         <li v-if="hiddenCount" key="more" class="py-0.5 pl-5.5 text-muted-foreground">

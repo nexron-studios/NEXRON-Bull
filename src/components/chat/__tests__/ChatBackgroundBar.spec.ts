@@ -99,11 +99,15 @@ describe('ChatBackgroundBar', () => {
     mounted.splice(0).forEach((wrapper) => wrapper.unmount())
   })
 
-  it('should list each agent and shell still running, agents first', () => {
+  it('should list only the shells, the panel already names the agents', () => {
     const names = mountBar(true)
       .findAll('li > .flex-1')
       .map((name) => name.text())
-    expect(names).toEqual(['Explore · Review the diff', 'Build'])
+    expect(names).toEqual(['Build'])
+  })
+
+  it('should count agents and shells in the title', () => {
+    expect(mountBar(true).find('p').text()).toContain('2 Aufgaben')
   })
 
   it('should say that Claude replies once the agent is done', () => {

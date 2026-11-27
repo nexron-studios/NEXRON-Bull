@@ -69,6 +69,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_kill,
             terminal::terminal_kill_all,
+            dictation::dictation_warm,
             dictation::dictation_start,
             dictation::dictation_stop,
             dictation::dictation_cancel,

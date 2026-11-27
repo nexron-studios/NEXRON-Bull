@@ -69,6 +69,9 @@ const ensureListening = () =>
 
 /** Claude Code's own dictation through a hidden `claude` on this machine (desktop app only). */
 export const dictationService = {
+  /** Starts Claude in the background unless it runs, so the next hold records at once. */
+  warm: (language: string): Promise<void> => call('dictation_warm', { language }),
+
   /** Holds Space in Claude; `listening` with the same `hold` follows once it records. */
   start: async (language: string, hold: number): Promise<void> => {
     await ensureListening()

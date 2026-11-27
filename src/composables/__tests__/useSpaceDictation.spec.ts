@@ -7,6 +7,7 @@ import { handleError } from '@/lib/error'
 import { useSpaceDictation } from '../useSpaceDictation'
 
 const service = vi.hoisted(() => ({
+  warm: vi.fn<(language: string) => Promise<void>>(),
   start: vi.fn<(language: string, hold: number) => Promise<void>>(),
   stop: vi.fn<() => Promise<string>>(),
   cancel: vi.fn<() => Promise<void>>(),
@@ -16,6 +17,7 @@ const service = vi.hoisted(() => ({
 vi.mock('@/api/services/dictation.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/services/dictation.service')>()),
   dictationService: {
+    warm: service.warm,
     start: service.start,
     stop: service.stop,
     cancel: service.cancel,
@@ -106,6 +108,8 @@ describe('useSpaceDictation', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     i18n.global.locale.value = 'de'
+    localStorage.clear()
+    service.warm.mockResolvedValue(undefined)
     service.start.mockResolvedValue(undefined)
     service.cancel.mockResolvedValue(undefined)
     service.stop.mockResolvedValue('')
@@ -389,6 +393,37 @@ describe('useSpaceDictation', () => {
     composer.keyup(' ')
 
     expect(composer.draft.value).toBe('a  ')
+  })
+
+  describe('warm-up', () => {
+    it('should not start Claude on focus for someone who never dictated', async () => {
+      const composer = await mountComposer('')
+      composer.caretAt(0)
+
+      expect(service.warm).not.toHaveBeenCalled()
+    })
+
+    it('should start Claude on focus once a dictation recorded', async () => {
+      const composer = await mountComposer('')
+      composer.caretAt(0)
+      composer.keydown(' ')
+      vi.advanceTimersByTime(500)
+      await composer.hear()
+      composer.keyup(' ')
+      await flushPromises()
+      composer.textarea().blur()
+      composer.caretAt(0)
+
+      expect(service.warm.mock.calls).toEqual([['de']])
+    })
+
+    it('should not start Claude on focus where dictation is off', async () => {
+      localStorage.setItem('bull.dictation.used', 'true')
+      const composer = await mountComposer('', false)
+      composer.caretAt(0)
+
+      expect(service.warm).not.toHaveBeenCalled()
+    })
   })
 
   describe('interim text', () => {

@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, type Ref } from 'vue'
-import { useEventListener, useTimeoutFn } from '@vueuse/core'
+import { useEventListener, useStorage, useTimeoutFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import {
   DictationError,
@@ -25,6 +25,7 @@ const ENGAGE_MS = 200
 const HOLD_MS = 500
 const ERROR_SHOW_MS = 2500
 const SPACE_CODE = 'Space'
+const HAS_DICTATED_STORAGE_KEY = 'bull.dictation.used'
 
 // The physical key, or the character where an input source sends no code (on-screen keyboards,
 // remote desktops): a press must end the way it started.
@@ -60,6 +61,9 @@ export const useSpaceDictation = ({
 }: SpaceDictationOptions) => {
   const state = ref<DictationState>({ kind: 'idle' })
   const { locale } = useI18n()
+  // Claude needs about 5 s from cold before it records, so the composer warms it up on focus.
+  // Only for someone who dictated before: everyone else would run a hidden Claude for nothing.
+  const hasDictated = useStorage(HAS_DICTATED_STORAGE_KEY, false, localStorage)
   // The key itself, apart from the dictation: once a dictation failed while Space is still down,
   // the system's auto-repeat must not type a row of spaces until it is let go.
   let isSpaceDown = false
@@ -223,7 +227,10 @@ export const useSpaceDictation = ({
       return cancelInClaude()
     }
     if (kind === 'engaged') commit()
-    if (state.value.kind === 'arming') state.value = { kind: 'recording', press: state.value.press }
+    if (state.value.kind === 'arming') {
+      state.value = { kind: 'recording', press: state.value.press }
+      hasDictated.value = true
+    }
     if (event.type === 'interim' && state.value.kind === 'recording') {
       interim.show(state.value.press.anchor, event.text)
     }
@@ -261,6 +268,9 @@ export const useSpaceDictation = ({
   })
   useEventListener(window, 'blur', release)
   useEventListener(textarea, 'blur', release)
+  useEventListener(textarea, 'focus', () => {
+    if (hasDictated.value && isEnabled()) dictationService.warm(locale.value).catch(handleError)
+  })
   const stopListening = dictationService.onEvent(handleEvent)
   onScopeDispose(() => {
     stopListening()

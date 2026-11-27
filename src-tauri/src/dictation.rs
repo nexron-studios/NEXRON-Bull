@@ -2,8 +2,9 @@
 //! speech API and forbids apps to use Claude.ai credentials, so Bull drives an unmodified `claude`
 //! TUI in a hidden pseudo console like a user would: it holds Space there (Claude recognises a
 //! held key by its auto-repeat), reads the transcript off the input line and clears it again.
-//! That Claude never gets Enter, so it never answers anything. It starts on the first dictation,
-//! stays warm for the next ones and ends after a while without any.
+//! That Claude never gets Enter, so it never answers anything. It needs about 5 s until its prompt
+//! box shows and records only after that, so the composer warms it up on focus (`warm`); it stays
+//! warm for the next dictations and ends after a while without any.
 //!
 //! The microphone is this machine's, also for a chat that runs on another one.
 
@@ -24,7 +25,8 @@ use crate::dictation_session::{HiddenClaude, KEY_DOWN, KEY_ESCAPE, KEY_SPACE, KE
 pub const DICTATION_EVENT: &str = "dictation";
 
 /// A key's auto-repeat as Claude needs it: it recorded with spaces every 50 ms, never with 65 ms.
-const REPEAT_INTERVAL: Duration = Duration::from_millis(30);
+/// It counts repeats rather than time: it recorded after ~0.1 s at this pace, ~0.2 s at 30 ms.
+const REPEAT_INTERVAL: Duration = Duration::from_millis(10);
 /// Claude records after about 0.5 s of repeats; this long without means it will not.
 const LISTEN_TIMEOUT: Duration = Duration::from_secs(3);
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -176,6 +178,24 @@ impl DictationHost {
         }
     }
 
+    /// Starts a Claude for `language` in the background unless one runs, so that the next press
+    /// records at once instead of waiting for Claude to start. Counts as use for the idle end.
+    pub fn warm(&self, language: &str) {
+        let inner = Arc::clone(&self.inner);
+        let language = language_of(language);
+        thread::spawn(move || {
+            // A press or another warm-up holds it: that one gets Claude ready already.
+            let Ok(_op) = inner.op.try_lock() else {
+                return;
+            };
+            *lock(&inner.last_used) = Instant::now();
+            // Only a head start: the press itself starts Claude again and reports the failure.
+            if let Err(err) = inner.ready_claude(&language) {
+                eprintln!("dictation: warming up Claude failed: {err}");
+            }
+        });
+    }
+
     /// Starts holding Space in a ready Claude; `Listening` for `hold` follows once it records.
     pub fn start(&self, language: &str, hold: u64) -> Result<(), DictationError> {
         let _op = lock(&self.inner.op);
@@ -184,7 +204,7 @@ impl DictationHost {
             // A hold nobody released is over; only the cleaning up below matters.
             let _ = previous.finish();
         }
-        let claude = self.ready_claude(&language_of(language))?;
+        let claude = self.inner.ready_claude(&language_of(language))?;
         settle_to_idle(&claude)?;
         clear_input(&claude)?;
         let baseline = prompt_of(&claude)
@@ -213,7 +233,7 @@ impl DictationHost {
         let hold = lock(&self.inner.hold)
             .take()
             .ok_or(DictationError::NotHolding)?;
-        let claude = self.current().ok_or(DictationError::Exited)?;
+        let claude = self.inner.current().ok_or(DictationError::Exited)?;
         let baseline = hold.baseline.clone();
         let result = match hold.finish() {
             Ok(true) => await_transcript(&claude, &baseline),
@@ -239,7 +259,7 @@ impl DictationHost {
         };
         // Recorded or not, it is thrown away; the hold only has to have ended.
         let _ = hold.finish();
-        let Some(claude) = self.current() else {
+        let Some(claude) = self.inner.current() else {
             return Ok(());
         };
         settle_to_idle(&claude)?;
@@ -255,21 +275,24 @@ impl DictationHost {
             claude.shut_down();
         }
     }
+}
 
+impl Inner {
     fn current(&self) -> Option<Arc<HiddenClaude>> {
-        lock(&self.inner.claude)
+        lock(&self.claude)
             .clone()
             .filter(|claude| claude.is_alive())
     }
 
     /// The running Claude, or a new one when there is none or it dictates another language.
+    /// The caller holds `op`.
     fn ready_claude(&self, language: &str) -> Result<Arc<HiddenClaude>, DictationError> {
         let running = self.current().filter(|claude| claude.language == language);
         let claude = match running {
             Some(claude) => claude,
             None => {
                 let claude = Arc::new(HiddenClaude::spawn(language)?);
-                if let Some(old) = lock(&self.inner.claude).replace(Arc::clone(&claude)) {
+                if let Some(old) = lock(&self.claude).replace(Arc::clone(&claude)) {
                     old.shut_down();
                 }
                 claude
@@ -277,7 +300,7 @@ impl DictationHost {
         };
         if let Err(err) = wait_ready(&claude) {
             // The next press starts afresh instead of waiting on a Claude that is stuck.
-            if let Some(stuck) = lock(&self.inner.claude).take() {
+            if let Some(stuck) = lock(&self.claude).take() {
                 stuck.shut_down();
             }
             return Err(err);
@@ -533,6 +556,11 @@ fn wait_for(claude: &HiddenClaude, timeout: Duration, is_done: impl Fn(&Prompt) 
     false
 }
 
+#[tauri::command]
+pub fn dictation_warm(host: State<'_, DictationHost>, language: String) {
+    host.warm(&language);
+}
+
 #[tauri::command(async)]
 pub fn dictation_start(
     host: State<'_, DictationHost>,
@@ -674,18 +702,26 @@ mod tests {
         assert!(host.cancel().is_ok());
     }
 
-    /// Drives the real `claude` on this machine: it must start, record (silence) and come back
-    /// with an empty input. Run with `cargo test -- --ignored real_claude`.
+    /// Drives the real `claude` on this machine: warmed up, it must record (silence) right away
+    /// and come back with an empty input. Run with `cargo test -- --ignored real_claude`.
     #[test]
     #[ignore = "starts the installed claude and records from the microphone"]
     fn real_claude_records_and_cleans_up() {
         const HOLD: Duration = Duration::from_millis(1500);
+        const WARM_RECORDING: Duration = Duration::from_millis(500);
         let (sender, events) = mpsc::channel();
         let sender = Mutex::new(sender);
         let host = DictationHost::new(move |event| {
             // The test may be over already.
             let _ = lock(&sender).send(event);
         });
+        host.warm("de");
+        let deadline = Instant::now() + READY_TIMEOUT;
+        while host.inner.current().and_then(|c| prompt_of(&c)).is_none() {
+            assert!(Instant::now() < deadline, "warming up took too long");
+            thread::sleep(POLL);
+        }
+        let pressed = Instant::now();
         host.start("de", 1).unwrap();
         let listening = DictationEvent {
             hold: 1,
@@ -695,6 +731,8 @@ mod tests {
             events.recv_timeout(Duration::from_secs(10)).unwrap(),
             listening
         );
+        eprintln!("listening after {:?}", pressed.elapsed());
+        assert!(pressed.elapsed() < WARM_RECORDING);
         thread::sleep(HOLD);
         let result = host.stop();
         eprintln!("stop: {result:?}");
@@ -702,7 +740,7 @@ mod tests {
             result,
             Ok(_) | Err(DictationError::NothingHeard(_))
         ));
-        let claude = host.current().unwrap();
+        let claude = host.inner.current().unwrap();
         assert_eq!(prompt_of(&claude).unwrap().text, "");
         host.start("de", 2).unwrap();
         thread::sleep(HOLD);

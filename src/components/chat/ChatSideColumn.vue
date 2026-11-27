@@ -5,6 +5,7 @@ import type { SideColumn } from '@/composables/useChatColumns'
 
 // A column right of the chat (preview, info panel) with its draggable left edge. The slot gets
 // `isClosing` (a drag would shut the column, the content fades) and `close` for its own button.
+// It glides open and shut (useLayoutGlide); the content keeps its width meanwhile and is clipped.
 const { column, label, toggleId } = defineProps<{
   column: SideColumn
   /** Names the edge for screen readers */
@@ -23,18 +24,24 @@ const close = async () => {
 </script>
 
 <template>
-  <div class="relative flex min-h-0 shrink-0" :style="{ width: `${column.layout.value.width}px` }">
-    <slot :is-closing="column.isClosing.value" :close />
-    <NchColumnEdge
-      :label
-      :width="column.layout.value.width"
-      :min-width="column.minWidth"
-      :max-width="column.layout.value.maxWidth"
-      :is-closing="column.isClosing.value"
-      @preview="column.preview"
-      @resize="column.resize"
-      @reset="column.resetWidth"
-      @close="close"
-    />
+  <div
+    class="flex min-h-0 w-(--glide-width) shrink-0"
+    :style="{ '--glide-width': `${column.layout.value.width}px` }"
+    data-glide
+  >
+    <div class="relative flex min-h-0 min-w-0 flex-1" data-glide-content>
+      <slot :is-closing="column.isClosing.value" :close />
+      <NchColumnEdge
+        :label
+        :width="column.layout.value.width"
+        :min-width="column.minWidth"
+        :max-width="column.layout.value.maxWidth"
+        :is-closing="column.isClosing.value"
+        @preview="column.preview"
+        @resize="column.resize"
+        @reset="column.resetWidth"
+        @close="close"
+      />
+    </div>
   </div>
 </template>

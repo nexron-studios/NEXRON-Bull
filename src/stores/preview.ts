@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
-import { useLayoutSnap } from '@/composables/useLayoutSnap'
+import { useLayoutGlide } from '@/composables/useLayoutGlide'
 import { useChatStore } from '@/stores/chat'
 import type { ChatTabState } from '@/utils/chatTab'
 import { latestPreviewOf, parseSavedPreviews, type SavedPreview } from '@/utils/previewUrl'
@@ -10,8 +10,6 @@ import { parseStoredWidth } from '@/utils/sideColumn'
 const URLS_STORAGE_KEY = 'bull.preview.urls'
 const OPEN_STORAGE_KEY = 'bull.preview.open'
 const WIDTH_STORAGE_KEY = 'bull.preview.width'
-/** On `<html>` while the pane slides in or out (transitions.css). */
-export const PREVIEW_SNAP_ATTRIBUTE = 'data-preview-snap'
 /** The header button that shows the pane; the focus returns there once the pane shuts. */
 export const PREVIEW_TOGGLE_ID = 'preview-toggle'
 
@@ -31,7 +29,7 @@ export const usePreviewStore = defineStore('preview', () => {
     serializer: { read: parseStoredWidth, write: String }
   })
   const isSheetRequested = ref(false)
-  const { snap } = useLayoutSnap(PREVIEW_SNAP_ATTRIBUTE)
+  const { glide } = useLayoutGlide()
 
   /** Remembers `url` for the tab; tabs that were closed meanwhile drop out. */
   const setUrl = (tab: ChatTabState, url: string) => {
@@ -58,15 +56,14 @@ export const usePreviewStore = defineStore('preview', () => {
     isOpen.value = false
   }
 
-  // The chat narrows while the pane slides in; flipped when the snap applies, so two toggles in
-  // one frame cancel out.
+  // The chat narrows while the pane glides in.
   const toggle = (hasRoom: boolean): Promise<void> => {
     if (!hasRoom) {
       if (isSheetRequested.value) closeSheet()
       else requestSheet()
       return Promise.resolve()
     }
-    return snap(() => {
+    return glide(() => {
       isOpen.value = !isOpen.value
       isSheetRequested.value = false
     }, true)
@@ -84,7 +81,7 @@ export const usePreviewStore = defineStore('preview', () => {
     isOpen,
     storedWidth,
     isSheetRequested,
-    snap,
+    glide,
     setUrl,
     toggle,
     show,

@@ -8,8 +8,8 @@ export interface SideColumnOptions {
   /** Saved width, `null` for the column's default */
   storedWidth: Ref<number | null>
   minWidth: number
-  /** The layout snap of this column (`useLayoutSnap`) */
-  snap: (update: () => void, isNewLayout: boolean) => Promise<void>
+  /** Animates this column's layout changes (`useLayoutGlide`) */
+  glide: (update: () => void, isNewLayout: boolean) => Promise<void>
 }
 
 /**
@@ -17,7 +17,7 @@ export interface SideColumnOptions {
  * a draft, and localStorage is written once, on release. A drag that would shut the column keeps
  * it on screen at its minimum (`isClosing`), so it can still come back.
  */
-export const useSideColumn = ({ isOpen, storedWidth, minWidth, snap }: SideColumnOptions) => {
+export const useSideColumn = ({ isOpen, storedWidth, minWidth, glide }: SideColumnOptions) => {
   const draft = ref<ColumnSize | null>(null)
 
   const isClosing = computed(() => draft.value?.isOpen === false)
@@ -33,13 +33,13 @@ export const useSideColumn = ({ isOpen, storedWidth, minWidth, snap }: SideColum
   // Never opens the column: a drag that ends because the shortcut shut it mid-drag keeps it shut.
   // Shutting keeps the stored width, which may be wider than this window shows.
   const resize = (next: ColumnSize, isShown: boolean) =>
-    snap(() => {
+    glide(() => {
       draft.value = null
       if (next.isOpen) storedWidth.value = next.width
       else isOpen.value = false
     }, !next.isOpen && isShown)
   const resetWidth = () =>
-    snap(() => {
+    glide(() => {
       draft.value = null
       storedWidth.value = null
     }, false)

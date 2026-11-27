@@ -23,7 +23,7 @@ const declarationsOf = (css: string, selector: string): Record<string, string> =
 }
 
 describe('layout snap cross-fade', () => {
-  it.each(['sidebar', 'chat-column', 'chat-pane'])(
+  it.each(['sidebar', 'chat-column'])(
     'should fade the old and new %s on one curve and add them up',
     (name) => {
       const old = declarationsOf(transitionsCss, `::view-transition-old(${name})`)
@@ -43,7 +43,7 @@ describe('layout snap cross-fade', () => {
     }
   )
 
-  it.each(['sidebar', 'chat-column', 'chat-pane', 'session-bar-tools', 'chat-search-field'])(
+  it.each(['sidebar', 'chat-column', 'session-bar-tools', 'chat-search-field'])(
     'should keep a lone %s picture from adding its light onto the parts beneath',
     (name) => {
       const pair = declarationsOf(transitionsCss, `::view-transition-image-pair(${name})`)
@@ -53,11 +53,35 @@ describe('layout snap cross-fade', () => {
   )
 
   it('should carry the session bar buttons as their own part', () => {
-    const tools = declarationsOf(
-      transitionsCss,
-      'html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]) [data-snap-bar-tools]'
-    )
+    const tools = declarationsOf(transitionsCss, 'html[data-sidebar-snap] [data-snap-bar-tools]')
 
     expect(tools['view-transition-name']).toBe('session-bar-tools')
+  })
+})
+
+describe('layout glide', () => {
+  it('should glide a column only while a glide runs, clipping its content', () => {
+    const column = declarationsOf(transitionsCss, 'html[data-layout-glide] [data-glide]')
+
+    expect([column.transition, column.overflow]).toEqual([
+      'width var(--duration-spring-smooth) var(--ease-spring-smooth)',
+      'clip'
+    ])
+  })
+
+  it('should hold the content at the width the column will have', () => {
+    const content = declarationsOf(
+      transitionsCss,
+      'html[data-layout-glide] [data-glide] > [data-glide-content]'
+    )
+
+    expect([content['min-width'], content['max-width']]).toEqual([
+      'var(--glide-width)',
+      'var(--glide-width)'
+    ])
+  })
+
+  it('should shrink a leaving column to nothing even after the glide ended', () => {
+    expect(declarationsOf(transitionsCss, '.column-leave-to').width).toBe('0')
   })
 })

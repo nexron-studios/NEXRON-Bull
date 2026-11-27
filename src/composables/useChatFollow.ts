@@ -1,5 +1,10 @@
 import { nextTick, onScopeDispose, ref, type Ref } from 'vue'
-import { createEventHook, useEventListener, usePreferredReducedMotion } from '@vueuse/core'
+import {
+  createEventHook,
+  useEventListener,
+  usePreferredReducedMotion,
+  useResizeObserver
+} from '@vueuse/core'
 import { springStepOf, type SpringState } from '@/utils/motion'
 import { smoothScrollStartOf } from '@/utils/scrollJump'
 
@@ -24,6 +29,8 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
   // list is not at the bottom while it runs.
   let isGlidingToHit = false
   let isDisposed = false
+  // At the very end as of the last scroll; the list keeps it while it changes size.
+  let isPinned = true
   // A glide that came to rest or that the reader took over; one replaced by the next does not count.
   const glideEnd = createEventHook<void>()
 
@@ -60,6 +67,8 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
     let last = performance.now()
     const end = () => {
       stopFollow()
+      // Its own writes never let go of the end: a glide up to a search hit does, where it stops.
+      isPinned = bottomOf(el) - el.scrollTop <= ARRIVAL_SLACK_PX
       void glideEnd.trigger()
     }
     const step = (now: number) => {
@@ -118,9 +127,21 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
       // The reader scrolled up during a follow: it lets go.
       if (followFrame && el && hasReaderMoved(el)) stopFollow()
       isAtBottom.value = (followFrame !== 0 && !isGlidingToHit) || isNearBottom()
+      // Rewrapped text moves the end without the reader: only their own scroll lets go of it.
+      if (el && bottomOf(el) - el.scrollTop <= ARRIVAL_SLACK_PX) isPinned = true
+      else if (el && Math.abs(el.scrollTop - written) > READER_MOVE_PX) isPinned = false
     },
     { passive: true }
   )
+  // A column gliding beside the chat or a resized window rewraps every message: a list that sat at
+  // its end stays there in each frame instead of the newest lines sliding out under the composer.
+  // Runs after layout and before paint, so no frame shows the list off its end.
+  useResizeObserver(scroller, () => {
+    const el = scroller.value
+    if (!el || followFrame || !isPinned) return
+    el.scrollTop = bottomOf(el)
+    written = el.scrollTop
+  })
   onScopeDispose(() => {
     isDisposed = true
     stopFollow()

@@ -1,7 +1,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { storeToRefs } from 'pinia'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { useLayoutSnap } from '@/composables/useLayoutSnap'
+import { useLayoutGlide } from '@/composables/useLayoutGlide'
 import { useSideColumn } from '@/composables/useSideColumn'
 import { usePreviewStore } from '@/stores/preview'
 import type { ChatTabState } from '@/utils/chatTab'
@@ -13,8 +13,6 @@ import { parseStoredWidth, type ColumnSize } from '@/utils/sideColumn'
 
 const PANEL_OPEN_STORAGE_KEY = 'bull.panel.open'
 const PANEL_WIDTH_STORAGE_KEY = 'bull.panel.width'
-/** On `<html>` while the panel slides in or out: only then do chat and panel carry a name. */
-const PANEL_SNAP_ATTRIBUTE = 'data-panel-snap'
 
 /**
  * The two columns right of the chat, the preview and the info panel, and how the window shares out
@@ -36,18 +34,18 @@ export const useChatColumns = (
     undefined,
     { serializer: { read: parseStoredWidth, write: String } }
   )
-  const { snap: snapPanel } = useLayoutSnap(PANEL_SNAP_ATTRIBUTE)
+  const { glide } = useLayoutGlide()
   const panelEdge = useSideColumn({
     isOpen: isPanelOpen,
     storedWidth: panelWidth,
     minWidth: INFO_PANEL_MIN_WIDTH,
-    snap: snapPanel
+    glide
   })
   const previewEdge = useSideColumn({
     isOpen: isPreviewOpen,
     storedWidth: previewWidth,
     minWidth: PREVIEW_MIN_WIDTH,
-    snap: previewStore.snap
+    glide: previewStore.glide
   })
 
   const layout = computed(() =>
@@ -63,10 +61,9 @@ export const useChatColumns = (
     previewShownAs(layout.value.preview.canShow, isPreviewOpen.value, previewStore.isSheetRequested)
   )
 
-  // The chat narrows while the panel slides in from the window's edge, and back when it shuts.
-  // Flipped when the snap applies, so two toggles in one frame cancel out.
+  // The chat narrows while the panel glides in from the window's edge, and back when it shuts.
   const togglePanel = () =>
-    snapPanel(() => {
+    glide(() => {
       isPanelOpen.value = !isPanelOpen.value
     }, layout.value.panel.canShow)
   const togglePreview = () => previewStore.toggle(layout.value.preview.canShow)

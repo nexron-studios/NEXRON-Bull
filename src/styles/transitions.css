@@ -209,8 +209,9 @@ html:is([data-route-transition='next'], [data-route-transition='prev']) {
   }
 }
 
-/* Sidebar snap (useLayoutSnap): rail, panel and full width morph into each other instead of
-   jumping. Sidebar and chat column carry a name only while a snap runs, like the route content.
+/* Sidebar snap to and from full width (useLayoutSnap), where the chat column leaves or comes back;
+   rail and panel glide instead (layout glide below). Sidebar and chat column carry a name only
+   while a snap runs, like the route content.
    The groups travel on the smooth spring; the snapshots keep their own size, pinned top left, so
    the wider one is revealed by its growing group instead of being stretched. */
 html[data-sidebar-snap] [data-snap-sidebar] {
@@ -220,8 +221,7 @@ html[data-sidebar-snap] [data-snap-chat] {
   view-transition-name: chat-column;
 }
 ::view-transition-group(sidebar),
-::view-transition-group(chat-column),
-::view-transition-group(chat-pane) {
+::view-transition-group(chat-column) {
   overflow: clip;
   animation-duration: var(--duration-spring-smooth);
   animation-timing-function: var(--ease-spring-smooth);
@@ -229,9 +229,7 @@ html[data-sidebar-snap] [data-snap-chat] {
 ::view-transition-old(sidebar),
 ::view-transition-new(sidebar),
 ::view-transition-old(chat-column),
-::view-transition-new(chat-column),
-::view-transition-old(chat-pane),
-::view-transition-new(chat-pane) {
+::view-transition-new(chat-column) {
   height: 100%;
   object-fit: none;
   object-position: left top;
@@ -241,7 +239,6 @@ html[data-sidebar-snap] [data-snap-chat] {
    faster fade-out let both sit half transparent at once and the whole part dimmed for a moment. */
 ::view-transition-old(sidebar),
 ::view-transition-old(chat-column),
-::view-transition-old(chat-pane),
 ::view-transition-old(session-bar-tools):only-child,
 ::view-transition-old(chat-search-field):only-child {
   mix-blend-mode: plus-lighter;
@@ -249,7 +246,6 @@ html[data-sidebar-snap] [data-snap-chat] {
 }
 ::view-transition-new(sidebar),
 ::view-transition-new(chat-column),
-::view-transition-new(chat-pane),
 ::view-transition-new(session-bar-tools):only-child,
 ::view-transition-new(chat-search-field):only-child {
   mix-blend-mode: plus-lighter;
@@ -259,7 +255,6 @@ html[data-sidebar-snap] [data-snap-chat] {
    the parts beneath it (the chat column when the sidebar goes full width). */
 ::view-transition-image-pair(sidebar),
 ::view-transition-image-pair(chat-column),
-::view-transition-image-pair(chat-pane),
 ::view-transition-image-pair(session-bar-tools),
 ::view-transition-image-pair(chat-search-field) {
   isolation: isolate;
@@ -267,11 +262,10 @@ html[data-sidebar-snap] [data-snap-chat] {
 /* The session bar's buttons sit at its right edge, the open search field below them: pinned top
    left, the new ones would wait outside the growing chat until it reached them. They travel there
    on the same spring instead. While the magnifier morphs, the field belongs to that morph. */
-html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]) [data-snap-bar-tools] {
+html[data-sidebar-snap] [data-snap-bar-tools] {
   view-transition-name: session-bar-tools;
 }
-html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]):not([data-search-morph])
-  [data-search-field] {
+html[data-sidebar-snap]:not([data-search-morph]) [data-search-field] {
   view-transition-name: chat-search-field;
 }
 ::view-transition-group(session-bar-tools),
@@ -280,71 +274,38 @@ html:is([data-sidebar-snap], [data-panel-snap], [data-preview-snap]):not([data-s
   animation-timing-function: var(--ease-spring-smooth);
 }
 
-/* Info panel (useInfoPanel): the chat narrows like in the sidebar snap above, and the panel
-   slides in from the window's right edge on the same spring, so its left edge stays on the chat's
-   right edge all the way. Shutting runs the same way back. Header, tab bar and sidebar are no part
-   of it and stand still. */
-html:is([data-panel-snap], [data-preview-snap]) [data-snap-chat-pane] {
-  view-transition-name: chat-pane;
-}
-html:is([data-panel-snap], [data-preview-snap]) [data-snap-panel] {
-  view-transition-name: info-panel;
-}
-::view-transition-new(info-panel):only-child {
-  animation: panel-slide-in var(--duration-spring-smooth) var(--ease-spring-smooth) both;
-}
-::view-transition-old(info-panel):only-child {
-  animation: panel-slide-out var(--duration-spring-smooth) var(--ease-spring-smooth) both;
-}
-@keyframes panel-slide-in {
-  from {
-    transform: translateX(100%);
-  }
-}
-@keyframes panel-slide-out {
-  to {
-    transform: translateX(100%);
-  }
-}
-/* Reduced motion: the chat takes its new width at once (main.css stops the groups) and the panel
-   only fades, like the sidebar snap. */
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-new(info-panel):only-child {
-    animation: route-in 200ms var(--ease-out-soft) both;
-  }
-  ::view-transition-old(info-panel):only-child {
-    animation: route-out 120ms var(--ease-out-soft) both;
-  }
-}
-
-/* Preview (usePreviewPane): the chat narrows on the same spring as for the info panel, and the
-   pane comes in from the chat's side: it sits between chat and info panel, so a slide from the
-   window's edge would cross the info panel. While the info panel snaps, the pane travels with the
-   chat's right edge instead of jumping. */
-html:is([data-panel-snap], [data-preview-snap]) [data-snap-preview] {
-  view-transition-name: preview-pane;
-}
-::view-transition-group(preview-pane) {
+/* Layout glide (useLayoutGlide): a column beside the chat opens, shuts or changes size through its
+   real width on the smooth spring, so the chat is laid out every frame and its messages travel
+   with the edge instead of cross-fading between two places. Only while a glide runs: an edge
+   dragged by hand follows the pointer 1:1. The column clips its content, which keeps the width it
+   will have (`--glide-width`) and does not rewrap on the way. Reduced motion: main.css stops the
+   transition, the width changes at once. */
+html[data-layout-glide] [data-glide] {
   overflow: clip;
-  animation-duration: var(--duration-spring-smooth);
-  animation-timing-function: var(--ease-spring-smooth);
+  transition: width var(--duration-spring-smooth) var(--ease-spring-smooth);
 }
-::view-transition-new(preview-pane):only-child {
-  animation: preview-in var(--duration-spring-smooth) var(--ease-spring-smooth) both;
+html[data-layout-glide] [data-glide] > [data-glide-content] {
+  min-width: var(--glide-width);
+  max-width: var(--glide-width);
 }
-::view-transition-old(preview-pane):only-child {
-  animation: route-out var(--duration-snap-fade) var(--ease-out-soft) both;
+/* Rail and panel swap inside the gliding sidebar (ChatView): the new one is there at once, the old
+   one stays on top where it was and fades out while the edge passes over it. */
+html[data-layout-glide] .glide-swap-leave-active {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  transition: opacity var(--duration-fade) var(--ease-out-soft);
 }
-@keyframes preview-in {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
+html[data-layout-glide] .glide-swap-leave-to {
+  opacity: 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-new(preview-pane):only-child {
-    animation: route-in 200ms var(--ease-out-soft) both;
-  }
+/* A column that opens or shuts (ChatSideColumns) grows from and shrinks to nothing. One that
+   appears for another reason (the window got room for it) is there at once, without a frame at
+   nothing. Shrinking is not tied to the glide: the column must not widen again in the frames
+   between the glide's end and its removal. */
+html[data-layout-glide] .column-enter-from,
+.column-leave-to {
+  width: 0;
 }
 
 /* Chat search (useChatSearch, Figma "13c"). The magnifier and the field are one shared element:

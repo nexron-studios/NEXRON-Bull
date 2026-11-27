@@ -80,6 +80,9 @@ const { labelOf: machineLabelOf } = useMachineLabel()
 const chat = useChatStore()
 const rewind = useRewindStore()
 const drafts = useDraftStore()
+// Before useChatFollow: resize observers run in the order they were made, so a new width first lays
+// every message out again and the follow then holds the list at its end in that same frame.
+useSkipOffscreenWidth(scroller)
 const { isAtBottom, scrollToBottom, follow, glideToBottom, glideTo, isGliding, onGlideEnd } =
   useChatFollow(scroller)
 // The open search floats over the chat's top: a revealed card lands below it.
@@ -88,7 +91,6 @@ const reducedMotion = usePreferredReducedMotion()
 // The session bar (phone: the screen's top bar) casts its edge. The composer deliberately does
 // not: a band above it read as a footer and blinked off after every message.
 const { hasMoreAbove } = useScrollEdges(scroller)
-useSkipOffscreenWidth(scroller)
 
 const isWorking = computed(() => tab.status === 'working' || tab.status === 'asking')
 // Every streamed token replaces the tab object, but not its message lists. These computeds return

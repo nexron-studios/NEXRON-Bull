@@ -1,7 +1,7 @@
 import { nextTick } from 'vue'
 import { ROUTE_TRANSITION_ATTRIBUTE, isSkippedTransition } from '@/utils/viewTransitions'
 
-// One queue for every layout snap (sidebar and info panel alike): a second startViewTransition
+// One queue for every layout snap (sidebar and search alike): a second startViewTransition
 // would skip the first, so snaps that start before the old snapshot is taken share one transition.
 let pending: (() => void) | null = null
 let waiting: Promise<void> | null = null
@@ -28,8 +28,8 @@ const release = (attributes: Set<string>) => {
 }
 
 /**
- * Animates a jump of the layout (the sidebar between rail, panel and full width, the info panel
- * in and out) through the View Transitions API: the browser morphs snapshots of the parts on the
+ * Animates a jump of the layout (the sidebar to and from full width, the search field opening)
+ * through the View Transitions API: the browser morphs snapshots of the parts on the
  * compositor instead of animating their width frame by frame. `attribute` sits on `<html>` while
  * the snap runs; only then do the parts carry their transition names (transitions.css). Without
  * the API, or during a page change, the update applies at once.

@@ -141,6 +141,10 @@ const showTerminal = (id: string) => {
   shownTerminalId.value = id
   if (!isChatRoute.value) void router.push({ name: 'chat' })
 }
+// Rail and panel swap while the edge glides: the old one keeps its own width as it fades out.
+const holdGlideWidth = (el: Element) => {
+  if (el instanceof HTMLElement) el.style.setProperty('--glide-width', `${el.offsetWidth}px`)
+}
 const searchFromRail = async () => {
   hasSearchOnOpen.value = true
   showPanel()
@@ -263,26 +267,31 @@ watch(
     </div>
     <aside
       v-else-if="!isNarrow"
-      class="relative flex shrink-0 flex-col"
+      class="relative flex w-(--glide-width) shrink-0 flex-col"
       :class="layout === 'full' ? 'flex-1' : 'border-r border-border'"
-      :style="{ width: asideWidth }"
+      :style="{ '--glide-width': asideWidth }"
       :aria-label="t('sidebar.label')"
       data-snap-sidebar
+      data-glide
     >
-      <SessionRail
-        v-if="layout === 'rail'"
-        @new="openNew"
-        @search="searchFromRail"
-        @expand="showPanel"
-      />
-      <SessionSidebar
-        v-else
-        :is-wide="layout === 'full'"
-        :has-search-on-open
-        @new="openNew"
-        @hide="toggleRail"
-        @opened="handleOpened"
-      />
+      <Transition name="glide-swap" @before-leave="holdGlideWidth">
+        <SessionRail
+          v-if="layout === 'rail'"
+          data-glide-content
+          @new="openNew"
+          @search="searchFromRail"
+          @expand="showPanel"
+        />
+        <SessionSidebar
+          v-else
+          :is-wide="layout === 'full'"
+          data-glide-content
+          :has-search-on-open
+          @new="openNew"
+          @hide="toggleRail"
+          @opened="handleOpened"
+        />
+      </Transition>
       <SessionResizeHandle
         :size
         :window-width
@@ -343,7 +352,7 @@ watch(
       <div class="flex min-h-0 flex-1">
         <NavRoutePage v-if="!isChatRoute" edge="top" @new="openNew" />
         <TerminalTabPane v-else-if="shownTerminal" :entry="shownTerminal" />
-        <div v-else-if="shownChatTab" class="flex min-w-0 flex-1 flex-col" data-snap-chat-pane>
+        <div v-else-if="shownChatTab" class="flex min-w-0 flex-1 flex-col">
           <ChatPaneSwitch
             :tab="shownChatTab"
             :tabs

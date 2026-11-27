@@ -61,9 +61,8 @@ export const searchEntriesOf = (stream: StreamItem[]): SearchEntry[] =>
         return item.steps.flatMap((step) =>
           step.kind === 'tool' ? toolEntryOf(item.key, order, step.block) : []
         )
-      // Thinking, steps and sources are not what a reader looks for again.
+      // Thinking and sources are not what a reader looks for again.
       case 'reasoning':
-      case 'todos':
       case 'sources':
         return []
       default: {

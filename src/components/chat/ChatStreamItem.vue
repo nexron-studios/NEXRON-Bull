@@ -5,7 +5,6 @@ import ChatMessageItem from '@/components/chat/ChatMessageItem.vue'
 import ChatReadGroup from '@/components/chat/ChatReadGroup.vue'
 import ChatReasoning from '@/components/chat/ChatReasoning.vue'
 import ChatSources from '@/components/chat/ChatSources.vue'
-import ChatSteps from '@/components/chat/ChatSteps.vue'
 import ChatToolCall from '@/components/chat/ChatToolCall.vue'
 import { toolCardIdOf } from '@/composables/useChatReveal'
 import type { StreamItem } from '@/utils/chatStream'
@@ -59,11 +58,6 @@ const hookBlock = computed(() => hookBlockOf(result.value))
     v-else-if="item.kind === 'reads'"
     :steps="item.steps"
     :results
-    :is-running="isRunning && item.isCurrent"
-  />
-  <ChatSteps
-    v-else-if="item.kind === 'todos'"
-    :todos="item.todos"
     :is-running="isRunning && item.isCurrent"
   />
   <ChatSources v-else :sources="item.sources" />

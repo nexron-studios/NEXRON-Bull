@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markdown, renderSegments } from '../markdown'
+import { markdown, renderInline, renderSegments } from '../markdown'
 
 describe('renderSegments', () => {
   it('should cut the text around a callout', () => {
@@ -99,5 +99,17 @@ describe('markdown', () => {
     expect(markdown.render('[Doku](https://vuejs.org)')).toBe(
       '<p><a href="https://vuejs.org">Doku</a></p>\n'
     )
+  })
+})
+
+describe('renderInline', () => {
+  it('should render bold, code and links without a paragraph around them', () => {
+    expect(renderInline('**Fix** `a.ts` see https://x.dev')).toBe(
+      '<strong>Fix</strong> <code>a.ts</code> see <a href="https://x.dev">https://x.dev</a>'
+    )
+  })
+
+  it('should escape HTML Claude wrote', () => {
+    expect(renderInline('<b>hi</b>')).toBe('&lt;b&gt;hi&lt;/b&gt;')
   })
 })

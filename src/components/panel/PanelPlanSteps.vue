@@ -2,9 +2,11 @@
 import type { Component } from 'vue'
 import { Check, Circle, CircleDashed, LoaderCircle } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+import NchInlineMarkdown from '@/components/common/NchInlineMarkdown.vue'
 import type { Todo, TodoStatus } from '@/utils/todos'
 
-// Claude's task list (TodoWrite or TaskCreate/TaskUpdate) as steps, after prompt-kit's Steps (MIT).
+// Claude's task list (TodoWrite or TaskCreate/TaskUpdate) as steps in the panel, after prompt-kit's
+// Steps (MIT). Only here, not in the chat (Jonas, 27.11.2026).
 const { todos, isRunning = false } = defineProps<{ todos: Todo[]; isRunning?: boolean }>()
 
 const { t } = useI18n()
@@ -40,7 +42,7 @@ const lookOf = (status: TodoStatus) =>
         :class="lookOf(todo.status).iconClass"
         aria-hidden="true"
       />
-      <span class="min-w-0 break-words">{{ todo.content }}</span>
+      <NchInlineMarkdown :text="todo.content" class="min-w-0 break-words" />
       <span class="sr-only">{{ t(`chat.stream.todo_state.${todo.status}`) }}</span>
     </li>
   </ul>

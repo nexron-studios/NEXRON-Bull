@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
+import NchInlineMarkdown from '@/components/common/NchInlineMarkdown.vue'
 import PanelFoldedList from '@/components/panel/PanelFoldedList.vue'
 import { ListChecks } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
@@ -75,7 +76,7 @@ const toggleFold = () => {
             class="min-w-0 flex-1 cursor-pointer break-words"
             :class="{ 'text-muted-foreground line-through': item.isDone }"
           >
-            {{ item.text }}
+            <NchInlineMarkdown :text="item.text" />
           </label>
         </li>
       </ul>

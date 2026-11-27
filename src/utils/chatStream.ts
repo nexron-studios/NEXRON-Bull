@@ -2,7 +2,6 @@ import type { Block, ChatMessage } from '@/types/agentd.type'
 import { MS_PER_SECOND } from '@/utils/elapsed'
 import { sourcesOfCall, uniqueSources, type Source } from '@/utils/sources'
 import { isPromptEcho } from '@/utils/pendingPrompts'
-import { taskCallsOf, todosOf, type TaskCall, type Todo } from '@/utils/todos'
 import { isReadOnlyTool, isTaskTool } from '@/utils/toolKind'
 import { hookBlockOf } from '@/utils/toolOutput'
 import { visibleMessages, type ToolResultBlock, type ToolUseBlock } from '@/utils/toolPairs'
@@ -30,7 +29,6 @@ export type StreamItem =
   | { kind: 'tool'; key: string; block: ToolUseBlock; isCurrent: boolean }
   /** Consecutive reads and searches as one quiet line, like "3 Dateien gelesen, 1 Suche" */
   | { kind: 'reads'; key: string; steps: ReadStep[]; isCurrent: boolean }
-  | { kind: 'todos'; key: string; todos: Todo[]; isCurrent: boolean }
   | { kind: 'sources'; key: string; sources: Source[] }
 
 export interface StreamOptions {
@@ -53,7 +51,6 @@ type BlockEntry = Extract<Entry, { kind: 'block' }>
 interface StreamContext {
   seconds: Map<string, number | null>
   results: Map<string, ToolResultBlock>
-  earlierTaskCalls: TaskCall[]
 }
 
 const secondsBetween = (from: string | null, to: string | null): number | null => {
@@ -162,18 +159,6 @@ const toolCallsOf = (entries: Entry[]): ToolUseBlock[] =>
     entry.kind === 'block' && entry.block.type === 'tool_use' ? [entry.block] : []
   )
 
-/** The plan as it stands after this run, shown only below a run that changed it. */
-const todosItem = (
-  segmentKey: string,
-  earlier: TaskCall[],
-  calls: TaskCall[],
-  isCurrent: boolean
-): StreamItem[] => {
-  if (!calls.length) return []
-  const todos = todosOf([...earlier, ...calls])
-  return todos.length ? [{ kind: 'todos', key: `todos:${segmentKey}`, todos, isCurrent }] : []
-}
-
 const sourcesItem = (
   segmentKey: string,
   entries: Entry[],
@@ -187,7 +172,10 @@ const sourcesItem = (
   return sources.length ? [{ kind: 'sources', key: `sources:${segmentKey}`, sources }] : []
 }
 
-/** One uninterrupted run of Claude's work, then the pages it read and its plan. */
+/**
+ * One uninterrupted run of Claude's work, then the pages it read. Its plan (TaskCreate, TodoWrite)
+ * shows only in the panel (Jonas, 27.11.2026: the chat repeated it after every run).
+ */
 const segmentItems = (
   segmentKey: string,
   entries: Entry[],
@@ -195,13 +183,7 @@ const segmentItems = (
   context: StreamContext
 ): StreamItem[] => [
   ...flatItemsOf(entries, isCurrent, context),
-  ...sourcesItem(segmentKey, entries, context.results),
-  ...todosItem(
-    segmentKey,
-    context.earlierTaskCalls,
-    taskCallsOf(toolCallsOf(entries), context.results),
-    isCurrent
-  )
+  ...sourcesItem(segmentKey, entries, context.results)
 ]
 
 /** A message that joins the run it arrives in instead of ending it. */
@@ -236,7 +218,7 @@ const withStats = (items: StreamItem[], from: number, stats: TurnStats | null): 
 }
 
 /**
- * The chat as the pane shows it: prompts, reasoning, tool cards, folded reads, answers, steps.
+ * The chat as the pane shows it: prompts, reasoning, tool cards, folded reads, answers.
  * Prompts marked `is_mid_turn` were sent while Claude was working; they stay inside the run they
  * interrupted instead of starting a new one, and so do hook lines.
  */
@@ -247,17 +229,13 @@ export const buildStream = (
 ): StreamItem[] => {
   const seconds = thinkingSeconds(messages)
   const items: StreamItem[] = []
-  // Claude Code's task list belongs to the session, so each run continues the one before.
-  let earlierTaskCalls: TaskCall[] = []
   let segment: Entry[] = []
   let turn: ChatMessage[] = []
   let turnStart = 0
   const flush = (isCurrent: boolean) => {
     const [first] = segment
     if (!first) return
-    const context = { seconds, results, earlierTaskCalls }
-    items.push(...segmentItems(keyOf(first), segment, isCurrent, context))
-    earlierTaskCalls = [...earlierTaskCalls, ...taskCallsOf(toolCallsOf(segment), results)]
+    items.push(...segmentItems(keyOf(first), segment, isCurrent, { seconds, results }))
     segment = []
   }
   const closeTurn = () => withStats(items, turnStart, turnStatsOf(turn, outputs))

@@ -117,53 +117,12 @@ describe('buildStream', () => {
     expect(items.map((item) => item.kind)).toEqual(['message', 'reasoning', 'message'])
   })
 
-  it('should turn the latest TodoWrite into steps instead of a card', () => {
-    const items = stream([prompt, read, readResult, todo, answer])
-    expect(items.at(-1)).toEqual({
-      kind: 'todos',
-      key: 'todos:a3:0',
-      todos: [{ id: '1', content: 'Read header', status: 'completed' }],
-      isCurrent: true
-    })
-    expect(items.map((item) => item.kind)).toEqual(['message', 'reads', 'message', 'todos'])
-  })
-
-  it('should carry tasks created in an earlier turn into the next one', () => {
+  it('should leave the plan to the panel, without a card or steps in the chat', () => {
     const create = message('a7', 'assistant', [
       { type: 'tool_use', id: 't4', name: 'TaskCreate', input: { subject: 'Build' } }
     ])
-    const created = message('u4', 'user', [
-      {
-        type: 'tool_result',
-        tool_use_id: 't4',
-        is_error: false,
-        content: [{ type: 'text', text: 'Task #1 created successfully: Build' }]
-      }
-    ])
-    const next = message('p2', 'user', [{ type: 'text', text: 'Go on' }])
-    const done = message('a8', 'assistant', [
-      {
-        type: 'tool_use',
-        id: 't5',
-        name: 'TaskUpdate',
-        input: { taskId: '1', status: 'completed' }
-      }
-    ])
-    const items = stream([prompt, create, created, next, done])
-    expect(items.filter((item) => item.kind === 'todos')).toEqual([
-      {
-        kind: 'todos',
-        key: 'todos:a7:0',
-        todos: [{ id: '1', content: 'Build', status: 'pending' }],
-        isCurrent: false
-      },
-      {
-        kind: 'todos',
-        key: 'todos:a8:0',
-        todos: [{ id: '1', content: 'Build', status: 'completed' }],
-        isCurrent: true
-      }
-    ])
+    const items = stream([prompt, read, readResult, todo, create, answer])
+    expect(items.map((item) => item.kind)).toEqual(['message', 'reads', 'message'])
   })
 
   it('should keep a prompt sent mid-turn inside the running turn', () => {

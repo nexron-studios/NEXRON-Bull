@@ -2,11 +2,11 @@
 import { computed } from 'vue'
 import { ListTodo } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
-import ChatSteps from '@/components/chat/ChatSteps.vue'
+import PanelPlanSteps from '@/components/panel/PanelPlanSteps.vue'
 import PanelSection from '@/components/panel/PanelSection.vue'
 import type { Todo } from '@/utils/todos'
 
-// Claude's plan for the prompt, the same steps the chat shows below its work, with how far it got.
+// Claude's plan for the prompt, with how far it got. The chat does not repeat it (27.11.2026).
 const { todos, isRunning } = defineProps<{ todos: Todo[]; isRunning: boolean }>()
 
 const { t } = useI18n()
@@ -21,6 +21,6 @@ const doneCount = computed(() => todos.filter((todo) => todo.status === 'complet
         {{ t('panel.plan_count', { done: doneCount, all: todos.length }) }}
       </span>
     </template>
-    <ChatSteps :todos :is-running />
+    <PanelPlanSteps :todos :is-running />
   </PanelSection>
 </template>

@@ -83,6 +83,12 @@ export const markdown = new MarkdownIt({
   .use(taskLists)
   .use(previewLinks)
 
+// One line of Claude's words outside the chat (a step of its plan, an "Offen" point in the panel):
+// bold, code and links, without the chat's plugins, whose buttons only the chat pane answers.
+const inlineMarkdown = new MarkdownIt({ html: false, linkify: true })
+
+export const renderInline = (text: string): string => inlineMarkdown.renderInline(text)
+
 export type MarkdownSegment =
   { kind: 'markdown'; html: string } | { kind: 'callout'; callout: CalloutProps; html: string }
 

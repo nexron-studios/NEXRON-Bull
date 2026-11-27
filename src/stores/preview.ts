@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
-import { useLayoutGlide } from '@/composables/useLayoutGlide'
+import { glideLayout } from '@/lib/layoutGlide'
 import { useChatStore } from '@/stores/chat'
 import type { ChatTabState } from '@/utils/chatTab'
 import { latestPreviewOf, parseSavedPreviews, type SavedPreview } from '@/utils/previewUrl'
@@ -29,7 +29,6 @@ export const usePreviewStore = defineStore('preview', () => {
     serializer: { read: parseStoredWidth, write: String }
   })
   const isSheetRequested = ref(false)
-  const { glide } = useLayoutGlide()
 
   /** Remembers `url` for the tab; tabs that were closed meanwhile drop out. */
   const setUrl = (tab: ChatTabState, url: string) => {
@@ -63,7 +62,7 @@ export const usePreviewStore = defineStore('preview', () => {
       else requestSheet()
       return Promise.resolve()
     }
-    return glide(() => {
+    return glideLayout(() => {
       isOpen.value = !isOpen.value
       isSheetRequested.value = false
     }, true)
@@ -81,7 +80,6 @@ export const usePreviewStore = defineStore('preview', () => {
     isOpen,
     storedWidth,
     isSheetRequested,
-    glide,
     setUrl,
     toggle,
     show,

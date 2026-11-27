@@ -274,7 +274,7 @@ html[data-sidebar-snap]:not([data-search-morph]) [data-search-field] {
   animation-timing-function: var(--ease-spring-smooth);
 }
 
-/* Layout glide (useLayoutGlide): a column beside the chat opens, shuts or changes size through its
+/* Layout glide (glideLayout): a column beside the chat opens, shuts or changes size through its
    real width on the smooth spring, so the chat is laid out every frame and its messages travel
    with the edge instead of cross-fading between two places. Only while a glide runs: an edge
    dragged by hand follows the pointer 1:1. The column clips its content, which keeps the width it

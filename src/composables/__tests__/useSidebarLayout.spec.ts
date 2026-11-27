@@ -1,6 +1,6 @@
 import { effectScope, type EffectScope } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LAYOUT_GLIDE_ATTRIBUTE } from '../useLayoutGlide'
+import { LAYOUT_GLIDE_ATTRIBUTE } from '@/lib/layoutGlide'
 import { useSidebarLayout } from '../useSidebarLayout'
 
 let scope: EffectScope

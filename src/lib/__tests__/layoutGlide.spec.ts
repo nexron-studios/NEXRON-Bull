@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ROUTE_TRANSITION_ATTRIBUTE } from '@/utils/viewTransitions'
-import { LAYOUT_GLIDE_ATTRIBUTE, useLayoutGlide } from '../useLayoutGlide'
+import { LAYOUT_GLIDE_ATTRIBUTE, glideLayout } from '../layoutGlide'
 
 const GLIDE_MS = 410
 
@@ -16,12 +16,11 @@ afterEach(() => {
   document.documentElement.removeAttribute(ROUTE_TRANSITION_ATTRIBUTE)
 })
 
-describe('useLayoutGlide', () => {
+describe('glideLayout', () => {
   it('should apply the update with the root marked as gliding', () => {
-    const { glide } = useLayoutGlide()
     let isMarkedDuringUpdate = false
 
-    void glide(() => {
+    void glideLayout(() => {
       isMarkedDuringUpdate = document.documentElement.hasAttribute(LAYOUT_GLIDE_ATTRIBUTE)
     }, true)
 
@@ -29,9 +28,7 @@ describe('useLayoutGlide', () => {
   })
 
   it('should unmark the root once the spring has arrived', () => {
-    const { glide } = useLayoutGlide()
-
-    void glide(() => {}, true)
+    void glideLayout(() => {}, true)
     vi.advanceTimersByTime(GLIDE_MS - 1)
     const isMarkedBefore = document.documentElement.hasAttribute(LAYOUT_GLIDE_ATTRIBUTE)
     vi.advanceTimersByTime(1)
@@ -42,21 +39,18 @@ describe('useLayoutGlide', () => {
   })
 
   it('should keep the root marked for a glide that starts while another runs', () => {
-    const { glide } = useLayoutGlide()
-
-    void glide(() => {}, true)
+    void glideLayout(() => {}, true)
     vi.advanceTimersByTime(GLIDE_MS - 10)
-    void glide(() => {}, true)
+    void glideLayout(() => {}, true)
     vi.advanceTimersByTime(10)
 
     expect(document.documentElement.hasAttribute(LAYOUT_GLIDE_ATTRIBUTE)).toBe(true)
   })
 
   it('should apply a change within the same layout without gliding', () => {
-    const { glide } = useLayoutGlide()
     const applied: string[] = []
 
-    void glide(() => applied.push('width'), false)
+    void glideLayout(() => applied.push('width'), false)
 
     expect([applied, document.documentElement.hasAttribute(LAYOUT_GLIDE_ATTRIBUTE)]).toEqual([
       ['width'],
@@ -66,10 +60,9 @@ describe('useLayoutGlide', () => {
 
   it('should not glide during a page change, which shows snapshots', () => {
     document.documentElement.setAttribute(ROUTE_TRANSITION_ATTRIBUTE, 'next')
-    const { glide } = useLayoutGlide()
     let isMarkedDuringUpdate = true
 
-    void glide(() => {
+    void glideLayout(() => {
       isMarkedDuringUpdate = document.documentElement.hasAttribute(LAYOUT_GLIDE_ATTRIBUTE)
     }, true)
 

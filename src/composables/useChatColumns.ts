@@ -1,8 +1,8 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { storeToRefs } from 'pinia'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { useLayoutGlide } from '@/composables/useLayoutGlide'
 import { useSideColumn } from '@/composables/useSideColumn'
+import { glideLayout } from '@/lib/layoutGlide'
 import { usePreviewStore } from '@/stores/preview'
 import type { ChatTabState } from '@/utils/chatTab'
 import { columnWidthsOf } from '@/utils/chatColumns'
@@ -34,18 +34,15 @@ export const useChatColumns = (
     undefined,
     { serializer: { read: parseStoredWidth, write: String } }
   )
-  const { glide } = useLayoutGlide()
   const panelEdge = useSideColumn({
     isOpen: isPanelOpen,
     storedWidth: panelWidth,
-    minWidth: INFO_PANEL_MIN_WIDTH,
-    glide
+    minWidth: INFO_PANEL_MIN_WIDTH
   })
   const previewEdge = useSideColumn({
     isOpen: isPreviewOpen,
     storedWidth: previewWidth,
-    minWidth: PREVIEW_MIN_WIDTH,
-    glide: previewStore.glide
+    minWidth: PREVIEW_MIN_WIDTH
   })
 
   const layout = computed(() =>
@@ -63,7 +60,7 @@ export const useChatColumns = (
 
   // The chat narrows while the panel glides in from the window's edge, and back when it shuts.
   const togglePanel = () =>
-    glide(() => {
+    glideLayout(() => {
       isPanelOpen.value = !isPanelOpen.value
     }, layout.value.panel.canShow)
   const togglePreview = () => previewStore.toggle(layout.value.preview.canShow)

@@ -60,6 +60,7 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
     scroller.value?.scrollTo({ top: scroller.value.scrollHeight })
   }
   const bottomOf = (el: HTMLElement) => el.scrollHeight - el.clientHeight
+  const isAtEnd = (el: HTMLElement) => bottomOf(el) - el.scrollTop <= ARRIVAL_SLACK_PX
   // The list glides on the smooth spring instead of snapping a line at a time. Each frame aims at
   // the target as it is now, so a reply that keeps growing keeps the speed it has.
   const startFollow = (el: HTMLElement, targetOf: (el: HTMLElement) => number = bottomOf) => {
@@ -68,7 +69,7 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
     const end = () => {
       stopFollow()
       // Its own writes never let go of the end: a glide up to a search hit does, where it stops.
-      isPinned = bottomOf(el) - el.scrollTop <= ARRIVAL_SLACK_PX
+      isPinned = isAtEnd(el)
       void glideEnd.trigger()
     }
     const step = (now: number) => {
@@ -128,8 +129,8 @@ export const useChatFollow = (scroller: Ref<HTMLElement | null>) => {
       if (followFrame && el && hasReaderMoved(el)) stopFollow()
       isAtBottom.value = (followFrame !== 0 && !isGlidingToHit) || isNearBottom()
       // Rewrapped text moves the end without the reader: only their own scroll lets go of it.
-      if (el && bottomOf(el) - el.scrollTop <= ARRIVAL_SLACK_PX) isPinned = true
-      else if (el && Math.abs(el.scrollTop - written) > READER_MOVE_PX) isPinned = false
+      if (el)
+        isPinned = isAtEnd(el) || (isPinned && Math.abs(el.scrollTop - written) <= READER_MOVE_PX)
     },
     { passive: true }
   )

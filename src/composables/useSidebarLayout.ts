@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { useStorage, useWindowSize } from '@vueuse/core'
-import { useLayoutGlide } from '@/composables/useLayoutGlide'
 import { useLayoutSnap } from '@/composables/useLayoutSnap'
+import { glideLayout } from '@/lib/layoutGlide'
 import {
   SIDEBAR_DEFAULT_WIDTH,
   panelWidthIn,
@@ -27,7 +27,6 @@ export const useSidebarLayout = () => {
   const storedWidth = useStorage(WIDTH_STORAGE_KEY, SIDEBAR_DEFAULT_WIDTH)
   const { width: windowWidth } = useWindowSize()
   const { snap } = useLayoutSnap(SNAP_ATTRIBUTE)
-  const { glide } = useLayoutGlide()
 
   // While the edge is dragged the size lives here; localStorage is written once, on release.
   const draft = ref<SidebarSize | null>(null)
@@ -47,7 +46,7 @@ export const useSidebarLayout = () => {
   const change = (next: SidebarLayout, update: () => void) => {
     const isNewLayout = next !== layout.value
     const isFullWidthChange = next === 'full' || layout.value === 'full'
-    return isNewLayout && isFullWidthChange ? snap(update, true) : glide(update, isNewLayout)
+    return isNewLayout && isFullWidthChange ? snap(update, true) : glideLayout(update, isNewLayout)
   }
 
   const preview = (next: SidebarSize) =>

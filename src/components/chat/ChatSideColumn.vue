@@ -5,7 +5,7 @@ import type { SideColumn } from '@/composables/useChatColumns'
 
 // A column right of the chat (preview, info panel) with its draggable left edge. The slot gets
 // `isClosing` (a drag would shut the column, the content fades) and `close` for its own button.
-// It glides open and shut (useLayoutGlide); the content keeps its width meanwhile and is clipped.
+// It glides open and shut (glideLayout); the content keeps its width meanwhile and is clipped.
 const { column, label, toggleId } = defineProps<{
   column: SideColumn
   /** Names the edge for screen readers */

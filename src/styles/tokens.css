@@ -35,9 +35,10 @@
  *   scrim      what dims and blurs the app behind a dialog, sheet or the image viewer, nothing else;
  *              darker on dark, where the page is dark already (24.11.2026)
  *   backdrop   the chat's own ground under the messages (ChatBackdrop), nothing else: the page
- *              background on light, pure black on dark (Jonas, 27.11.2026: the chat completely black)
+ *              background on light, a step darker than it on dark (Jonas, 27.11.2026: pure black
+ *              was too harsh, the chat a little darker than the grey everywhere else)
  *   vignette   what the chat's backdrop darkens towards at its edges (ChatBackdrop), nothing else;
- *              the middle keeps the plain background (26.11.2026); none on dark, already black
+ *              the middle keeps the plain background (26.11.2026); none on dark (27.11.2026: flat)
  *   shadow-edge  the shadow a bar casts over content that scrolls past it (NchScrollEdge), nothing
  *              else; stronger on dark, where little is left to darken
  * Nothing outside this file introduces a hue.
@@ -245,7 +246,7 @@
   --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.35);
   --shadow-edge: rgb(0 0 0 / 0.7);
   --scrim: rgb(0 0 0 / 0.6);
-  --backdrop: #000000;
+  --backdrop: #09090a;
   --vignette: transparent;
 }
 

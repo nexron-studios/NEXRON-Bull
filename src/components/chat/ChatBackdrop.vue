@@ -1,5 +1,5 @@
-<!-- The chat's backdrop: one flat colour (`backdrop`, pure black on dark: Jonas, 27.11.2026, the chat
-     completely black) with a wide inner shadow along the edges on light, no gradient across the
+<!-- The chat's backdrop: one flat colour (`backdrop`, on dark a step darker than the page grey:
+     Jonas, 27.11.2026, pure black was too harsh) with a wide inner shadow along the edges on light, no gradient across the
      area (27.11.2026, Jonas: the radial vignette still read as a light gradient around the empty
      chat's frame; the dot grid fading towards the composer read as a haze; 26.11.2026: no lighter
      middle, no brand-blue light from the top). It stays put while the messages scroll over it. Its

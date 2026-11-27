@@ -236,6 +236,7 @@ export default {
     drop_images: 'Drop images here',
     image_wrong_type: '{names}: only PNG, JPEG, GIF or WebP.',
     image_too_large: '{names}: too large. An image file can be at most {max}.',
+    image_cannot_shrink: '{names}: still too large for Claude, even shrunk.',
     image_read_failed: 'Could not read: {names}.',
     image_limit: 'At most {max} images per message. Not attached: {names}.',
     image_unnamed: 'Pasted image',

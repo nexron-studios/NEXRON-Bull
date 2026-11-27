@@ -40,6 +40,7 @@ const readAccepted = async ({
 const REJECT_KEYS: Record<RejectReason, string> = {
   type: 'chat.image_wrong_type',
   size: 'chat.image_too_large',
+  shrink: 'chat.image_cannot_shrink',
   limit: 'chat.image_limit'
 }
 
@@ -118,9 +119,12 @@ export const useImageAttachments = (
 
     const tooLarge = failed.filter(({ reason }) => reason instanceof ImageTooLargeError)
     const unreadable = failed.filter(({ reason }) => !(reason instanceof ImageTooLargeError))
-    reportRejected(tooLarge.map(({ item: { file } }) => ({ name: file.name, reason: 'size' })))
+    reportRejected(tooLarge.map(({ item: { file } }) => ({ name: file.name, reason: 'shrink' })))
     if (unreadable.length) {
-      console.warn('attachments.read_failed', { count: unreadable.length })
+      console.warn('attachments.read_failed', {
+        count: unreadable.length,
+        reasons: unreadable.map(({ reason }) => String(reason))
+      })
       toast.error(
         t('chat.image_read_failed', {
           names: namesOf(unreadable.map(({ item: { file } }) => file.name))

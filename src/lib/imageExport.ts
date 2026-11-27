@@ -15,15 +15,20 @@ export interface EncodedImage {
   bytes: number
 }
 
+const decoded = async (src: string) => {
+  const image = new Image()
+  image.src = src
+  await image.decode()
+  return image
+}
+
 /** The image at its natural resolution with the strokes and their numbers painted over it. */
 const paint = async (
   src: string,
   strokes: readonly Stroke[],
   numbers: ReadonlyMap<string, number> = new Map()
 ) => {
-  const image = new Image()
-  image.src = src
-  await image.decode()
+  const image = await decoded(src)
   const canvas = document.createElement('canvas')
   canvas.width = image.naturalWidth
   canvas.height = image.naturalHeight
@@ -65,41 +70,42 @@ const encode = async (
   return { src, mediaType, data, bytes: base64Bytes(data) }
 }
 
-const onBackdrop = (canvas: HTMLCanvasElement) => {
-  const opaque = document.createElement('canvas')
-  opaque.width = canvas.width
-  opaque.height = canvas.height
-  const ctx = opaque.getContext('2d')
+interface Source {
+  image: CanvasImageSource
+  width: number
+  height: number
+}
+
+/** The source scaled by `factor` on a backdrop, drawn in one go so no full-size copy is made first. */
+const opaqueCopy = ({ image, width, height }: Source, factor: number) => {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(width * factor)
+  canvas.height = Math.round(height * factor)
+  const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas 2d context unavailable')
   ctx.fillStyle = JPEG_BACKDROP
-  ctx.fillRect(0, 0, opaque.width, opaque.height)
-  ctx.drawImage(canvas, 0, 0)
-  return opaque
-}
-
-const scaledCopy = (canvas: HTMLCanvasElement, factor: number) => {
-  const scaled = document.createElement('canvas')
-  scaled.width = Math.round(canvas.width * factor)
-  scaled.height = Math.round(canvas.height * factor)
-  const ctx = scaled.getContext('2d')
-  if (!ctx) throw new Error('canvas 2d context unavailable')
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height)
-  return scaled
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+  return canvas
 }
 
-/** Each try scales both sides of the original to this share of the try before. */
+/** Each try scales both sides to this share of the try before. */
 const SHRINK_STEP = 0.8
 /** Text on a screenshot turns unreadable below this long side; such an image is refused instead. */
 const MIN_LONG_SIDE_PX = 800
+/** The API refuses an image with a longer side. */
+const MAX_SIDE_PX = 8000
+/** Safari's canvas area limit, the lowest of the webviews Bull runs in. */
+const MAX_CANVAS_PIXELS = 4096 * 4096
 
 /** JPEG, scaled down step by step until its base64 fits the API limit. */
-const jpegThatFits = async (canvas: HTMLCanvasElement): Promise<EncodedImage> => {
-  const opaque = onBackdrop(canvas)
-  const longSide = Math.max(opaque.width, opaque.height)
-  for (let factor = 1; ; factor *= SHRINK_STEP) {
-    const source = factor === 1 ? opaque : scaledCopy(opaque, factor)
-    const jpeg = await encode(source, 'image/jpeg', FALLBACK_JPEG_QUALITY)
+const jpegThatFits = async (source: Source): Promise<EncodedImage> => {
+  const longSide = Math.max(source.width, source.height)
+  const pixels = source.width * source.height
+  const first = Math.min(1, MAX_SIDE_PX / longSide, Math.sqrt(MAX_CANVAS_PIXELS / pixels))
+  for (let factor = first; ; factor *= SHRINK_STEP) {
+    const jpeg = await encode(opaqueCopy(source, factor), 'image/jpeg', FALLBACK_JPEG_QUALITY)
     if (jpeg.data.length <= MAX_IMAGE_BYTES) return jpeg
     if (longSide * factor * SHRINK_STEP < MIN_LONG_SIDE_PX) throw new ImageTooLargeError()
   }
@@ -117,12 +123,24 @@ export const flattenImage = async (
   const canvas = await paint(src, strokes, numbers)
   const png = await encode(canvas, 'image/png')
   if (png.data.length <= MAX_IMAGE_BYTES) return png
-  return jpegThatFits(canvas)
+  return jpegThatFits({ image: canvas, width: canvas.width, height: canvas.height })
 }
 
+const shrinkNow = async (src: string) => {
+  const image = await decoded(src)
+  return jpegThatFits({ image, width: image.naturalWidth, height: image.naturalHeight })
+}
+
+// One shrink at a time: each holds canvases of up to 64 MB, and a drop of ten big screenshots
+// would otherwise hold all of them at once. The caller gets each result or error from `run`.
+let shrinkQueue: Promise<unknown> = Promise.resolve()
+
 /** An attachment over the API limit, such as a full-screen screenshot on a 4K display, made to fit. */
-export const shrinkImage = async (src: string): Promise<EncodedImage> =>
-  jpegThatFits(await paint(src, []))
+export const shrinkImage = (src: string): Promise<EncodedImage> => {
+  const run = shrinkQueue.then(() => shrinkNow(src))
+  shrinkQueue = Promise.allSettled([run])
+  return run
+}
 
 // Through the web clipboard: the Tauri plugin writes images only with an extra Rust feature, and
 // the button click gives the window focus, which the web API needs. Chromium takes only PNG.

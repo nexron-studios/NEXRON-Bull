@@ -239,6 +239,7 @@ export default {
     drop_images: 'Bilder hier ablegen',
     image_wrong_type: '{names}: nur PNG, JPEG, GIF oder WebP.',
     image_too_large: '{names}: zu groß. Eine Bilddatei darf höchstens {max} haben.',
+    image_cannot_shrink: '{names}: auch verkleinert noch zu groß für Claude.',
     image_read_failed: 'Nicht lesbar: {names}.',
     image_limit: 'Höchstens {max} Bilder pro Nachricht. Nicht angehängt: {names}.',
     image_unnamed: 'Eingefügtes Bild',

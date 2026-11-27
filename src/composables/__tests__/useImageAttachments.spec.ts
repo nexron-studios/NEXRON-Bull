@@ -136,13 +136,13 @@ describe('useImageAttachments', () => {
     expect(images.value.map((image) => image.name)).toEqual(['Eingefügtes Bild'])
   })
 
-  it('should report an image as too large when even the smallest copy does not fit', async () => {
+  it('should say an image stays too large when even the smallest copy does not fit', async () => {
     vi.mocked(shrinkImage).mockRejectedValue(new ImageTooLargeError())
     const { images, addFiles } = setup()
     await addFiles([hugePng('panorama.png')])
     expect([images.value, vi.mocked(toast.error).mock.calls]).toEqual([
       [],
-      [['panorama.png: zu groß. Eine Bilddatei darf höchstens 3,75 MB haben.']]
+      [['panorama.png: auch verkleinert noch zu groß für Claude.']]
     ])
   })
 

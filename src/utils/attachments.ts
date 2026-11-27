@@ -5,7 +5,7 @@ import type { MarkNote, Size } from '@/utils/markup'
 /** More images than this make one turn slow and expensive; the API allows more, the chat does not need them. */
 export const MAX_IMAGES_PER_MESSAGE = 10
 
-export const rejectReasonList = ['type', 'size', 'limit'] as const
+export const rejectReasonList = ['type', 'size', 'shrink', 'limit'] as const
 export type RejectReason = (typeof rejectReasonList)[number]
 
 export type ImageBlock = Extract<Block, { type: 'image' }>
@@ -37,7 +37,10 @@ export const encodedBytes = (size: number) => Math.ceil(size / 3) * 4
 /** The largest file whose base64 text still fits `MAX_IMAGE_BYTES`, for the message shown to the user. */
 export const MAX_IMAGE_FILE_BYTES = Math.floor(MAX_IMAGE_BYTES / 4) * 3
 
-/** A GIF over the limit is most likely animated, and a smaller copy would keep only its first frame. */
+/**
+ * A smaller copy keeps only the first frame. A GIF that large is almost always animated, so it is
+ * refused; an animated WebP or PNG that large is rare enough to lose its motion.
+ */
 const canShrink = (type: ImageType) => type !== 'image/gif'
 
 /**

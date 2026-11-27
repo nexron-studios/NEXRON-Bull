@@ -34,8 +34,10 @@
  *              pale so it never reads as Clawd's orange (24.11.2026)
  *   scrim      what dims and blurs the app behind a dialog, sheet or the image viewer, nothing else;
  *              darker on dark, where the page is dark already (24.11.2026)
+ *   backdrop   the chat's own ground under the messages (ChatBackdrop), nothing else: the page
+ *              background on light, pure black on dark (Jonas, 27.11.2026: the chat completely black)
  *   vignette   what the chat's backdrop darkens towards at its edges (ChatBackdrop), nothing else;
- *              the middle keeps the plain background (26.11.2026)
+ *              the middle keeps the plain background (26.11.2026); none on dark, already black
  *   shadow-edge  the shadow a bar casts over content that scrolls past it (NchScrollEdge), nothing
  *              else; stronger on dark, where little is left to darken
  * Nothing outside this file introduces a hue.
@@ -98,6 +100,7 @@
   --color-plan-ultra: var(--plan-ultra);
   --color-shadow-edge: var(--shadow-edge);
   --color-scrim: var(--scrim);
+  --color-backdrop: var(--backdrop);
   --color-vignette: var(--vignette);
 
   --radius-sm: calc(var(--radius) * 0.6);
@@ -186,6 +189,7 @@
   --shadow-edge: rgb(0 0 0 / 0.1);
   /* Behind a dialog (with an 8 px blur), so the open question stands out from the app. */
   --scrim: rgb(0 0 0 / 0.4);
+  --backdrop: var(--background);
   --vignette: rgb(60 50 30 / 0.09);
 
   /* The brand blue in both themes: quiet at rest, full on hover and drag. */
@@ -241,7 +245,8 @@
   --shadow-lift: 0 10px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.35);
   --shadow-edge: rgb(0 0 0 / 0.7);
   --scrim: rgb(0 0 0 / 0.6);
-  --vignette: rgb(0 0 0 / 0.85);
+  --backdrop: #000000;
+  --vignette: transparent;
 }
 
 /* Syntax colours, only inside code blocks. Muted on purpose: code is content, and status

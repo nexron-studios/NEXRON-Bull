@@ -11,9 +11,10 @@ export const tauriTransport: AgentdTransport = {
   onLine: (listener) => listen<string>(AGENTD_EVENT, ({ payload }) => listener(payload)),
 
   // The window reaches its machines whenever it asks; the app attaches once its tabs are restored,
-  // which the persisted store does right after it is set up.
+  // which the persisted store does right after it is set up. This machine always, so a window
+  // without saved tabs still finds the chats running here.
   onReady: (listener) => {
-    queueMicrotask(() => listener([]))
+    queueMicrotask(() => listener([null]))
     return () => undefined
   }
 }

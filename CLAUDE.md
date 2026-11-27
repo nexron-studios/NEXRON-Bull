@@ -37,8 +37,9 @@ Plan and decisions: Obsidian vault, `Projects/NEXRON Chat.md` and
   asks `isDesktopApp()` in `src/lib/platform.ts`. The bridge
   checks `Origin` and a device token (first message), runs one `agentd connect` per device and
   machine and kills it when the socket goes. The browser asks `tabs` instead of `running` and
-  opens the tabs other apps started (`src/lib/runningTabs.ts`, attaching in
-  `src/stores/chatAttach.ts`). Terminal, login and the machine
+  opens the tabs other apps started on every machine; the app window does so for its own machine
+  (`adoptsOn` in `src/lib/runningTabs.ts`, attaching in `src/stores/chatAttach.ts`). Closing an
+  adopted tab only stops watching it. Terminal, login and the machine
   settings are desktop only (`offeredSettingsSectionsOf`, `terminal.desktop_only`).
 
 ## This machine and other machines

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 
+// The keys date from when only the browser adopted tabs; renaming them would reopen closed ones.
 const ADOPTED_STORAGE_KEY = 'bull.bridge.adoptedTabs'
 const CLOSED_STORAGE_KEY = 'bull.bridge.closedTabs'
 /** More than ever run at once; the oldest ids fall out, their tabs long gone. */
@@ -10,10 +11,10 @@ const withId = (ids: string[], id: string): string[] =>
   [...ids.filter((known) => known !== id), id].slice(-MAX_REMEMBERED)
 
 /**
- * Browser only: which tabs another app started (this browser only watches them) and which were
- * closed here (never opened again while their Claude still runs). Kept across reloads.
+ * Which tabs another app or device started (this one only watches them) and which were closed here
+ * (never opened again while their Claude still runs). Kept across reloads.
  */
-export const useBrowserTabsStore = defineStore('browserTabs', () => {
+export const useWatchedTabsStore = defineStore('watchedTabs', () => {
   const adopted = useStorage<string[]>(ADOPTED_STORAGE_KEY, [])
   const closed = useStorage<string[]>(CLOSED_STORAGE_KEY, [])
 

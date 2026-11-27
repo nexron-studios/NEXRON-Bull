@@ -12,9 +12,15 @@ export interface RunningTabs {
 }
 
 /**
- * The tabs still running on a machine. The app window started its own and only asks which run; a
- * browser also opens the ones the desktop or another device started, since it learns of them only
- * here (`tabs`, which an older agentd elsewhere does not know).
+ * Where this app opens the tabs another app or device started. A browser opens them everywhere; the
+ * app window on its own machine, so a second window or a fresh install shows every chat running
+ * there. Other machines it leaves to the tabs it opened there itself.
+ */
+export const adoptsOn = (machine: Machine): boolean => !isDesktopApp() || machine === null
+
+/**
+ * The tabs still running on a machine, and where this app adopts, the ones it has none for yet:
+ * it learns of those only here (`tabs`, which an older agentd elsewhere does not know).
  */
 const runningOnly = async (machine: Machine): Promise<RunningTabs> => {
   const { tabs } = await agentdService.ask<'running'>({ op: 'running' }, machine)
@@ -25,7 +31,7 @@ export const runningTabsOn = async (
   machine: Machine,
   knownIds: ReadonlySet<string>
 ): Promise<RunningTabs> => {
-  if (isDesktopApp()) return runningOnly(machine)
+  if (!adoptsOn(machine)) return runningOnly(machine)
   try {
     const { tabs: infos } = await agentdService.ask<'tabs'>({ op: 'tabs' }, machine)
     return {
@@ -33,7 +39,7 @@ export const runningTabsOn = async (
       adopted: adoptedTabsOf(infos, knownIds, machine)
     }
   } catch (error) {
-    // An agentd from before `tabs` still attaches the tabs this browser has; it adopts none until
+    // An agentd from before `tabs` still attaches the tabs this app has; it adopts none until
     // that machine gets the new agentd.
     if (isUnknownOpError(error, 'tabs')) return runningOnly(machine)
     throw error

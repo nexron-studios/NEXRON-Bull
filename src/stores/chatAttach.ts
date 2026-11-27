@@ -6,9 +6,8 @@ import {
 } from '@/api/services/agentd.service'
 import i18n from '@/i18n'
 import { handleError } from '@/lib/error'
-import { isDesktopApp } from '@/lib/platform'
-import { runningTabsOn } from '@/lib/runningTabs'
-import { useBrowserTabsStore } from '@/stores/browserTabs'
+import { adoptsOn, runningTabsOn } from '@/lib/runningTabs'
+import { useWatchedTabsStore } from '@/stores/watchedTabs'
 import { newTab, type ChatTabState, type SavedTab } from '@/utils/chatTab'
 import { NO_LIVE_BLOCK } from '@/utils/liveStream'
 
@@ -44,8 +43,8 @@ export const disconnectedNoticeOf = (machine: Machine) =>
     : i18n.global.t('chat.disconnected_local')
 
 /**
- * Attaching to the tabs whose Claude runs on a machine: on start, after a lost connection, and in
- * a browser also to the tabs other apps started there. Claude outlives the app on every machine,
+ * Attaching to the tabs whose Claude runs on a machine: on start, after a lost connection, and
+ * also to the tabs other apps started there (see `adoptsOn`). Claude outlives the app on every machine,
  * so a tab here is only a view onto it.
  */
 export const useChatAttach = ({
@@ -64,17 +63,17 @@ export const useChatAttach = ({
    * every answer was computed against the tabs from before its own wait.
    */
   const openAdopted = (adopted: SavedTab[]): ChatTabState[] => {
-    const browserTabs = useBrowserTabsStore()
+    const watchedTabs = useWatchedTabsStore()
     const opened = adopted
-      .filter((tab) => !tabOf(tab.id) && !browserTabs.isClosed(tab.id))
+      .filter((tab) => !tabOf(tab.id) && !watchedTabs.isClosed(tab.id))
       .map(newTab)
     if (!opened.length) return opened
     tabs.value = [...tabs.value, ...opened]
-    browserTabs.markAdopted(opened.map((tab) => tab.id))
+    watchedTabs.markAdopted(opened.map((tab) => tab.id))
     return opened
   }
 
-  /** The tabs whose Claude still runs on the machine; a browser opens the ones it lacks. */
+  /** The tabs whose Claude still runs on the machine; where this app adopts, it opens the ones it lacks. */
   const runningOn = async (machine: Machine): Promise<string[]> => {
     const known = new Set(tabs.value.map((tab) => tab.id))
     const { running, adopted } = await runningTabsOn(machine, known)
@@ -185,15 +184,14 @@ export const useChatAttach = ({
   }
 
   /**
-   * Another app started a tab this browser has none for: open it too and attach. Only the new
-   * ones; attaching again to the others would reload their chats. The event does not say its
-   * machine, but only an attached one can have sent it. Each is asked on its own: one that went
-   * away meanwhile keeps no other machine's tab closed. The app window opens only its own tabs.
+   * Another app started a tab this one has none for: open it too and attach. Only the new ones;
+   * attaching again to the others would reload their chats. The event does not say its machine,
+   * but only an attached one can have sent it. Each is asked on its own: one that went away
+   * meanwhile keeps no other machine's tab closed.
    */
   const adoptStarted = async () => {
-    if (isDesktopApp()) return
     const attached = [...links].flatMap(([machine, link]) =>
-      link.state === 'attached' ? [machine] : []
+      link.state === 'attached' && adoptsOn(machine) ? [machine] : []
     )
     const results = await Promise.allSettled(attached.map(adoptStartedOn))
     for (const result of results) {
@@ -205,13 +203,11 @@ export const useChatAttach = ({
     }
   }
 
-  /** A browser only watches a tab another app started: closing it here leaves Claude running. */
-  const isWatchedOnly = (id: string) => !isDesktopApp() && useBrowserTabsStore().isAdopted(id)
+  /** This app only watches a tab another app started: closing it here leaves Claude running. */
+  const isWatchedOnly = (id: string) => useWatchedTabsStore().isAdopted(id)
 
-  /** Closed here: a browser never opens it again while its Claude still runs. */
-  const forgetClosed = (id: string) => {
-    if (!isDesktopApp()) useBrowserTabsStore().markClosed(id)
-  }
+  /** Closed here: never opened again while its Claude still runs. */
+  const forgetClosed = (id: string) => useWatchedTabsStore().markClosed(id)
 
   return { attachAll, markDisconnected, adoptStarted, isWatchedOnly, forgetClosed }
 }

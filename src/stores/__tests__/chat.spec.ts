@@ -142,14 +142,14 @@ describe('useChatStore: lost connection to this computer', () => {
   })
 
   it('should ask this computer again which tabs run and clear the notice', async () => {
-    ask.mockResolvedValue({ type: 'running', id: 1, tabs: [] })
+    ask.mockResolvedValue({ type: 'tabs', id: 1, tabs: [] })
     const chat = useChatStore()
     chat.tabs = [liveTab('local', null)]
 
     emit({ type: 'disconnected', machine: null, connection: 1 })
     await vi.advanceTimersByTimeAsync(250)
 
-    expect(ask).toHaveBeenCalledWith({ op: 'running' }, null)
+    expect(ask).toHaveBeenCalledWith({ op: 'tabs' }, null)
     expect(chat.tabs[0].notice).toBe(null)
   })
 
@@ -176,7 +176,7 @@ describe('useChatStore: lost connection to this computer', () => {
   })
 
   it('should drop the waiting try once the tabs attached another way', async () => {
-    ask.mockResolvedValue({ type: 'running', id: 1, tabs: [] })
+    ask.mockResolvedValue({ type: 'tabs', id: 1, tabs: [] })
     const chat = useChatStore()
     chat.tabs = [liveTab('local', null)]
 
@@ -621,6 +621,34 @@ describe('useChatStore: in a browser through the bridge', () => {
       },
       null
     )
+  })
+
+  it('should open in the app window the tabs another window runs on this machine only', async () => {
+    runtime.isDesktopApp = true
+    ask.mockImplementation(async (message: { op: string }) => {
+      if (message.op === 'tabs') return { type: 'tabs', id: 1, tabs: [running] }
+      if (message.op === 'running') return { type: 'running', id: 3, tabs: [] }
+      return { type: 'history', id: 2, messages: [], has_more: false }
+    })
+    const chat = useChatStore()
+
+    ready.forEach((attach) => attach([null, 'main-pc']))
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+
+    expect(ask).toHaveBeenCalledWith({ op: 'running' }, 'main-pc')
+    expect(chat.tabs.map((tab) => [tab.id, tab.machine])).toEqual([['t9', null]])
+  })
+
+  it('should only stop watching in the app window a tab another window started', async () => {
+    runtime.isDesktopApp = true
+    const chat = useChatStore()
+    ready.forEach((attach) => attach([null]))
+    await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
+    send.mockClear()
+
+    chat.close('t9')
+
+    expect([chat.tabs, send.mock.calls]).toEqual([[], []])
   })
 
   it('should ask once while an attach to the machine is still under way', async () => {

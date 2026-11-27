@@ -884,7 +884,7 @@ export const useChatStore = defineStore(
 
     const close = (id: string) => {
       const tab = tabOf(id)
-      // A tab another app started is that app's chat: the browser only stops watching it.
+      // A tab another app started is that app's chat: this one only stops watching it.
       if (tab && tab.status !== 'ended' && !attach.isWatchedOnly(id))
         toTab(id, { op: 'stop', tab: id }).catch(handleError)
       attach.forgetClosed(id)

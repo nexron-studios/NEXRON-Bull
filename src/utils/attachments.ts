@@ -24,6 +24,8 @@ export interface Rejected {
 export interface Accepted<T> {
   file: T
   mediaType: ImageType
+  /** Over the API limit as it is; attached as a smaller copy */
+  isOversized: boolean
 }
 
 export const isImageType = (type: string): type is ImageType =>
@@ -34,6 +36,9 @@ export const encodedBytes = (size: number) => Math.ceil(size / 3) * 4
 
 /** The largest file whose base64 text still fits `MAX_IMAGE_BYTES`, for the message shown to the user. */
 export const MAX_IMAGE_FILE_BYTES = Math.floor(MAX_IMAGE_BYTES / 4) * 3
+
+/** A GIF over the limit is most likely animated, and a smaller copy would keep only its first frame. */
+const canShrink = (type: ImageType) => type !== 'image/gif'
 
 /**
  * Splits incoming files into those that fit into `room` free slots and those turned away, with the reason.
@@ -48,9 +53,13 @@ export const sortIncoming = <T extends FileLike>(files: readonly T[], room: numb
       })
       if (!file.type) return result
       if (!isImageType(file.type)) return reject('type')
-      if (encodedBytes(file.size) > MAX_IMAGE_BYTES) return reject('size')
+      const isOversized = encodedBytes(file.size) > MAX_IMAGE_BYTES
+      if (isOversized && !canShrink(file.type)) return reject('size')
       if (result.accepted.length >= room) return reject('limit')
-      return { ...result, accepted: [...result.accepted, { file, mediaType: file.type }] }
+      return {
+        ...result,
+        accepted: [...result.accepted, { file, mediaType: file.type, isOversized }]
+      }
     },
     { accepted: [], rejected: [] }
   )
@@ -64,17 +73,17 @@ export const groupRejected = (rejected: readonly Rejected[]) =>
     }))
     .filter((group) => group.names.length > 0)
 
-/** Pairs each item with its settled result: the values that arrived and the items that failed. */
+/** Pairs each item with its settled result: the values that arrived and the items that failed, with why. */
 export const splitSettled = <T, V>(
   items: readonly T[],
   results: readonly PromiseSettledResult<V>[]
 ) =>
-  items.reduce<{ done: { item: T; value: V }[]; failed: T[] }>(
+  items.reduce<{ done: { item: T; value: V }[]; failed: { item: T; reason: unknown }[] }>(
     (split, item, at) => {
       const result = results[at]
       return result?.status === 'fulfilled'
         ? { ...split, done: [...split.done, { item, value: result.value }] }
-        : { ...split, failed: [...split.failed, item] }
+        : { ...split, failed: [...split.failed, { item, reason: result?.reason }] }
     },
     { done: [], failed: [] }
   )

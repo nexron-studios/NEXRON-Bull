@@ -31,30 +31,36 @@ describe('sortIncoming', () => {
   it('should accept supported images and keep their media type', () => {
     const file = png('a.png')
     expect(sortIncoming([file], 10)).toEqual({
-      accepted: [{ file, mediaType: 'image/png' }],
+      accepted: [{ file, mediaType: 'image/png', isOversized: false }],
       rejected: []
     })
   })
 
-  it('should reject other types and images over the size limit with their reason', () => {
+  it('should reject other types and GIFs over the size limit with their reason', () => {
     const files = [
       { name: 'notes.txt', type: 'text/plain', size: 10 },
       { name: 'old.bmp', type: 'image/bmp', size: 10 },
-      png('huge.png', MAX_IMAGE_BYTES + 1)
+      { name: 'loop.gif', type: 'image/gif', size: MAX_IMAGE_BYTES + 1 }
     ]
     expect(sortIncoming(files, 10).rejected).toEqual([
       { name: 'notes.txt', reason: 'type' },
       { name: 'old.bmp', reason: 'type' },
-      { name: 'huge.png', reason: 'size' }
+      { name: 'loop.gif', reason: 'size' }
     ])
   })
 
-  it('should measure the size as base64, as the API does', () => {
+  it('should accept other images over the limit as oversized, measured as base64', () => {
     const files = [png('fits.png', MAX_IMAGE_FILE_BYTES), png('over.png', MAX_IMAGE_FILE_BYTES + 1)]
     const result = sortIncoming(files, 10)
-    expect([result.accepted.map((item) => item.file.name), result.rejected]).toEqual([
-      ['fits.png'],
-      [{ name: 'over.png', reason: 'size' }]
+    expect([
+      result.accepted.map((item) => [item.file.name, item.isOversized]),
+      result.rejected
+    ]).toEqual([
+      [
+        ['fits.png', false],
+        ['over.png', true]
+      ],
+      []
     ])
   })
 
@@ -103,10 +109,10 @@ describe('encodedBytes', () => {
 })
 
 describe('splitSettled', () => {
-  it('should pair values with their items and collect the failed items', () => {
+  it('should pair values with their items and collect the failed items with the reason', () => {
     const results: PromiseSettledResult<string>[] = [
       { status: 'fulfilled', value: 'A' },
-      { status: 'rejected', reason: new Error('nope') },
+      { status: 'rejected', reason: 'nope' },
       { status: 'fulfilled', value: 'C' }
     ]
     expect(splitSettled(['a', 'b', 'c'], results)).toEqual({
@@ -114,7 +120,7 @@ describe('splitSettled', () => {
         { item: 'a', value: 'A' },
         { item: 'c', value: 'C' }
       ],
-      failed: ['b']
+      failed: [{ item: 'b', reason: 'nope' }]
     })
   })
 })

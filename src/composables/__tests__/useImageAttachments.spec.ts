@@ -3,9 +3,16 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'vue-sonner'
 import i18n from '@/i18n'
+import { ImageTooLargeError, shrinkImage } from '@/lib/imageExport'
+import { MAX_IMAGE_FILE_BYTES } from '@/utils/attachments'
 import { useImageAttachments } from '../useImageAttachments'
 
 vi.mock('vue-sonner', () => ({ toast: { error: vi.fn() } }))
+// Canvas encoding does not exist in jsdom; the shrinking itself is the browser's.
+vi.mock('@/lib/imageExport', () => ({
+  ImageTooLargeError: class extends Error {},
+  shrinkImage: vi.fn()
+}))
 
 // Reads finish on a later tick, like the real FileReader; a file named broken.png fails.
 class FakeReader {
@@ -28,6 +35,14 @@ class FakeReader {
 }
 
 const png = (name: string) => new File(['abc'], name, { type: 'image/png' })
+const hugePng = (name: string) =>
+  new File([new Uint8Array(MAX_IMAGE_FILE_BYTES + 1)], name, { type: 'image/png' })
+const SHRUNK = {
+  src: 'data:image/jpeg;base64,WFla',
+  mediaType: 'image/jpeg' as const,
+  data: 'WFla',
+  bytes: 3
+}
 const pngs = (prefix: string, count: number) =>
   Array.from({ length: count }, (_, at) => png(`${prefix}${at + 1}.png`))
 
@@ -51,6 +66,7 @@ describe('useImageAttachments', () => {
     i18n.global.locale.value = 'de'
     vi.stubGlobal('FileReader', FakeReader)
     vi.mocked(toast.error).mockClear()
+    vi.mocked(shrinkImage).mockReset()
   })
 
   afterEach(() => {
@@ -94,6 +110,39 @@ describe('useImageAttachments', () => {
       'QUJD',
       'data:image/png;base64,QUJD',
       3
+    ])
+  })
+
+  it('should attach an image over the API limit as the smaller JPEG copy', async () => {
+    vi.mocked(shrinkImage).mockResolvedValue(SHRUNK)
+    const { images, addFiles } = setup()
+    await addFiles([hugePng('Bild 16-40-37.png')])
+    const [image] = images.value
+    expect([
+      vi.mocked(shrinkImage).mock.calls,
+      [image?.name, image?.mediaType, image?.data, image?.bytes],
+      vi.mocked(toast.error).mock.calls
+    ]).toEqual([
+      [['data:image/png;base64,QUJD']],
+      ['Bild 16-40-37.jpg', 'image/jpeg', 'WFla', 3],
+      []
+    ])
+  })
+
+  it('should keep the generic name of a pasted image that had to be shrunk', async () => {
+    vi.mocked(shrinkImage).mockResolvedValue(SHRUNK)
+    const { images, addFiles } = setup()
+    await addFiles([hugePng('')])
+    expect(images.value.map((image) => image.name)).toEqual(['Eingefügtes Bild'])
+  })
+
+  it('should report an image as too large when even the smallest copy does not fit', async () => {
+    vi.mocked(shrinkImage).mockRejectedValue(new ImageTooLargeError())
+    const { images, addFiles } = setup()
+    await addFiles([hugePng('panorama.png')])
+    expect([images.value, vi.mocked(toast.error).mock.calls]).toEqual([
+      [],
+      [['panorama.png: zu groß. Eine Bilddatei darf höchstens 3,75 MB haben.']]
     ])
   })
 

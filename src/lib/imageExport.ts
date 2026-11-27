@@ -3,7 +3,7 @@ import { MAX_IMAGE_BYTES, type ImageType } from '@/utils/content'
 import type { Stroke } from '@/utils/markup'
 import { drawStrokes } from '@/utils/markupCanvas'
 
-/** JPEG quality when a marked PNG would be too large for the API. */
+/** JPEG quality when an image would be too large for the API as it is. */
 const FALLBACK_JPEG_QUALITY = 0.9
 
 export class ImageTooLargeError extends Error {}
@@ -77,6 +77,34 @@ const onBackdrop = (canvas: HTMLCanvasElement) => {
   return opaque
 }
 
+const scaledCopy = (canvas: HTMLCanvasElement, factor: number) => {
+  const scaled = document.createElement('canvas')
+  scaled.width = Math.round(canvas.width * factor)
+  scaled.height = Math.round(canvas.height * factor)
+  const ctx = scaled.getContext('2d')
+  if (!ctx) throw new Error('canvas 2d context unavailable')
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height)
+  return scaled
+}
+
+/** Each try scales both sides of the original to this share of the try before. */
+const SHRINK_STEP = 0.8
+/** Text on a screenshot turns unreadable below this long side; such an image is refused instead. */
+const MIN_LONG_SIDE_PX = 800
+
+/** JPEG, scaled down step by step until its base64 fits the API limit. */
+const jpegThatFits = async (canvas: HTMLCanvasElement): Promise<EncodedImage> => {
+  const opaque = onBackdrop(canvas)
+  const longSide = Math.max(opaque.width, opaque.height)
+  for (let factor = 1; ; factor *= SHRINK_STEP) {
+    const source = factor === 1 ? opaque : scaledCopy(opaque, factor)
+    const jpeg = await encode(source, 'image/jpeg', FALLBACK_JPEG_QUALITY)
+    if (jpeg.data.length <= MAX_IMAGE_BYTES) return jpeg
+    if (longSide * factor * SHRINK_STEP < MIN_LONG_SIDE_PX) throw new ImageTooLargeError()
+  }
+}
+
 /**
  * The image with its strokes burnt in. PNG keeps screenshots sharp; a photo that comes out over
  * the API limit as PNG falls back to JPEG instead of being refused.
@@ -89,10 +117,12 @@ export const flattenImage = async (
   const canvas = await paint(src, strokes, numbers)
   const png = await encode(canvas, 'image/png')
   if (png.data.length <= MAX_IMAGE_BYTES) return png
-  const jpeg = await encode(onBackdrop(canvas), 'image/jpeg', FALLBACK_JPEG_QUALITY)
-  if (jpeg.data.length <= MAX_IMAGE_BYTES) return jpeg
-  throw new ImageTooLargeError()
+  return jpegThatFits(canvas)
 }
+
+/** An attachment over the API limit, such as a full-screen screenshot on a 4K display, made to fit. */
+export const shrinkImage = async (src: string): Promise<EncodedImage> =>
+  jpegThatFits(await paint(src, []))
 
 // Through the web clipboard: the Tauri plugin writes images only with an extra Rust feature, and
 // the button click gives the window focus, which the web API needs. Chromium takes only PNG.

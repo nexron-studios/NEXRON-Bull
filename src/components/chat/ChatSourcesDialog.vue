@@ -120,7 +120,7 @@ watch(open, (isOpen) => {
               <span class="min-w-0 truncate">{{ group.domain }}</span>
               <span class="text-muted-foreground tabular-nums">{{ group.sources.length }}</span>
             </h3>
-            <ul class="mb-2 flex flex-col">
+            <ul class="mb-5 flex flex-col">
               <li v-for="source in group.sources" :key="source.url">
                 <a
                   :href="source.url"

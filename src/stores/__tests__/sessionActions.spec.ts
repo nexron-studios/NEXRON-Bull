@@ -114,7 +114,7 @@ describe('useSessionActionsStore', () => {
 
     useSessionActionsStore().act('copy_id', targetOfTab(chat.tabs[0]))
 
-    await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Kopiert'))
+    await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Kopiert', { id: 'copied' }))
     expect(writeText).toHaveBeenCalledWith('s-a')
   })
 })

@@ -20,9 +20,12 @@ export const writeClipboard = (text: string): Promise<boolean> =>
       return false
     })
 
+// One id for every copy: clicking again refreshes the toast on screen instead of stacking another.
+const COPIED_TOAST_ID = 'copied'
+
 /** `writeClipboard` with a "Kopiert" toast, for a copy button or shortcut. */
 export const copyText = async (text: string): Promise<boolean> => {
   const isCopied = await writeClipboard(text)
-  if (isCopied) toast.success(i18n.global.t('chat.copied'))
+  if (isCopied) toast.success(i18n.global.t('chat.copied'), { id: COPIED_TOAST_ID })
   return isCopied
 }

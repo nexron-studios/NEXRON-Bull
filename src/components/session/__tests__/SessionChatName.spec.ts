@@ -48,7 +48,7 @@ describe('SessionChatName', () => {
 
     await wrapper.find('button > span').trigger('click')
 
-    await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Kopiert'))
+    await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Kopiert', { id: 'copied' }))
     expect(writeText).toHaveBeenCalledWith(SESSION_ID)
     expect(onOpen).not.toHaveBeenCalled()
   })

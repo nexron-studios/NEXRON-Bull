@@ -10,7 +10,7 @@
 
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -49,6 +49,9 @@ const CLEAR_ATTEMPTS: usize = 3;
 /// against updates: unused this long, it ends.
 const IDLE_SHUTDOWN: Duration = Duration::from_secs(10 * 60);
 const IDLE_CHECK: Duration = Duration::from_secs(30);
+/// After a failed warm-up: a Claude that cannot start (missing, logged out, stuck) is not started
+/// again on every focus, for up to `READY_TIMEOUT` each.
+const WARM_PAUSE: Duration = Duration::from_secs(3 * 60);
 const FALLBACK_LANGUAGE: &str = "en";
 const MAX_LANGUAGE_CHARS: usize = 16;
 
@@ -100,6 +103,11 @@ impl DictationError {
             Self::Io(err) => err.to_string(),
             Self::ClaudeMissing | Self::Exited | Self::Timeout | Self::NotHolding => String::new(),
         }
+    }
+
+    /// Whether starting Claude again right away would fail the same way.
+    fn repeats(&self) -> bool {
+        matches!(self, Self::ClaudeMissing | Self::Spawn(_) | Self::Io(_))
     }
 }
 
@@ -153,11 +161,14 @@ impl Hold {
     }
 }
 
-/// A warm-up that failed, for the press that waited for it.
+/// The last warm-up that failed: it pauses the next ones, and its error is for the press that
+/// waited for it.
 struct WarmFailure {
     language: String,
+    started: Instant,
     at: Instant,
-    error: DictationError,
+    /// Gone once a press took it
+    error: Option<DictationError>,
 }
 
 struct Inner {
@@ -295,8 +306,10 @@ impl Inner {
     /// A Claude for `language` when none runs. A focus never extends a running Claude's life:
     /// only a new one counts as use, so it can still end idle.
     fn warm_up(&self, language: &str) {
-        // A press or another warm-up holds it: that one gets Claude ready already.
-        let Ok(_op) = self.op.try_lock() else {
+        // A press or another warm-up holds it: that one gets Claude ready already. So does the
+        // idle check, for a moment every `IDLE_CHECK`: a focus right then warms nothing, the
+        // next one does.
+        let Some(_op) = self.try_op() else {
             return;
         };
         // While Space is held, a Claude for another language would end the one recording.
@@ -304,10 +317,14 @@ impl Inner {
         let is_running = self
             .current()
             .is_some_and(|claude| claude.language == language);
-        if is_holding || is_running || self.is_shut_down.load(Ordering::SeqCst) {
+        let is_paused = lock(&self.warm_failure).as_ref().is_some_and(|failure| {
+            failure.language == language && failure.at.elapsed() < WARM_PAUSE
+        });
+        if is_holding || is_running || is_paused || self.is_shut_down.load(Ordering::SeqCst) {
             return;
         }
-        *lock(&self.last_used) = Instant::now();
+        let started = Instant::now();
+        *lock(&self.last_used) = started;
         let Err(error) = self.ready_claude(language) else {
             return;
         };
@@ -315,18 +332,35 @@ impl Inner {
         eprintln!("dictation: warming up Claude failed: {error}");
         *lock(&self.warm_failure) = Some(WarmFailure {
             language: language.to_string(),
+            started,
             at: Instant::now(),
-            error,
+            error: Some(error),
         });
     }
 
-    /// The failure of a warm-up that ended after `pressed`: the press waited for it, and starting
-    /// again would make it wait as long once more. An older failure is dropped; the press retries.
+    /// `op` unless an operation holds it. A panic in one must not end warm-ups and idle checks
+    /// for good, so a poisoned lock counts as free, as in `lock`.
+    fn try_op(&self) -> Option<MutexGuard<'_, ()>> {
+        match self.op.try_lock() {
+            Ok(op) => Some(op),
+            Err(TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+            Err(TryLockError::WouldBlock) => None,
+        }
+    }
+
+    /// The failure of a warm-up that ended while this press waited, when starting again would
+    /// only fail the same way or keep it waiting about as long once more: so a press never waits
+    /// more than one `READY_TIMEOUT` beyond that. Otherwise the press tries again itself.
     fn warm_failure_since(&self, language: &str, pressed: Instant) -> Option<DictationError> {
-        lock(&self.warm_failure)
-            .take()
-            .filter(|failure| failure.language == language && failure.at >= pressed)
-            .map(|failure| failure.error)
+        let mut failure = lock(&self.warm_failure);
+        let failure = failure
+            .as_mut()
+            .filter(|failure| failure.language == language && failure.at >= pressed)?;
+        let waited = failure.at.duration_since(pressed);
+        let took = failure.at.duration_since(failure.started);
+        let error = failure.error.take()?;
+        let has_waited_most = waited * 2 >= took;
+        (error.repeats() || has_waited_most).then_some(error)
     }
 
     /// Makes `claude` the current one and ends the one before; after the window closed, ends
@@ -377,7 +411,7 @@ fn end_when_idle(inner: &Inner) {
     loop {
         thread::sleep(IDLE_CHECK);
         // Busy with a dictation right now: certainly not idle.
-        let Ok(_op) = inner.op.try_lock() else {
+        let Some(_op) = inner.try_op() else {
             continue;
         };
         let is_idle =
@@ -499,7 +533,9 @@ fn hold_until_stopped(
             return Err(DictationError::NotListening(detail));
         }
     }
-    Ok(is_listening)
+    // The release can come between two looks, right after Claude started recording.
+    Ok(is_listening
+        || prompt_of(claude).is_some_and(|prompt| prompt.phase == VoicePhase::Listening))
 }
 
 /// The interim text last reported. The screen is read at key-repeat speed, so only a change goes
@@ -846,26 +882,92 @@ mod tests {
     #[test]
     fn a_press_takes_only_the_failure_of_the_warm_up_it_waited_for() {
         let host = DictationHost::new(|_| {});
-        let failed = |language: &str, at| {
+        let start = long_ago();
+        let at = |secs| start + Duration::from_secs(secs);
+        // The warm-up ran from 0 s to 30 s; what a press at `pressed` gets from it.
+        let code_for = |language: &str, error, pressed| {
             *lock(&host.inner.warm_failure) = Some(WarmFailure {
                 language: language.to_string(),
-                at,
-                error: DictationError::NotReady("stuck".into()),
+                started: at(0),
+                at: at(30),
+                error: Some(error),
             });
+            host.inner
+                .warm_failure_since("de", pressed)
+                .map(|error| error.code())
         };
-        let pressed = Instant::now();
+        let stuck = || DictationError::NotReady("stuck".into());
 
-        failed("de", Instant::now());
-        let waited_for = host.inner.warm_failure_since("de", pressed);
-        failed("de", long_ago());
-        let earlier = host.inner.warm_failure_since("de", pressed);
-        failed("en", Instant::now());
-        let other_language = host.inner.warm_failure_since("de", pressed);
+        let waited_all = code_for("de", stuck(), at(0));
+        let taken_already = host.inner.warm_failure_since("de", at(0));
+        let waited_a_moment = code_for("de", stuck(), at(29));
+        let missing_after_a_moment = code_for("de", DictationError::ClaudeMissing, at(29));
+        let came_after = code_for("de", stuck(), at(31));
+        let other_language = code_for("en", stuck(), at(0));
 
-        assert_eq!(waited_for.map(|error| error.detail()), Some("stuck".into()));
-        assert!(earlier.is_none());
-        assert!(other_language.is_none());
-        assert!(lock(&host.inner.warm_failure).is_none());
+        assert_eq!(waited_all, Some("not_ready"));
+        assert_eq!(waited_a_moment, None);
+        assert_eq!(missing_after_a_moment, Some("claude_missing"));
+        assert_eq!(came_after, None);
+        assert_eq!(other_language, None);
+        assert!(taken_already.is_none());
+    }
+
+    #[test]
+    fn a_failed_warm_up_pauses_the_next_ones() {
+        let host = DictationHost::new(|_| {});
+        *lock(&host.inner.warm_failure) = Some(WarmFailure {
+            language: "de".into(),
+            started: Instant::now(),
+            at: Instant::now(),
+            error: None,
+        });
+        let used = long_ago();
+        *lock(&host.inner.last_used) = used;
+
+        host.inner.warm_up("de");
+
+        assert!(lock(&host.inner.claude).is_none());
+        assert_eq!(*lock(&host.inner.last_used), used);
+    }
+
+    /// A process in Claude's place that shows a recording Claude's prompt box and then waits.
+    fn listening_claude() -> Arc<HiddenClaude> {
+        let command = if cfg!(windows) {
+            let mut command = CommandBuilder::new("powershell");
+            command.args([
+                "-NoProfile",
+                "-Command",
+                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; \
+                 [Console]::Write(\"listening…`r`n───`r`n❯ `r`n───`r`n\"); Start-Sleep 60",
+            ]);
+            command
+        } else {
+            let mut command = CommandBuilder::new("sh");
+            command.args([
+                "-c",
+                "printf 'listening…\\r\\n───\\r\\n❯ \\r\\n───\\r\\n'; sleep 60",
+            ]);
+            command
+        };
+        Arc::new(HiddenClaude::spawn_command("de", command).unwrap())
+    }
+
+    #[test]
+    fn a_release_between_two_looks_still_sees_claude_recording() {
+        const SHOWN_WITHIN: Duration = Duration::from_secs(10);
+        let claude = listening_claude();
+        let deadline = Instant::now() + SHOWN_WITHIN;
+        while prompt_of(&claude).is_none() {
+            assert!(Instant::now() < deadline, "the stand-in drew no prompt box");
+            thread::sleep(POLL);
+        }
+        let stopped = AtomicBool::new(true);
+
+        let recorded = hold_until_stopped(&claude, &stopped, &|_| {});
+
+        assert!(recorded.unwrap());
+        claude.shut_down();
     }
 
     /// Drives the real `claude` on this machine: warmed up, it must record (silence) right away
@@ -874,7 +976,8 @@ mod tests {
     #[ignore = "starts the installed claude and records from the microphone"]
     fn real_claude_records_and_cleans_up() {
         const HOLD: Duration = Duration::from_millis(1500);
-        const WARM_RECORDING: Duration = Duration::from_millis(500);
+        // Measured ~0.1 s; the headroom keeps a busy machine from failing it.
+        const WARM_RECORDING: Duration = Duration::from_secs(1);
         const SHORT_HOLD: Duration = Duration::from_millis(60);
         let (sender, events) = mpsc::channel();
         let sender = Mutex::new(sender);

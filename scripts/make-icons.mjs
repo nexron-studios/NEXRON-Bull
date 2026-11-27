@@ -1,6 +1,6 @@
 // Regenerates every app icon from public/favicon.svg, the one source of the bull:
 // the Tauri bundle icons in src-tauri/icons and the PWA icons in public/icons.
-// App icons put the bull on a dark rounded tile, like the Agent Dashboard; the favicon and the
+// App icons put the bull on a dark rounded tile, like NEXRON-Manta; the favicon and the
 // header mark stay the bare bull. Windows only for now: the tile is not inset for macOS.
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -12,10 +12,10 @@ const TAURI_ICONS = 'src-tauri/icons'
 const PWA_ICONS = 'public/icons'
 const CANVAS = 1024
 
-// Colours mirror the dark Night Desk tokens in src/styles/tokens.css.
-const CARD = '#19191a' // --card
-const LINE = '#2c2c2d' // --border
-const TILE = { inset: 24, radius: 228, strokeWidth: 10 }
+// The tile matches NEXRON-Manta's icon, so both sit alike in the taskbar: edge to edge, no
+// hairline, the dark Night Desk --background of src/styles/tokens.css.
+const TILE_FILL = '#0e0e0f' // --background
+const TILE_RADIUS = 200
 // The source has an optical-centring margin, so 0.82 fills about 73 % of the canvas: large
 // enough that the bull reads in the taskbar and eye and cheek survive at 16 to 32 px.
 const TILE_BULL_SCALE = 0.82
@@ -42,13 +42,11 @@ const nestedBull = ({ viewBox, inner }, scale) => {
   return `<svg x="${offset}" y="${offset}" width="${size}" height="${size}" viewBox="${viewBox}">${inner}</svg>`
 }
 
-const tileSvg = (bull) => {
-  const side = CANVAS - 2 * TILE.inset
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}"><rect x="${TILE.inset}" y="${TILE.inset}" width="${side}" height="${side}" rx="${TILE.radius}" fill="${CARD}" stroke="${LINE}" stroke-width="${TILE.strokeWidth}"/>${nestedBull(bull, TILE_BULL_SCALE)}</svg>`
-}
+const tileSvg = (bull) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}"><rect width="${CANVAS}" height="${CANVAS}" rx="${TILE_RADIUS}" fill="${TILE_FILL}"/>${nestedBull(bull, TILE_BULL_SCALE)}</svg>`
 
 const fullBleedSvg = (bull) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}"><rect width="${CANVAS}" height="${CANVAS}" fill="${CARD}"/>${nestedBull(bull, FULL_BLEED_BULL_SCALE)}</svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}"><rect width="${CANVAS}" height="${CANVAS}" fill="${TILE_FILL}"/>${nestedBull(bull, FULL_BLEED_BULL_SCALE)}</svg>`
 
 const work = mkdtempSync(join(tmpdir(), 'bull-icons-'))
 try {

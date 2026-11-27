@@ -8,13 +8,12 @@ import { COLOR_SCHEME_STYLE_ID, bullIconUrlOf } from '@/utils/colorScheme'
 /** Set on <html> while a scheme other than Night Desk is active. */
 export const COLOR_SCHEME_ATTRIBUTE = 'data-color-scheme'
 
-// The tile of scripts/make-icons.mjs (CANVAS, CARD, LINE, TILE, TILE_BULL_SCALE), scaled from its
+// The tile of scripts/make-icons.mjs (CANVAS, TILE_FILL, TILE_RADIUS, TILE_BULL_SCALE), scaled from its
 // 1024 px canvas, so a recoloured taskbar icon looks like the bundled one.
 const ICON_CANVAS_PX = 1024
 const TASKBAR_ICON_PX = 256
-const TILE_FILL = '#19191a'
-const TILE_LINE = '#2c2c2d'
-const TILE = { inset: 24, radius: 228, strokeWidth: 10 } as const
+const TILE_FILL = '#0e0e0f'
+const TILE_RADIUS = 200
 const TILE_BULL_SCALE = 0.82
 
 let sheetVersion = 0
@@ -63,14 +62,10 @@ const loadImage = (src: string) =>
   })
 
 const drawTile = (context: CanvasRenderingContext2D, bull: HTMLImageElement) => {
-  const side = ICON_CANVAS_PX - 2 * TILE.inset
   context.fillStyle = TILE_FILL
-  context.strokeStyle = TILE_LINE
-  context.lineWidth = TILE.strokeWidth
   context.beginPath()
-  context.roundRect(TILE.inset, TILE.inset, side, side, TILE.radius)
+  context.roundRect(0, 0, ICON_CANVAS_PX, ICON_CANVAS_PX, TILE_RADIUS)
   context.fill()
-  context.stroke()
   const size = ICON_CANVAS_PX * TILE_BULL_SCALE
   const offset = (ICON_CANVAS_PX - size) / 2
   context.drawImage(bull, offset, offset, size, size)

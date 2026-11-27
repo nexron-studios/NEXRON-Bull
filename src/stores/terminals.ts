@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { glideLayout } from '@/lib/layoutGlide'
 import type { TerminalRequest } from '@/stores/terminalRequests'
 import {
   DEFAULT_DRAWER_HEIGHT,
@@ -71,11 +72,15 @@ export const useTerminalStore = defineStore(
       return entry.id
     }
 
-    /** Ctrl+`: shows or hides the drawer; the first time it starts a shell in the chat's folder. */
-    const toggleDrawer = (chatId: string, request: TerminalRequest) => {
-      if (!drawerTerminalsOf(chatId).length) return void openInDrawer(chatId, request)
-      setDrawer(chatId, { isOpen: !drawerOf(chatId).isOpen })
-    }
+    /**
+     * Ctrl+`: shows or hides the drawer, gliding through its height; the first time it starts a
+     * shell in the chat's folder.
+     */
+    const toggleDrawer = (chatId: string, request: TerminalRequest) =>
+      void glideLayout(() => {
+        if (!drawerTerminalsOf(chatId).length) return void openInDrawer(chatId, request)
+        setDrawer(chatId, { isOpen: !drawerOf(chatId).isOpen })
+      }, true)
 
     const showInDrawer = (chatId: string, id: string) => setDrawer(chatId, { activeId: id })
 

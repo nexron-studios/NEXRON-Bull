@@ -308,6 +308,14 @@ html[data-layout-glide] .column-enter-from,
   width: 0;
 }
 
+/* The terminal drawer under the chat (TerminalDrawer) glides the same way through its height: the
+   chat above is laid out every frame and stays at its end (useChatFollow), the drawer's content
+   keeps its height and is clipped, so the terminal is not fitted on the way. */
+html[data-layout-glide] [data-glide-height] {
+  overflow: clip;
+  transition: height var(--duration-spring-smooth) var(--ease-spring-smooth);
+}
+
 /* Chat search (useChatSearch, Figma "13c"). The magnifier and the field are one shared element:
    the group grows from the button to the field on the smooth spring, the field is revealed from
    its top right corner instead of being stretched, and the button's image fades out quickly. */

@@ -946,11 +946,12 @@ export const useChatStore = defineStore(
     // Claude outlives the app on every machine; restored tabs pick up where it is now.
     agentdService.onReady(attach.attachAll)
 
-    // Runs only when a saved field changes, never for a streamed token.
+    // Runs only when a saved field changes, never for a streamed token. A watched tab is not
+    // saved: adoption brings it back while it runs, and restored it would count as this app's own.
     watch(
       () => ({
         activeId: activeId.value,
-        tabs: tabs.value.filter((tab) => attach.isSavedHere(tab.id)).map(savedTabOf)
+        tabs: tabs.value.filter((tab) => !attach.isWatchedOnly(tab.id)).map(savedTabOf)
       }),
       saved.save
     )

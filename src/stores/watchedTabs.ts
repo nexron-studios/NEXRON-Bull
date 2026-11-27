@@ -13,9 +13,9 @@ const withId = (ids: string[], id: string): string[] =>
   [...ids.filter((known) => known !== id), id].slice(-MAX_REMEMBERED)
 
 /**
- * A browser keeps the lists across reloads. The app window keeps them for its own run only: a second
- * window shares its localStorage and would take this window's tabs for watched ones, and after a
- * restart it adopts again whatever still runs.
+ * A browser keeps the lists across reloads. The app window keeps them for its own run only: a
+ * second window shares its localStorage and would take this window's tabs for watched ones, and
+ * after a restart it adopts again whatever still runs.
  */
 const rememberedIds = (key: string) =>
   isDesktopApp() ? ref<string[]>([]) : useStorage<string[]>(key, [])

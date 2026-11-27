@@ -45,8 +45,8 @@ export const disconnectedNoticeOf = (machine: Machine) =>
 
 /**
  * Attaching to the tabs whose Claude runs on a machine: on start, after a lost connection, and
- * also to the tabs other apps started there (see `adoptsOn`). Claude outlives the app on every machine,
- * so a tab here is only a view onto it.
+ * also to the tabs other apps started there (see `adoptsOn`). Claude outlives the app on every
+ * machine, so a tab here is only a view onto it.
  */
 export const useChatAttach = ({
   tabs,
@@ -74,7 +74,7 @@ export const useChatAttach = ({
     return opened
   }
 
-  /** The tabs whose Claude still runs on the machine; where this app adopts, it opens the ones it lacks. */
+  /** The tabs whose Claude still runs on the machine; where this app adopts, it opens new ones. */
   const runningOn = async (machine: Machine): Promise<string[]> => {
     const known = new Set(tabs.value.map((tab) => tab.id))
     const { running, adopted } = await runningTabsOn(machine, known)
@@ -215,11 +215,5 @@ export const useChatAttach = ({
     if (!isDesktopApp() || isWatchedOnly(id)) useWatchedTabsStore().markClosed(id)
   }
 
-  /**
-   * The app window saves only its own tabs: a watched one comes back by adoption while it still
-   * runs, and restored from the saved list it would count as this window's own.
-   */
-  const isSavedHere = (id: string) => !isDesktopApp() || !isWatchedOnly(id)
-
-  return { attachAll, markDisconnected, adoptStarted, isWatchedOnly, forgetClosed, isSavedHere }
+  return { attachAll, markDisconnected, adoptStarted, isWatchedOnly, forgetClosed }
 }

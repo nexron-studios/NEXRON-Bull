@@ -18,6 +18,15 @@ import { groupSourcesByDomain, pathOf, type Source } from '@/utils/sources'
 // order, searchable. Rows open in the system browser like the chips.
 const { sources } = defineProps<{ sources: Source[] }>()
 
+// Title and path before the site: those are what a person remembers of a page.
+const FUSE_KEYS = [
+  { name: 'title', weight: 3 },
+  { name: 'url', weight: 2 },
+  { name: 'domain', weight: 1 }
+]
+// Loose enough for a typo in a word, strict enough that "wiki" does not match every path.
+const FUSE_THRESHOLD = 0.35
+
 const open = defineModel<boolean>('open', { required: true })
 
 const query = ref('')
@@ -26,17 +35,8 @@ const list = useTemplateRef<HTMLElement>('list')
 const { t } = useI18n()
 const isPhone = useIsPhone()
 const { hasMoreAbove, hasMoreBelow } = useScrollEdges(list)
-// Title and path before the site: those are what a person remembers of a page.
 const { results } = useFuse(query, () => sources, {
-  fuseOptions: {
-    keys: [
-      { name: 'title', weight: 3 },
-      { name: 'url', weight: 2 },
-      { name: 'domain', weight: 1 }
-    ],
-    threshold: 0.35,
-    ignoreLocation: true
-  },
+  fuseOptions: { keys: FUSE_KEYS, threshold: FUSE_THRESHOLD, ignoreLocation: true },
   matchAllWhenSearchEmpty: true
 })
 
@@ -46,7 +46,7 @@ const groups = computed(() => {
   const found = new Set(matches.value)
   return groupSourcesByDomain(sources.filter((source) => found.has(source)))
 })
-const siteCount = computed(() => groupSourcesByDomain(sources).length)
+const siteCount = computed(() => new Set(sources.map((source) => source.domain)).size)
 const countLabel = computed(() =>
   query.value
     ? t('chat.sources.found', { n: matches.value.length, total: sources.length })

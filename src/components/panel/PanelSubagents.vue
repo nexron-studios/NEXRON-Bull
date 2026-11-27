@@ -17,7 +17,9 @@ import type { ChatTabState } from '@/utils/chatTab'
 // The subagents of the shown turn plus older ones still running, each with its own tool calls
 // (Figma "10", "21"): running first, the newest on top (24.11.2026), folded after five like the
 // other panel lists. Before the first one, ghost agents hold about the room one or two real ones
-// take.
+// take. Agents come, go and change their height while they work: every row grows and shrinks in
+// place (`row-grow`), and the 10 px between them is the bottom padding of each row, taken back
+// under the last one, since a gap would snap.
 const { tab, isEntering = false } = defineProps<{
   tab: ChatTabState
   /** Shown in a sheet that just opened: every row enters. */
@@ -75,13 +77,15 @@ const toggle = () => {
       :is-foldable="fold.isFoldable.value"
       :hidden-count="fold.hiddenCount.value"
       :controls="listId"
+      :is-capped="false"
       @toggle="toggle"
     >
       <TransitionGroup
         :id="listId"
         tag="ul"
+        name="row-grow"
         move-class="panel-row-move"
-        class="flex flex-col gap-2.5 text-small"
+        class="-mb-2.5 flex flex-col text-small"
       >
         <PanelSubagentRow
           v-for="agent in fold.shown.value"

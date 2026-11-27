@@ -12,7 +12,8 @@ import { subagentDurationOf, type Subagent, type SubagentStatus } from '@/utils/
 
 // One subagent in the panel (Figma "10", `subagentRow`). A running one is open and lists its
 // actions, the newest on top and folded after five (24.11.2026: "+13 weitere" could not be shut
-// again); a finished one is closed and names how many it took. A click flips either.
+// again); a finished one is closed and names how many it took. A click flips either. Every part
+// that comes or goes grows in place (`row-grow`), so the panel never jumps while agents work.
 const { agent, actions, now } = defineProps<{
   agent: Subagent
   actions: ToolRun[]
@@ -49,66 +50,79 @@ const toggle = () => {
 </script>
 
 <template>
-  <li class="flex flex-col gap-1">
-    <component
-      :is="hasActions ? 'button' : 'div'"
-      :type="hasActions ? 'button' : undefined"
-      :aria-expanded="hasActions ? isOpen : undefined"
-      :aria-controls="isOpen ? listId : undefined"
-      class="flex w-full items-center gap-2 rounded-sm text-left outline-none"
-      :class="{
-        'motion-press hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring': hasActions
-      }"
-      @click="hasActions && toggle()"
-    >
+  <!-- One child for the list's `row-grow`; its `pb-2.5` is the room to the next agent. -->
+  <li>
+    <div class="flex flex-col pb-2.5">
       <component
-        :is="LOOK[agent.status].icon"
-        class="size-4 shrink-0"
-        :class="LOOK[agent.status].class"
-        aria-hidden="true"
-      />
-      <span class="sr-only">{{ t(`panel.subagent_state.${agent.status}`) }}:</span>
-      <span
-        class="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-meta text-subtle"
+        :is="hasActions ? 'button' : 'div'"
+        :type="hasActions ? 'button' : undefined"
+        :aria-expanded="hasActions ? isOpen : undefined"
+        :aria-controls="isOpen ? listId : undefined"
+        class="flex w-full items-center gap-2 rounded-sm text-left outline-none"
+        :class="{
+          'motion-press hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring': hasActions
+        }"
+        @click="hasActions && toggle()"
       >
-        <Bot class="size-3" aria-hidden="true" />{{ agent.agentType }}
-      </span>
-      <span class="min-w-0 flex-1 truncate">{{ agent.title }}</span>
-      <span v-if="duration" class="shrink-0 text-meta text-muted-foreground tabular-nums">
-        {{ duration }}
-      </span>
-      <component
-        :is="isOpen ? ChevronDown : ChevronRight"
-        v-if="hasActions"
-        class="size-3.5 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
-    </component>
+        <component
+          :is="LOOK[agent.status].icon"
+          class="size-4 shrink-0"
+          :class="LOOK[agent.status].class"
+          aria-hidden="true"
+        />
+        <span class="sr-only">{{ t(`panel.subagent_state.${agent.status}`) }}:</span>
+        <span
+          class="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-meta text-subtle"
+        >
+          <Bot class="size-3" aria-hidden="true" />{{ agent.agentType }}
+        </span>
+        <span class="min-w-0 flex-1 truncate">{{ agent.title }}</span>
+        <span v-if="duration" class="shrink-0 text-meta text-muted-foreground tabular-nums">
+          {{ duration }}
+        </span>
+        <component
+          :is="isOpen ? ChevronDown : ChevronRight"
+          v-if="hasActions"
+          class="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </component>
 
-    <PanelFoldedList
-      v-if="isOpen"
-      class="ml-1.5 border-l border-border pl-3.5"
-      :is-expanded="fold.isExpanded.value"
-      :is-foldable="fold.isFoldable.value"
-      :hidden-count="fold.hiddenCount.value"
-      :controls="listId"
-      @toggle="fold.toggle"
-    >
-      <TransitionGroup
-        :id="listId"
-        tag="ul"
-        move-class="panel-row-move"
-        class="flex flex-col"
-        :aria-label="t('panel.subagent_actions', actions.length)"
-      >
-        <li v-for="run in fold.shown.value" :key="run.id">
-          <PanelSubagentAction :run :now />
-        </li>
-      </TransitionGroup>
-    </PanelFoldedList>
-    <PanelSubagentAction v-else-if="isRunning && last" :run="last" :now class="pl-6" />
-    <p v-else-if="hasActions" class="truncate pl-6 font-mono text-meta text-muted-foreground">
-      {{ t('panel.subagent_actions', actions.length) }} · {{ summary }}
-    </p>
+      <!-- Opening, shutting and finishing swap what sits under the title: the old part shrinks
+           while the new one grows, so the agents below glide instead of jumping. -->
+      <Transition name="row-grow">
+        <div v-if="isOpen" key="actions">
+          <PanelFoldedList
+            class="mt-1 ml-1.5 border-l border-border pl-3.5"
+            :is-expanded="fold.isExpanded.value"
+            :is-foldable="fold.isFoldable.value"
+            :hidden-count="fold.hiddenCount.value"
+            :controls="listId"
+            @toggle="fold.toggle"
+          >
+            <TransitionGroup
+              :id="listId"
+              tag="ul"
+              name="row-grow"
+              move-class="panel-row-move"
+              class="flex flex-col"
+              :aria-label="t('panel.subagent_actions', actions.length)"
+            >
+              <li v-for="run in fold.shown.value" :key="run.id">
+                <PanelSubagentAction :run :now />
+              </li>
+            </TransitionGroup>
+          </PanelFoldedList>
+        </div>
+        <div v-else-if="isRunning && last" key="last">
+          <PanelSubagentAction :run="last" :now class="mt-1 pl-6" />
+        </div>
+        <div v-else-if="hasActions" key="summary">
+          <p class="mt-1 truncate pl-6 font-mono text-meta text-muted-foreground">
+            {{ t('panel.subagent_actions', actions.length) }} · {{ summary }}
+          </p>
+        </div>
+      </Transition>
+    </div>
   </li>
 </template>

@@ -385,3 +385,33 @@ html[data-search-morph] [data-search-field] {
 .panel-row-move {
   transition: transform var(--duration-spring-smooth) var(--ease-spring-smooth);
 }
+
+/* A row of a live panel list that comes or goes (<Transition>/<TransitionGroup name="row-grow">):
+   it opens and shuts through its height, so what sits below glides instead of jumping a row at a
+   time (Jonas, 27.11.2026: with eight subagents at work the panel jumped on every tool call). One
+   arriving on top while one leaves at the bottom share curve and duration, so a folded list keeps
+   its height. The animated element holds exactly one child, which clips while it moves; spacing
+   between rows lives in that child, since a gap would still snap. `grid-template-rows` 0fr → 1fr
+   instead of `height: auto`: WebKit (Bull on the Mac) has no `interpolate-size`. Reduced motion:
+   only the fade stays, the height changes at once. */
+.row-grow-enter-active,
+.row-grow-leave-active {
+  display: grid;
+  transition:
+    grid-template-rows var(--duration-spring-smooth) var(--ease-spring-smooth),
+    opacity var(--duration-fade) var(--ease-out-soft);
+}
+.row-grow-enter-active > *,
+.row-grow-leave-active > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.row-grow-enter-from,
+.row-grow-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.row-grow-enter-to,
+.row-grow-leave-from {
+  grid-template-rows: 1fr;
+}

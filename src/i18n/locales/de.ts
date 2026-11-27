@@ -131,6 +131,22 @@ export default {
       hours: '{time} h',
       tokens: '{n} Tokens'
     },
+    sources: {
+      more: '+{n}',
+      show_all: 'Alle {n} Quellen zeigen',
+      title: '{n} Quelle | {n} Quellen',
+      description:
+        'Was Claude in diesem Schritt gelesen hat, nach Website in der Reihenfolge des Lesens.',
+      count: '{pages} · {sites}',
+      pages: '{n} Seite | {n} Seiten',
+      sites: '{n} Website | {n} Websites',
+      found: '{n} von {total} Seiten',
+      search: 'Quellen durchsuchen',
+      search_placeholder: 'Titel, Adresse oder Website …',
+      no_match: 'Keine Quelle passt',
+      no_match_hint: 'Anders suchen oder die Suche leeren.',
+      reset: 'Suche leeren'
+    },
     stream: {
       thought: 'Gedacht',
       thought_for: 'Gedacht · {seconds} s',

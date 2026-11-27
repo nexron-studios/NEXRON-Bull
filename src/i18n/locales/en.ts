@@ -130,6 +130,21 @@ export default {
       hours: '{time} h',
       tokens: '{n} tokens'
     },
+    sources: {
+      more: '+{n}',
+      show_all: 'Show all {n} sources',
+      title: '{n} source | {n} sources',
+      description: 'What Claude read in this step, by website in reading order.',
+      count: '{pages} · {sites}',
+      pages: '{n} page | {n} pages',
+      sites: '{n} website | {n} websites',
+      found: '{n} of {total} pages',
+      search: 'Search sources',
+      search_placeholder: 'Title, address or website …',
+      no_match: 'No source matches',
+      no_match_hint: 'Try other words or clear the search.',
+      reset: 'Clear search'
+    },
     stream: {
       thought: 'Thought',
       thought_for: 'Thought for {seconds} s',

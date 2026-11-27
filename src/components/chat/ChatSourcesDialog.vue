@@ -57,6 +57,13 @@ const countLabel = computed(() =>
 )
 
 const openSource = (url: string) => openLink(url).catch(handleError)
+// Esc in a filled search clears it first; only an empty search lets Esc close the dialog.
+const clearOrClose = (event: KeyboardEvent) => {
+  if (!query.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  query.value = ''
+}
 
 // A reopened dialog starts with the whole list.
 watch(open, (isOpen) => {
@@ -65,6 +72,9 @@ watch(open, (isOpen) => {
 </script>
 
 <template>
+  <!-- On the phone the sheet body scrolls the list; a second fixed-height scroller inside it
+       would fight over the swipe. Sections fade in without an offset: an offset entry inside a
+       scrolling list flashes its scrollbar (motion.md). -->
   <NchResponsiveDialog
     v-model:open="open"
     :title="t('chat.sources.title', { n: sources.length }, sources.length)"
@@ -86,6 +96,7 @@ watch(open, (isOpen) => {
           class="pl-9"
           :aria-label="t('chat.sources.search')"
           :placeholder="t('chat.sources.search_placeholder')"
+          @keydown.esc="clearOrClose"
         />
       </div>
       <p class="text-meta text-muted-foreground tabular-nums" aria-live="polite">
@@ -94,7 +105,8 @@ watch(open, (isOpen) => {
       <div class="relative -mx-1 flex min-h-0 flex-col">
         <div
           ref="list"
-          class="flex h-[min(26rem,55dvh)] min-h-0 flex-col overflow-y-auto px-1 pb-1"
+          class="flex min-h-0 flex-col px-1 pb-1"
+          :class="{ 'h-[min(26rem,55dvh)] overflow-y-auto': !isPhone }"
         >
           <NchSectionEmpty
             v-if="!groups.length"
@@ -107,12 +119,7 @@ watch(open, (isOpen) => {
               {{ t('chat.sources.reset') }}
             </Button>
           </NchSectionEmpty>
-          <section
-            v-for="(group, index) in groups"
-            :key="group.domain"
-            class="motion-stagger"
-            :style="{ '--stagger-index': index }"
-          >
+          <section v-for="group in groups" :key="group.domain" class="motion-fade-in">
             <h3
               class="sticky top-0 z-10 flex items-center gap-2 bg-popover/90 py-1.5 text-meta font-medium text-foreground backdrop-blur-md backdrop-saturate-180"
             >

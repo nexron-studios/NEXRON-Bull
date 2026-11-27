@@ -41,20 +41,17 @@ const open = (url: string) => openLink(url).catch(handleError)
       </Tooltip>
     </li>
     <li v-if="row.hiddenCount">
-      <Tooltip>
-        <TooltipTrigger as-child>
-          <button
-            type="button"
-            class="motion-press inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-meta font-medium text-foreground tabular-nums hover:bg-accent"
-            :aria-label="t('chat.sources.show_all', { n: sources.length })"
-            aria-haspopup="dialog"
-            @click="isListOpen = true"
-          >
-            {{ t('chat.sources.more', { n: row.hiddenCount }) }}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{{ t('chat.sources.show_all', { n: sources.length }) }}</TooltipContent>
-      </Tooltip>
+      <!-- The visible "+88" starts the accessible name, so voice control finds it by what it
+           shows. No tooltip: focus returns here when the dialog closes and would pop it up. -->
+      <button
+        type="button"
+        class="motion-press inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-meta font-medium text-foreground tabular-nums hover:bg-accent"
+        aria-haspopup="dialog"
+        @click="isListOpen = true"
+      >
+        {{ t('chat.sources.more', { n: row.hiddenCount }) }}
+        <span class="sr-only">{{ t('chat.sources.show_all', { n: sources.length }) }}</span>
+      </button>
       <ChatSourcesDialog v-model:open="isListOpen" :sources />
     </li>
   </ul>

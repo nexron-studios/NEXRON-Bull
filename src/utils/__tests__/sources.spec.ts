@@ -42,19 +42,6 @@ describe('sourcesOfCall', () => {
     ])
   })
 
-  it('should find no sources in other tools', () => {
-    expect(sourcesOfCall('Bash', { command: 'curl https://example.com' }, null)).toEqual([])
-  })
-})
-
-describe('uniqueSources', () => {
-  it('should keep the first of two equal urls', () => {
-    const source = { url: 'https://a.dev/', domain: 'a.dev' }
-    expect(uniqueSources([source, { ...source }])).toEqual([source])
-  })
-})
-
-describe('sourcesOfCall titles', () => {
   it('should take the page title a WebSearch result names', () => {
     const text = 'Links: [{"title":"Chip \\"overflow\\"","url":"https://carbondesignsystem.com/x"}]'
     expect(sourcesOfCall('WebSearch', { query: 'chips' }, searchResult(text))).toEqual([
@@ -65,6 +52,30 @@ describe('sourcesOfCall titles', () => {
       }
     ])
   })
+
+  it('should find the title of a hit whose url ends in punctuation', () => {
+    const text = 'Links: [{"title":"Spec","url":"https://a.dev/spec."}]'
+    expect(sourcesOfCall('WebSearch', { query: 'spec' }, searchResult(text))).toEqual([
+      { url: 'https://a.dev/spec', domain: 'a.dev', title: 'Spec' }
+    ])
+  })
+
+  it('should find no sources in other tools', () => {
+    expect(sourcesOfCall('Bash', { command: 'curl https://example.com' }, null)).toEqual([])
+  })
+})
+
+describe('uniqueSources', () => {
+  it('should keep a title a later read of the same page found', () => {
+    const fetched = { url: 'https://a.dev/x', domain: 'a.dev' }
+    const found = { ...fetched, title: 'X guide' }
+    expect(uniqueSources([fetched, found])).toEqual([found])
+  })
+
+  it('should keep the first of two equal urls', () => {
+    const source = { url: 'https://a.dev/', domain: 'a.dev' }
+    expect(uniqueSources([source, { ...source }])).toEqual([source])
+  })
 })
 
 const pagesOf = (count: number) =>
@@ -73,6 +84,10 @@ const pagesOf = (count: number) =>
 describe('sourceRowOf', () => {
   it('should show up to eight pages without a +N chip', () => {
     expect(sourceRowOf(pagesOf(8))).toEqual({ shown: pagesOf(8), hiddenCount: 0 })
+  })
+
+  it('should start folding at nine pages', () => {
+    expect(sourceRowOf(pagesOf(9))).toEqual({ shown: pagesOf(6), hiddenCount: 3 })
   })
 
   it('should fold everything after the sixth page into the +N chip', () => {

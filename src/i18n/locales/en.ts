@@ -132,7 +132,7 @@ export default {
     },
     sources: {
       more: '+{n}',
-      show_all: 'Show all {n} sources',
+      show_all: ', show all {n} sources',
       title: '{n} source | {n} sources',
       description: 'What Claude read in this step, by website in reading order.',
       count: '{pages} · {sites}',

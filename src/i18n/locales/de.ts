@@ -133,7 +133,7 @@ export default {
     },
     sources: {
       more: '+{n}',
-      show_all: 'Alle {n} Quellen zeigen',
+      show_all: ', alle {n} Quellen zeigen',
       title: '{n} Quelle | {n} Quellen',
       description:
         'Was Claude in diesem Schritt gelesen hat, nach Website in der Reihenfolge des Lesens.',

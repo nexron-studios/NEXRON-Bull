@@ -63,12 +63,16 @@ export const sourcesOfCall = (
   })
 }
 
-/** Page title by url, from the JSON hits of a WebSearch result. */
+/**
+ * Page title by url, from the JSON hits of a WebSearch result. The url is cleaned like the
+ * sources' own, so a hit whose url ends in punctuation still finds its title.
+ */
 const titlesOf = (text: string): Map<string, string> => {
   const titles = new Map<string, string>()
   for (const [, title, url] of text.matchAll(TITLED_LINK)) {
     const unescaped = unescapeJson(title)
-    if (unescaped) titles.set(unescapeJson(url), unescaped)
+    const source = sourceOf(unescapeJson(url))
+    if (unescaped && source) titles.set(source.url, unescaped)
   }
   return titles
 }
@@ -82,10 +86,18 @@ const unescapeJson = (value: string): string => {
   }
 }
 
-/** Each page once, in the order Claude first read it. */
+/**
+ * Each page once, in the order Claude first read it. A title from a later read is kept: a page
+ * fetched first and found by a search afterwards still shows the search's title.
+ */
 export const uniqueSources = (sources: Source[]): Source[] => {
-  const seen = new Set<string>()
-  return sources.filter((source) => !seen.has(source.url) && !!seen.add(source.url))
+  const byUrl = new Map<string, Source>()
+  for (const source of sources) {
+    const seen = byUrl.get(source.url)
+    if (!seen) byUrl.set(source.url, source)
+    else if (!seen.title && source.title) byUrl.set(source.url, { ...seen, title: source.title })
+  }
+  return [...byUrl.values()]
 }
 
 /** The chips of the row and the count behind its "+N" chip. */

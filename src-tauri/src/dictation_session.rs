@@ -56,7 +56,11 @@ pub struct HiddenClaude {
 
 impl HiddenClaude {
     pub fn spawn(language: &str) -> Result<Self, DictationError> {
-        let command = command_of(language)?;
+        Self::spawn_command(language, command_of(language)?)
+    }
+
+    /// `command` in place of Claude, so tests can stand in a process that only waits.
+    pub fn spawn_command(language: &str, command: CommandBuilder) -> Result<Self, DictationError> {
         let size = PtySize {
             rows: ROWS.get(),
             cols: COLS.get(),

@@ -27,8 +27,12 @@ pub const DICTATION_EVENT: &str = "dictation";
 /// A key's auto-repeat as Claude needs it: it recorded with spaces every 50 ms, never with 65 ms.
 /// It counts repeats rather than time: it recorded after ~0.1 s at this pace, ~0.2 s at 30 ms.
 const REPEAT_INTERVAL: Duration = Duration::from_millis(10);
-/// Claude records after about 0.5 s of repeats; this long without means it will not.
+/// Claude records after about 0.1 s of repeats, 0.35 s at most on its first recording; this long
+/// without means it will not.
 const LISTEN_TIMEOUT: Duration = Duration::from_secs(3);
+/// Reading the 400×40 screen costs far more than sending a key: it is read every third key, as
+/// often as at the 30 ms pace before. Listening shows at most two keys later.
+const KEYS_PER_LOOK: u32 = 3;
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL: Duration = Duration::from_millis(20);
 /// Time for the trust dialog to redraw after a key, so one key is never sent twice.
@@ -149,12 +153,23 @@ impl Hold {
     }
 }
 
+/// A warm-up that failed, for the press that waited for it.
+struct WarmFailure {
+    language: String,
+    at: Instant,
+    error: DictationError,
+}
+
 struct Inner {
     /// One operation at a time: a release waits for its press to have started
     op: Mutex<()>,
     claude: Mutex<Option<Arc<HiddenClaude>>>,
     hold: Mutex<Option<Hold>>,
+    /// The last press, release or start of a Claude; a focus alone never counts
     last_used: Mutex<Instant>,
+    warm_failure: Mutex<Option<WarmFailure>>,
+    /// Set once the window closed: a Claude that finishes starting afterwards ends at once
+    is_shut_down: AtomicBool,
 }
 
 pub struct DictationHost {
@@ -169,6 +184,8 @@ impl DictationHost {
             claude: Mutex::new(None),
             hold: Mutex::new(None),
             last_used: Mutex::new(Instant::now()),
+            warm_failure: Mutex::new(None),
+            is_shut_down: AtomicBool::new(false),
         });
         let watched = Arc::clone(&inner);
         thread::spawn(move || end_when_idle(&watched));
@@ -179,32 +196,27 @@ impl DictationHost {
     }
 
     /// Starts a Claude for `language` in the background unless one runs, so that the next press
-    /// records at once instead of waiting for Claude to start. Counts as use for the idle end.
+    /// records at once instead of waiting for Claude to start.
     pub fn warm(&self, language: &str) {
         let inner = Arc::clone(&self.inner);
         let language = language_of(language);
-        thread::spawn(move || {
-            // A press or another warm-up holds it: that one gets Claude ready already.
-            let Ok(_op) = inner.op.try_lock() else {
-                return;
-            };
-            *lock(&inner.last_used) = Instant::now();
-            // Only a head start: the press itself starts Claude again and reports the failure.
-            if let Err(err) = inner.ready_claude(&language) {
-                eprintln!("dictation: warming up Claude failed: {err}");
-            }
-        });
+        thread::spawn(move || inner.warm_up(&language));
     }
 
     /// Starts holding Space in a ready Claude; `Listening` for `hold` follows once it records.
     pub fn start(&self, language: &str, hold: u64) -> Result<(), DictationError> {
+        let pressed = Instant::now();
         let _op = lock(&self.inner.op);
         *lock(&self.inner.last_used) = Instant::now();
+        let language = language_of(language);
+        if let Some(error) = self.inner.warm_failure_since(&language, pressed) {
+            return Err(error);
+        }
         if let Some(previous) = lock(&self.inner.hold).take() {
             // A hold nobody released is over; only the cleaning up below matters.
             let _ = previous.finish();
         }
-        let claude = self.inner.ready_claude(&language_of(language))?;
+        let claude = self.inner.ready_claude(&language)?;
         settle_to_idle(&claude)?;
         clear_input(&claude)?;
         let baseline = prompt_of(&claude)
@@ -267,6 +279,8 @@ impl DictationHost {
     }
 
     pub fn shut_down(&self) {
+        // Before the slot is emptied: a Claude still starting must not land in it afterwards.
+        self.inner.is_shut_down.store(true, Ordering::SeqCst);
         if let Some(hold) = lock(&self.inner.hold).take() {
             // Claude ends right after; what the hold did no longer matters.
             let _ = hold.finish();
@@ -278,6 +292,58 @@ impl DictationHost {
 }
 
 impl Inner {
+    /// A Claude for `language` when none runs. A focus never extends a running Claude's life:
+    /// only a new one counts as use, so it can still end idle.
+    fn warm_up(&self, language: &str) {
+        // A press or another warm-up holds it: that one gets Claude ready already.
+        let Ok(_op) = self.op.try_lock() else {
+            return;
+        };
+        // While Space is held, a Claude for another language would end the one recording.
+        let is_holding = lock(&self.hold).is_some();
+        let is_running = self
+            .current()
+            .is_some_and(|claude| claude.language == language);
+        if is_holding || is_running || self.is_shut_down.load(Ordering::SeqCst) {
+            return;
+        }
+        *lock(&self.last_used) = Instant::now();
+        let Err(error) = self.ready_claude(language) else {
+            return;
+        };
+        // Only a head start: a later press starts Claude again and reports a failure itself.
+        eprintln!("dictation: warming up Claude failed: {error}");
+        *lock(&self.warm_failure) = Some(WarmFailure {
+            language: language.to_string(),
+            at: Instant::now(),
+            error,
+        });
+    }
+
+    /// The failure of a warm-up that ended after `pressed`: the press waited for it, and starting
+    /// again would make it wait as long once more. An older failure is dropped; the press retries.
+    fn warm_failure_since(&self, language: &str, pressed: Instant) -> Option<DictationError> {
+        lock(&self.warm_failure)
+            .take()
+            .filter(|failure| failure.language == language && failure.at >= pressed)
+            .map(|failure| failure.error)
+    }
+
+    /// Makes `claude` the current one and ends the one before; after the window closed, ends
+    /// `claude` instead, since nobody would.
+    fn adopt(&self, claude: Arc<HiddenClaude>) -> Result<(), DictationError> {
+        let mut slot = lock(&self.claude);
+        if self.is_shut_down.load(Ordering::SeqCst) {
+            drop(slot);
+            claude.shut_down();
+            return Err(DictationError::Exited);
+        }
+        if let Some(old) = slot.replace(claude) {
+            old.shut_down();
+        }
+        Ok(())
+    }
+
     fn current(&self) -> Option<Arc<HiddenClaude>> {
         lock(&self.claude)
             .clone()
@@ -292,9 +358,7 @@ impl Inner {
             Some(claude) => claude,
             None => {
                 let claude = Arc::new(HiddenClaude::spawn(language)?);
-                if let Some(old) = lock(&self.claude).replace(Arc::clone(&claude)) {
-                    old.shut_down();
-                }
+                self.adopt(Arc::clone(&claude))?;
                 claude
             }
         };
@@ -407,11 +471,16 @@ fn hold_until_stopped(
     let started = Instant::now();
     let mut is_listening = false;
     let mut interim = InterimWatch::default();
+    let mut keys: u32 = 0;
     while !stop.load(Ordering::Relaxed) {
         claude.send(KEY_SPACE)?;
         thread::sleep(REPEAT_INTERVAL);
         if !claude.is_alive() {
             return Err(DictationError::Exited);
+        }
+        keys = keys.wrapping_add(1);
+        if !keys.is_multiple_of(KEYS_PER_LOOK) {
+            continue;
         }
         let prompt = prompt_of(claude);
         if !is_listening
@@ -583,6 +652,7 @@ pub fn dictation_cancel(host: State<'_, DictationHost>) -> Result<(), DictationE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use portable_pty::CommandBuilder;
     use std::sync::mpsc;
 
     #[test]
@@ -702,6 +772,102 @@ mod tests {
         assert!(host.cancel().is_ok());
     }
 
+    /// A process in Claude's place that only waits, so the slot holds one that is alive.
+    fn waiting_claude(language: &str) -> Arc<HiddenClaude> {
+        let command = if cfg!(windows) {
+            let mut command = CommandBuilder::new("cmd");
+            command.args(["/d", "/c", "ping -n 60 127.0.0.1 >nul"]);
+            command
+        } else {
+            let mut command = CommandBuilder::new("sleep");
+            command.arg("60");
+            command
+        };
+        Arc::new(HiddenClaude::spawn_command(language, command).unwrap())
+    }
+
+    fn long_ago() -> Instant {
+        Instant::now().checked_sub(Duration::from_secs(60)).unwrap()
+    }
+
+    #[test]
+    fn a_warm_up_leaves_a_running_claude_to_end_idle() {
+        let host = DictationHost::new(|_| {});
+        let claude = waiting_claude("de");
+        host.inner.adopt(Arc::clone(&claude)).unwrap();
+        let used = long_ago();
+        *lock(&host.inner.last_used) = used;
+
+        host.inner.warm_up("de");
+
+        assert_eq!(*lock(&host.inner.last_used), used);
+        assert!(Arc::ptr_eq(&host.inner.current().unwrap(), &claude));
+        host.shut_down();
+    }
+
+    #[test]
+    fn a_warm_up_leaves_a_held_claude_alone() {
+        let host = DictationHost::new(|_| {});
+        let claude = waiting_claude("en");
+        host.inner.adopt(Arc::clone(&claude)).unwrap();
+        *lock(&host.inner.hold) = Some(Hold {
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: thread::spawn(|| Ok(true)),
+            baseline: String::new(),
+        });
+        let used = long_ago();
+        *lock(&host.inner.last_used) = used;
+
+        host.inner.warm_up("de");
+
+        assert!(Arc::ptr_eq(&host.inner.current().unwrap(), &claude));
+        assert_eq!(*lock(&host.inner.last_used), used);
+        host.shut_down();
+    }
+
+    #[test]
+    fn a_claude_that_finishes_starting_after_the_shut_down_ends() {
+        const ENDED_WITHIN: Duration = Duration::from_secs(8);
+        let host = DictationHost::new(|_| {});
+        host.shut_down();
+        let claude = waiting_claude("de");
+
+        let adopted = host.inner.adopt(Arc::clone(&claude));
+
+        assert!(matches!(adopted, Err(DictationError::Exited)));
+        assert!(lock(&host.inner.claude).is_none());
+        let deadline = Instant::now() + ENDED_WITHIN;
+        while claude.is_alive() && Instant::now() < deadline {
+            thread::sleep(POLL);
+        }
+        assert!(!claude.is_alive());
+    }
+
+    #[test]
+    fn a_press_takes_only_the_failure_of_the_warm_up_it_waited_for() {
+        let host = DictationHost::new(|_| {});
+        let failed = |language: &str, at| {
+            *lock(&host.inner.warm_failure) = Some(WarmFailure {
+                language: language.to_string(),
+                at,
+                error: DictationError::NotReady("stuck".into()),
+            });
+        };
+        let pressed = Instant::now();
+
+        failed("de", Instant::now());
+        let waited_for = host.inner.warm_failure_since("de", pressed);
+        failed("de", long_ago());
+        let earlier = host.inner.warm_failure_since("de", pressed);
+        failed("en", Instant::now());
+        let other_language = host.inner.warm_failure_since("de", pressed);
+
+        assert_eq!(waited_for.map(|error| error.detail()), Some("stuck".into()));
+        assert!(earlier.is_none());
+        assert!(other_language.is_none());
+        assert!(lock(&host.inner.warm_failure).is_none());
+    }
+
     /// Drives the real `claude` on this machine: warmed up, it must record (silence) right away
     /// and come back with an empty input. Run with `cargo test -- --ignored real_claude`.
     #[test]
@@ -709,6 +875,7 @@ mod tests {
     fn real_claude_records_and_cleans_up() {
         const HOLD: Duration = Duration::from_millis(1500);
         const WARM_RECORDING: Duration = Duration::from_millis(500);
+        const SHORT_HOLD: Duration = Duration::from_millis(60);
         let (sender, events) = mpsc::channel();
         let sender = Mutex::new(sender);
         let host = DictationHost::new(move |event| {
@@ -746,6 +913,13 @@ mod tests {
         thread::sleep(HOLD);
         host.cancel().unwrap();
         assert_eq!(prompt_of(&claude).unwrap().text, "");
+        // Let go before Claude records: the spaces it typed meanwhile must go again.
+        for hold in 3..6 {
+            host.start("de", hold).unwrap();
+            thread::sleep(SHORT_HOLD);
+            host.cancel().unwrap();
+            assert_eq!(prompt_of(&claude).unwrap().text, "");
+        }
         host.shut_down();
         thread::sleep(Duration::from_secs(4));
         assert!(!claude.is_alive());

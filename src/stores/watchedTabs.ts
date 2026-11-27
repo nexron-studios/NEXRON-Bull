@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
+import { ref } from 'vue'
 import { useStorage } from '@vueuse/core'
+import { isDesktopApp } from '@/lib/platform'
 
 // The keys date from when only the browser adopted tabs; renaming them would reopen closed ones.
 const ADOPTED_STORAGE_KEY = 'bull.bridge.adoptedTabs'
@@ -11,12 +13,20 @@ const withId = (ids: string[], id: string): string[] =>
   [...ids.filter((known) => known !== id), id].slice(-MAX_REMEMBERED)
 
 /**
+ * A browser keeps the lists across reloads. The app window keeps them for its own run only: a second
+ * window shares its localStorage and would take this window's tabs for watched ones, and after a
+ * restart it adopts again whatever still runs.
+ */
+const rememberedIds = (key: string) =>
+  isDesktopApp() ? ref<string[]>([]) : useStorage<string[]>(key, [])
+
+/**
  * Which tabs another app or device started (this one only watches them) and which were closed here
- * (never opened again while their Claude still runs). Kept across reloads.
+ * (never opened again while their Claude still runs).
  */
 export const useWatchedTabsStore = defineStore('watchedTabs', () => {
-  const adopted = useStorage<string[]>(ADOPTED_STORAGE_KEY, [])
-  const closed = useStorage<string[]>(CLOSED_STORAGE_KEY, [])
+  const adopted = rememberedIds(ADOPTED_STORAGE_KEY)
+  const closed = rememberedIds(CLOSED_STORAGE_KEY)
 
   const markAdopted = (ids: string[]) => {
     adopted.value = ids.reduce(withId, adopted.value)

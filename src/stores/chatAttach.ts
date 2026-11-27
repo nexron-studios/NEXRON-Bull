@@ -6,6 +6,7 @@ import {
 } from '@/api/services/agentd.service'
 import i18n from '@/i18n'
 import { handleError } from '@/lib/error'
+import { isDesktopApp } from '@/lib/platform'
 import { adoptsOn, runningTabsOn } from '@/lib/runningTabs'
 import { useWatchedTabsStore } from '@/stores/watchedTabs'
 import { newTab, type ChatTabState, type SavedTab } from '@/utils/chatTab'
@@ -206,8 +207,19 @@ export const useChatAttach = ({
   /** This app only watches a tab another app started: closing it here leaves Claude running. */
   const isWatchedOnly = (id: string) => useWatchedTabsStore().isAdopted(id)
 
-  /** Closed here: never opened again while its Claude still runs. */
-  const forgetClosed = (id: string) => useWatchedTabsStore().markClosed(id)
+  /**
+   * Closed here: never opened again while its Claude still runs. The app window marks only a
+   * watched one: it stops its own, and one whose stop failed comes back once agentd answers again.
+   */
+  const forgetClosed = (id: string) => {
+    if (!isDesktopApp() || isWatchedOnly(id)) useWatchedTabsStore().markClosed(id)
+  }
 
-  return { attachAll, markDisconnected, adoptStarted, isWatchedOnly, forgetClosed }
+  /**
+   * The app window saves only its own tabs: a watched one comes back by adoption while it still
+   * runs, and restored from the saved list it would count as this window's own.
+   */
+  const isSavedHere = (id: string) => !isDesktopApp() || !isWatchedOnly(id)
+
+  return { attachAll, markDisconnected, adoptStarted, isWatchedOnly, forgetClosed, isSavedHere }
 }

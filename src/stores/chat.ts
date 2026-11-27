@@ -947,7 +947,13 @@ export const useChatStore = defineStore(
     agentdService.onReady(attach.attachAll)
 
     // Runs only when a saved field changes, never for a streamed token.
-    watch(() => ({ activeId: activeId.value, tabs: tabs.value.map(savedTabOf) }), saved.save)
+    watch(
+      () => ({
+        activeId: activeId.value,
+        tabs: tabs.value.filter((tab) => attach.isSavedHere(tab.id)).map(savedTabOf)
+      }),
+      saved.save
+    )
 
     return {
       tabs,

@@ -8,9 +8,9 @@ vi.mock('@/api/services/agentd.service', () => ({ agentdService: { ask } }))
 const TAB_INFO = {
   tab: 't1',
   title: 'Moodboard',
-  profile: 'C:\Users\me\.claude',
+  profile: String.raw`C:\Users\me\.claude`,
   account: 'default',
-  cwd: 'C:\me',
+  cwd: String.raw`C:\me`,
   session_id: 's1',
   model: 'opus',
   permission_mode: 'auto',

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/i18n'
 import type { AgentdEvent } from '@/types/agentd.type'
 import { useConnectorSetupStore } from '@/stores/connectorSetup'
+import { useSavedTabsStore } from '@/stores/savedTabs'
 import { AgentdDisconnectedError } from '@/api/services/agentd.service'
 import { newTab } from '@/utils/chatTab'
 import { useChatStore } from '../chat'
@@ -637,6 +638,16 @@ describe('useChatStore: in a browser through the bridge', () => {
 
     expect(ask).toHaveBeenCalledWith({ op: 'running' }, 'main-pc')
     expect(chat.tabs.map((tab) => [tab.id, tab.machine])).toEqual([['t9', null]])
+  })
+
+  it('should not save in the app window a tab another window started', async () => {
+    runtime.isDesktopApp = true
+    const chat = useChatStore()
+    ready.forEach((attach) => attach([null]))
+    await vi.waitFor(() => expect(chat.tabs.map((tab) => tab.id)).toEqual(['t9']))
+    await Promise.resolve()
+
+    expect(useSavedTabsStore().tabs).toEqual([])
   })
 
   it('should only stop watching in the app window a tab another window started', async () => {

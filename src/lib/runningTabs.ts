@@ -18,15 +18,16 @@ export interface RunningTabs {
  */
 export const adoptsOn = (machine: Machine): boolean => !isDesktopApp() || machine === null
 
-/**
- * The tabs still running on a machine, and where this app adopts, the ones it has none for yet:
- * it learns of those only here (`tabs`, which an older agentd elsewhere does not know).
- */
+/** The tabs still running on a machine, without adopting any. */
 const runningOnly = async (machine: Machine): Promise<RunningTabs> => {
   const { tabs } = await agentdService.ask<'running'>({ op: 'running' }, machine)
   return { running: tabs, adopted: [] }
 }
 
+/**
+ * The tabs still running on a machine, and where this app adopts, the ones it has none for yet:
+ * it learns of those only here (`tabs`, which an older agentd elsewhere does not know).
+ */
 export const runningTabsOn = async (
   machine: Machine,
   knownIds: ReadonlySet<string>

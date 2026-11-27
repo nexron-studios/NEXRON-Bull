@@ -3,7 +3,7 @@ import type { SavedTab } from '@/utils/chatTab'
 import { isPermissionMode } from '@/utils/sessionSettings'
 
 /**
- * The running tabs of a machine this app has no tab for yet, as tabs to open: the browser did not
+ * The running tabs of a machine this app has no tab for yet, as tabs to open: this app did not
  * start them, so `tabs` is all it knows about them. The history comes from the transcript once the
  * app attaches.
  */

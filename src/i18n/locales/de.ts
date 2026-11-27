@@ -595,6 +595,8 @@ export default {
     resize: 'Breite der Details',
     open_items: 'Offen',
     open_items_count: '{open} von {all}',
+    plan: 'Plan',
+    plan_count: '{done} von {all}',
     show: 'Details einblenden ({key})',
     hide: 'Details ausblenden ({key})',
     machine: 'Rechner',

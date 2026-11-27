@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { useId } from 'vue'
+import { computed, useId } from 'vue'
 import PanelFoldedList from '@/components/panel/PanelFoldedList.vue'
 import { ListChecks } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { Checkbox } from '@/components/ui/checkbox'
+import PanelPlan from '@/components/panel/PanelPlan.vue'
 import PanelSection from '@/components/panel/PanelSection.vue'
 import { useFoldedRows } from '@/composables/useFoldedRows'
 import { useOpenItems } from '@/composables/useOpenItems'
 import { useRowArrivals } from '@/composables/useRowArrivals'
+import { useTabInsights } from '@/composables/useTabInsights'
 import type { ChatTabState } from '@/utils/chatTab'
 
-// The "Offen" points (`> [!todo]`) of the answer to the last prompt, in one list to tick off
-// (Figma 38b), folded after five like the other panel lists. Only there once that answer had one.
+// What is open for this prompt. While Claude works: its plan (TaskCreate/TodoWrite) with progress.
+// Once it answered: the "Offen" points (`> [!todo]`) of that answer, in one list to tick off
+// (Figma 38b), folded after five like the other panel lists; without any, the finished plan
+// (Jonas, 27.11.2026). Not there when the prompt has neither.
 const { tab } = defineProps<{ tab: ChatTabState }>()
 
 const EXPANDED_STORAGE_KEY = 'bull.panel.open_items_expanded'
@@ -20,8 +24,14 @@ const { t } = useI18n()
 const idPrefix = useId()
 const listId = useId()
 const { items, openCount, toggle } = useOpenItems(() => tab)
+const { turnPlan } = useTabInsights(tab.id)
 const fold = useFoldedRows(items, EXPANDED_STORAGE_KEY)
 const { staggerIndexOf, settle } = useRowArrivals(() => fold.shown.value.map((item) => item.text))
+
+const isRunning = computed(() => tab.status === 'working' || tab.status === 'asking')
+const isPlanShown = computed(
+  () => turnPlan.value.length > 0 && (isRunning.value || items.value.length === 0)
+)
 
 const toggleFold = () => {
   settle()
@@ -30,7 +40,8 @@ const toggleFold = () => {
 </script>
 
 <template>
-  <PanelSection v-if="items.length" :icon="ListChecks" :title="t('panel.open_items')">
+  <PanelPlan v-if="isPlanShown" :todos="turnPlan" :is-running />
+  <PanelSection v-else-if="items.length" :icon="ListChecks" :title="t('panel.open_items')">
     <template #aside>
       <span class="text-meta text-muted-foreground tabular-nums">
         {{ t('panel.open_items_count', { open: openCount, all: items.length }) }}

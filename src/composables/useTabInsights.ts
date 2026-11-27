@@ -2,6 +2,7 @@ import { computed, effectScope, onScopeDispose, type EffectScope } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { activityStateOf, backgroundShellsOf, promptTurnOf, turnToolsOf } from '@/utils/tabActivity'
 import { contextOf, subagentsOf, turnSubagentsOf } from '@/utils/tabInsights'
+import { turnPlanOf } from '@/utils/todos'
 
 const buildInsights = (tabId: string) => {
   const chat = useChatStore()
@@ -45,6 +46,7 @@ const buildInsights = (tabId: string) => {
   // The panel's per-prompt lists ("Offen", subagents) read this; token-stable like turnTools.
   const promptTurn = computed(() => promptTurnOf(turnSource.value))
   const turnSubagents = computed(() => turnSubagentsOf(subagents.value, promptTurn.value))
+  const turnPlan = computed(() => turnPlanOf(messages.value, promptTurn.value.messages))
   const activity = computed(() => {
     if (!tab.value) return null
     const { tools, recent } = turnTools.value
@@ -55,6 +57,7 @@ const buildInsights = (tabId: string) => {
     context,
     subagents,
     promptTurn,
+    turnPlan,
     turnSubagents,
     runningSubagents,
     liveSubagents,

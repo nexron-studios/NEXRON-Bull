@@ -582,6 +582,8 @@ export default {
     resize: 'Details width',
     open_items: 'Open',
     open_items_count: '{open} of {all}',
+    plan: 'Plan',
+    plan_count: '{done} of {all}',
     show: 'Show details ({key})',
     hide: 'Hide details ({key})',
     machine: 'Machine',

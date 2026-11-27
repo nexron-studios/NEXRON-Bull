@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { todosOf, type TaskCall } from '../todos'
+import type { ChatMessage } from '@/types/agentd.type'
+import { todosOf, turnPlanOf, type TaskCall } from '../todos'
 
 let nextCallId = 0
 const call = (
@@ -60,5 +61,43 @@ describe('todosOf', () => {
     expect(todosOf([call('TodoWrite', { todos: [{ content: 'X', status: 'blocked' }] })])).toEqual(
       []
     )
+  })
+})
+
+const callMessage = (id: string, name: string, input: Record<string, unknown>): ChatMessage => ({
+  uuid: `a-${id}`,
+  role: 'assistant',
+  at: null,
+  blocks: [{ type: 'tool_use', id, name, input }]
+})
+
+const resultMessage = (id: string, text: string): ChatMessage => ({
+  uuid: `u-${id}`,
+  role: 'user',
+  at: null,
+  blocks: [
+    { type: 'tool_result', tool_use_id: id, is_error: false, content: [{ type: 'text', text }] }
+  ]
+})
+
+describe('turnPlanOf', () => {
+  const earlier = [
+    callMessage('c1', 'TaskCreate', { subject: 'Build' }),
+    resultMessage('c1', 'Task #1 created successfully: Build'),
+    callMessage('c2', 'TaskCreate', { subject: 'Merge' }),
+    resultMessage('c2', 'Task #2 created successfully: Merge')
+  ]
+
+  it('should show the whole list when the turn updated a task of an earlier turn', () => {
+    const turn = [callMessage('c3', 'TaskUpdate', { taskId: '1', status: 'completed' })]
+    expect(turnPlanOf([...earlier, ...turn], turn)).toEqual([
+      { id: '1', content: 'Build', status: 'completed' },
+      { id: '2', content: 'Merge', status: 'pending' }
+    ])
+  })
+
+  it('should show nothing when the turn never wrote to the list', () => {
+    const turn = [callMessage('c4', 'TaskList', {})]
+    expect(turnPlanOf([...earlier, ...turn], turn)).toEqual([])
   })
 })

@@ -1,3 +1,7 @@
+import type { ChatMessage } from '@/types/agentd.type'
+import { isTaskTool } from '@/utils/toolKind'
+import { resultTextOf, resultsByToolId, type ToolUseBlock } from '@/utils/toolPairs'
+
 export const todoStatusList = ['pending', 'in_progress', 'completed'] as const
 export type TodoStatus = (typeof todoStatusList)[number]
 
@@ -72,3 +76,25 @@ export const todosOf = (calls: TaskCall[]): Todo[] =>
         return todos
     }
   }, [])
+
+/** Every task tool call in these messages, with its result where one arrived. */
+export const taskCallsIn = (messages: ChatMessage[]): TaskCall[] => {
+  const results = resultsByToolId(messages)
+  return messages
+    .flatMap((message) => message.blocks)
+    .filter((block): block is ToolUseBlock => block.type === 'tool_use' && isTaskTool(block.name))
+    .map(({ id, name, input }) => {
+      const result = results.get(id)
+      return { id, name, input, result: result ? resultTextOf(result) : null }
+    })
+}
+
+/** The task tools that change the list; `TaskList` and `TaskGet` only read it. */
+const PLAN_WRITES = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate'])
+
+/**
+ * The plan of one turn: the session's task list as it stands, but only when the turn wrote to it.
+ * A turn that never touched the list would otherwise show the leftovers of an older prompt.
+ */
+export const turnPlanOf = (chat: ChatMessage[], turn: ChatMessage[]): Todo[] =>
+  taskCallsIn(turn).some((call) => PLAN_WRITES.has(call.name)) ? todosOf(taskCallsIn(chat)) : []

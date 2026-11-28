@@ -158,9 +158,10 @@ pub fn message_from(line: &Value) -> Option<ChatMessage> {
         return None;
     }
     let message = line.get("message")?;
-    // Live, the summary a compaction leaves is a synthetic user line with plain text; the
-    // transcript marks the same line `isCompactSummary`. Nobody typed it.
-    if kind == "user" && is_true(line, "isSynthetic") && message.get("content").is_some_and(Value::is_string) {
+    // Live, Claude Code marks the user lines it writes itself `isSynthetic`, where the transcript
+    // says `isMeta` or `isCompactSummary`: the summary a compaction leaves (plain text) and the
+    // instructions of a loaded skill (text blocks). Nobody typed them.
+    if kind == "user" && is_true(line, "isSynthetic") {
         return None;
     }
     // Claude Code writes API errors (limit reached, login expired) as a fake assistant reply;
@@ -737,6 +738,14 @@ mod tests {
     fn skips_the_live_compaction_summary() {
         let line = json!({ "type": "user", "uuid": "u9", "isSynthetic": true, "isReplay": false,
             "message": { "role": "user", "content": "This session is being continued from a previous conversation." } });
+        assert_eq!(message_from(&line), None);
+    }
+
+    #[test]
+    fn skips_the_live_instructions_of_a_loaded_skill() {
+        let line = json!({ "type": "user", "uuid": "u10", "isSynthetic": true, "parent_tool_use_id": null,
+            "message": { "role": "user",
+                         "content": [{ "type": "text", "text": "Base directory for this skill: C:\\skills\\rea" }] } });
         assert_eq!(message_from(&line), None);
     }
 
